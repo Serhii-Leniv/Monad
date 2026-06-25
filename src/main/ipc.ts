@@ -1,0 +1,181 @@
+import { ipcMain, dialog, BrowserWindow, Notification, shell } from 'electron'
+import { join, basename } from 'path'
+import { promises as fs } from 'fs'
+import { PtyManager, type SpawnOptions } from './pty-manager'
+import {
+  getGitInfo,
+  getRepoRootSafe,
+  createWorktree,
+  removeWorktree,
+  pruneWorktrees,
+  getAgentDiff,
+  mergeAgent
+} from './git'
+import { detectShells } from './shells'
+
+/**
+ * Registers every main-process IPC handler against a window accessor.
+ * Extracted from index.ts so the same wiring can be driven by integration
+ * tests, and so Phase 2's git/worktree handlers slot in alongside these.
+ * Returns the PtyManager so the caller can kill sessions on quit.
+ */
+export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
+  // Guard against a destroyed window: a PTY can still emit during teardown,
+  // and webContents.send on a destroyed object throws "Object has been destroyed".
+  const send = (channel: string, payload: unknown): void => {
+    const w = getWindow()
+    if (w && !w.isDestroyed() && !w.webContents.isDestroyed()) {
+      w.webContents.send(channel, payload)
+    }
+  }
+  const ptyManager = new PtyManager(
+    (id, data) => send('pty:data', { id, data }),
+    (id, code, signal) => send('pty:exit', { id, code, signal })
+  )
+
+  ipcMain.handle('pty:spawn', (_e, opts: SpawnOptions) => ptyManager.spawn(opts ?? {}))
+  ipcMain.on('pty:input', (_e, { id, data }: { id: string; data: string }) =>
+    ptyManager.write(id, data)
+  )
+  ipcMain.on('pty:resize', (_e, { id, cols, rows }: { id: string; cols: number; rows: number }) =>
+    ptyManager.resize(id, cols, rows)
+  )
+  ipcMain.on('pty:kill', (_e, { id }: { id: string }) => ptyManager.kill(id))
+
+  ipcMain.handle('shells:list', () => detectShells())
+
+  // Open a URL from a terminal (web-links addon) in the user's real browser.
+  ipcMain.handle('open:external', (_e, url: string) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
+    return true
+  })
+
+  // --- Project / canvas persistence (one canvas per project) ---
+  ipcMain.handle('project:pick', async () => {
+    const win = getWindow()
+    if (!win) return null
+    const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] })
+    if (r.canceled || !r.filePaths[0]) return null
+    return { path: r.filePaths[0], name: basename(r.filePaths[0]) }
+  })
+
+  ipcMain.handle('project:exists', async (_e, projectPath: string) => {
+    try {
+      const st = await fs.stat(projectPath)
+      return st.isDirectory()
+    } catch {
+      return false
+    }
+  })
+
+  ipcMain.handle('project:load', async (_e, projectPath: string) => {
+    try {
+      const txt = await fs.readFile(join(projectPath, '.agent-canvas', 'canvas.json'), 'utf8')
+      return JSON.parse(txt)
+    } catch {
+      return null
+    }
+  })
+
+  ipcMain.handle(
+    'project:save',
+    async (_e, { projectPath, data }: { projectPath: string; data: unknown }) => {
+      const dir = join(projectPath, '.agent-canvas')
+      await fs.mkdir(dir, { recursive: true })
+      await fs.writeFile(join(dir, 'canvas.json'), JSON.stringify(data, null, 2), 'utf8')
+      return true
+    }
+  )
+
+  // --- Git / per-agent worktree isolation ---
+  ipcMain.handle('git:info', (_e, projectPath: string) => getGitInfo(projectPath))
+
+  ipcMain.handle('git:prune', async (_e, projectPath: string) => {
+    const repoRoot = await getRepoRootSafe(projectPath)
+    if (repoRoot) await pruneWorktrees(repoRoot)
+    return true
+  })
+
+  // Resolve an agent's working dir: a git worktree when isolated, else the
+  // shared project dir. Falls back to shared on any git failure.
+  ipcMain.handle(
+    'worktree:create',
+    async (
+      _e,
+      { projectPath, agentId, isolation }: { projectPath: string; agentId: string; isolation: string }
+    ) => {
+      if (isolation !== 'worktree') {
+        return { cwd: projectPath, branch: null, isolated: false }
+      }
+      const repoRoot = await getRepoRootSafe(projectPath)
+      if (!repoRoot) {
+        return { cwd: projectPath, branch: null, isolated: false, reason: 'Not a git repository' }
+      }
+      try {
+        const wt = await createWorktree(repoRoot, agentId)
+        return { cwd: wt.path, branch: wt.branch, isolated: true }
+      } catch (e) {
+        return {
+          cwd: projectPath,
+          branch: null,
+          isolated: false,
+          reason: e instanceof Error ? e.message : 'Could not create worktree'
+        }
+      }
+    }
+  )
+
+  // Desktop notification when a backgrounded agent needs the user. Clicking it
+  // surfaces the window and tells the renderer which terminal to focus.
+  ipcMain.handle(
+    'notify:agent',
+    (_e, { id, title, body }: { id: string; title: string; body: string }) => {
+      if (!Notification.isSupported()) return false
+      const n = new Notification({ title: title || 'Vectro', body })
+      n.on('click', () => {
+        const w = getWindow()
+        if (w && !w.isDestroyed()) {
+          if (w.isMinimized()) w.restore()
+          w.show()
+          w.focus()
+        }
+        send('notify:click', { id })
+      })
+      n.show()
+      return true
+    }
+  )
+
+  ipcMain.handle(
+    'worktree:remove',
+    async (_e, { projectPath, agentId }: { projectPath: string; agentId: string }) => {
+      const repoRoot = await getRepoRootSafe(projectPath)
+      if (repoRoot) await removeWorktree(repoRoot, agentId)
+      return true
+    }
+  )
+
+  // --- Diff / merge (review an agent's work) ---
+  ipcMain.handle(
+    'git:diff',
+    async (_e, { projectPath, agentId }: { projectPath: string; agentId: string }) => {
+      const info = await getGitInfo(projectPath)
+      if (!info.repoRoot) return { branch: '', base: null, diff: '', untracked: [], hasChanges: false }
+      return getAgentDiff(info.repoRoot, agentId, info.branch)
+    }
+  )
+
+  ipcMain.handle(
+    'git:merge',
+    async (
+      _e,
+      { projectPath, agentId, message }: { projectPath: string; agentId: string; message: string }
+    ) => {
+      const info = await getGitInfo(projectPath)
+      if (!info.repoRoot) return { ok: false, error: 'Not a git repository' }
+      return mergeAgent(info.repoRoot, agentId, message)
+    }
+  )
+
+  return ptyManager
+}

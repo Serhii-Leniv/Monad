@@ -1,0 +1,41 @@
+{
+  "name": "vectro",
+  "version": "0.0.1",
+  "description": "Vectro — a cross-platform canvas for running terminals and AI agents in parallel",
+  "main": "./out/main/index.js",
+  "author": "",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "smoke:pty": "electron scripts/pty-smoke.cjs",
+    "smoke:p1": "electron scripts/phase1-smoke.cjs",
+    "smoke:p2": "electron scripts/phase2-smoke.cjs",
+    "smoke:p3": "electron scripts/phase3-smoke.cjs"
+  },
+  "dependencies": {
+    "@homebridge/node-pty-prebuilt-multiarch": "^0.13.1",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-search": "^0.15.0",
+    "@xterm/addon-web-links": "^0.11.0",
+    "@xterm/xterm": "^5.5.0",
+    "@xyflow/react": "^12.11.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-moveable": "^0.56.0",
+    "react-selecto": "^1.26.3",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.10",
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.2",
+    "electron": "^29.4.6",
+    "electron-vite": "^2.3.0",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.8"
+  }
+}

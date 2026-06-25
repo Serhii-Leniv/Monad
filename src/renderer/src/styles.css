@@ -1,0 +1,1492 @@
+﻿:root {
+  /* Professional dark palette (Apple dark-mode + dev tools) */
+  --text: rgba(255, 255, 255, 0.95);
+  --text-2: rgba(235, 235, 245, 0.6);
+  --muted: rgba(235, 235, 245, 0.45);
+  /* Serious navy-blue accent (replaces the old neon cyan). One RGB triple
+     drives every translucent tint so the whole UI stays in the same family. */
+  --accent-rgb: 59, 91, 217;
+  --accent: rgb(var(--accent-rgb)); /* #3b5bd9 */
+  --accent-2: #5a78ef; /* lighter top for gradients */
+  --accent-active: #2c45ad; /* pressed / deeper navy */
+  --accent-muted: rgba(var(--accent-rgb), 0.16);
+  /* Brand mark sits a touch brighter, still in the blue family. */
+  --brand: #6d8bff;
+
+  /* --- One coherent radius scale --- */
+  --r-xs: 8px; /* inputs, step buttons */
+  --r-sm: 10px; /* small controls */
+  --r-md: 12px; /* terminal panes */
+  --r-lg: 16px; /* palette, menus */
+  --r-xl: 20px; /* modals, dock */
+
+  /* --- One coherent blur scale (frosted chrome only; never on terminals) --- */
+  --blur-sm: blur(14px) saturate(150%); /* titlebar */
+  --blur-md: blur(20px) saturate(160%); /* dock, menus, modals, palette */
+  --blur-lg: blur(30px) saturate(170%); /* hero overlays */
+
+  /* --- One coherent hairline/border opacity scale --- */
+  --line-1: rgba(255, 255, 255, 0.08);
+  --line-2: rgba(255, 255, 255, 0.14);
+  --line-3: rgba(255, 255, 255, 0.2);
+
+  /* Frosted glass for chrome (real backdrop blur) */
+  --hairline: var(--line-1);
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-bg-strong: rgba(255, 255, 255, 0.08);
+  --glass-border: var(--line-2);
+  --glass-highlight: rgba(255, 255, 255, 0.12);
+  --glass-blur: var(--blur-md);
+  --glass-sheen: linear-gradient(150deg, rgba(255, 255, 255, 0.1), transparent 44%);
+  --glass-specular: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  --glass-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+  --menu-bg: rgba(16, 18, 24, 0.74);
+
+  /* Card surface inside the canvas transform (solid-translucent, not blurred). */
+  --card-bg: rgba(22, 25, 32, 0.72);
+  --card-bg-strong: rgba(30, 34, 44, 0.76);
+  --term-bg: #0a0c10;
+
+  --success: #30d158;
+  --danger: #ff453a;
+
+  /* --- Agent status palette --- */
+  --status-working: var(--accent);
+  --status-idle: #3a4a60;
+  --status-attention: #ff9f0a;
+  --status-done: #30d158;
+  --status-error: #ff6b63;
+
+  /* Apple-grade motion */
+  --ease-out: cubic-bezier(0, 0, 0.58, 1);
+  --ease-decelerate: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-select: 150ms;
+  --dur-snap: 340ms;
+  --dur-resize: 220ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+/* Cold scene: blue + teal glows over a dark veil (sits over OS acrylic). */
+body {
+  background:
+    radial-gradient(1200px 820px at 18% -6%, rgba(30, 64, 92, 0.14), transparent 55%),
+    linear-gradient(180deg, rgba(11, 12, 15, 0.84), rgba(8, 9, 12, 0.9));
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: transparent;
+}
+
+/* Minimal top bar = window drag region only (native buttons live top-right). */
+.titlebar {
+  flex: 0 0 40px;
+  height: 40px;
+  -webkit-app-region: drag;
+  border-bottom: 1px solid var(--line-1);
+  background: rgba(10, 14, 22, 0.35);
+  backdrop-filter: var(--blur-sm);
+  -webkit-backdrop-filter: var(--blur-sm);
+}
+
+.app__main {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.app__canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.canvas-wrap {
+  width: 100%;
+  height: 100%;
+}
+
+/* ---------- Stage (free canvas) ---------- */
+.stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: transparent;
+  --moveable-color: var(--accent);
+}
+
+.stage__panes {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+}
+
+.vec-pane {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: linear-gradient(160deg, rgba(34, 39, 50, 0.76), rgba(15, 17, 23, 0.76));
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    0 14px 40px rgba(0, 0, 0, 0.42),
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 var(--glass-highlight);
+  transition:
+    transform var(--dur-snap) var(--ease-decelerate),
+    width var(--dur-resize) var(--ease-out),
+    height var(--dur-resize) var(--ease-out),
+    box-shadow var(--dur-select) var(--ease-out),
+    border-color var(--dur-select) var(--ease-out);
+}
+
+/* Grid-only drag: the card animates cell-to-cell (transition stays on), with a
+   lifted look. `will-change` only here so panes aren't cached as 1x bitmaps at
+   rest (which would blur the text). */
+.vec-pane.is-dragging {
+  z-index: 5;
+  transition: none; /* 1:1 with the cursor; the OTHER cards keep their transition */
+  will-change: transform;
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 30px 64px rgba(0, 0, 0, 0.66),
+    inset 0 1px 0 var(--glass-highlight);
+}
+
+/* Apple selection: crisp 1px accent ring, no glow. */
+.vec-pane.is-selected {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 14px 40px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 var(--glass-highlight);
+}
+
+/* Status rings — quiet, only when the card isn't selected (selection wins).
+   Restrained: a 1px tinted ring, no glow, no loop. */
+.vec-pane.is-attention:not(.is-selected) {
+  border-color: rgba(255, 159, 10, 0.55);
+  box-shadow:
+    0 0 0 1px rgba(255, 159, 10, 0.5),
+    0 14px 40px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 var(--glass-highlight);
+}
+
+.vec-pane.is-error:not(.is-selected) {
+  border-color: rgba(255, 107, 99, 0.5);
+  box-shadow:
+    0 0 0 1px rgba(255, 107, 99, 0.45),
+    0 14px 40px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 var(--glass-highlight);
+}
+
+/* A single settle when a process finishes — no continuous pulsing. */
+@keyframes dot-settle {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.55);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.vec-pane__dot--done {
+  animation: dot-settle 560ms var(--ease-out);
+}
+
+.vec-pane__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  /* Faint top-light so the card edge catches light without blurring the
+     terminal body below (which stays fully opaque). */
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0));
+  border-bottom: 1px solid var(--line-1);
+  font-size: 12px;
+  cursor: grab;
+}
+
+.vec-pane__header:active {
+  cursor: grabbing;
+}
+
+.vec-pane__dot {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px currentColor;
+  transition: background var(--dur-select) var(--ease-out);
+}
+
+.vec-pane__title {
+  flex: 1;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vec-pane__branch {
+  font-size: 10px;
+  color: var(--muted);
+  background: rgba(220, 235, 255, 0.07);
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  padding: 2px 6px;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vec-pane__branch--shared {
+  color: #d3a684;
+}
+
+.vec-pane__close {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.vec-pane__close:hover {
+  color: #ff6b63;
+  background: rgba(255, 107, 99, 0.12);
+}
+
+.vec-pane__body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.vec-pane__term {
+  position: absolute;
+  inset: 0;
+  padding: 6px;
+  background: var(--term-bg);
+}
+
+.vec-pane__term .xterm,
+.vec-pane__term .xterm-viewport {
+  height: 100%;
+}
+
+.vec-pane__term .xterm-viewport {
+  scrollbar-width: none;
+}
+
+.vec-pane__term .xterm-viewport::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* Inline error state — replaces the terminal body when the shell fails to
+   spawn, so the card never sits as a silent dead rectangle. */
+.vec-pane__error {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 20px;
+  text-align: center;
+  background: var(--term-bg);
+}
+
+.vec-pane__error-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--status-error);
+}
+
+.vec-pane__error-msg {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--muted);
+  word-break: break-word;
+  font-family: 'Cascadia Code', Consolas, monospace;
+}
+
+.vec-pane__retry {
+  margin-top: 4px;
+  padding: 6px 16px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-xs);
+  cursor: pointer;
+  transition: background var(--dur-select) var(--ease-out),
+    border-color var(--dur-select) var(--ease-out);
+}
+
+.vec-pane__retry:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(var(--accent-rgb), 0.4);
+}
+
+/* In-terminal find bar (Ctrl/Cmd+F) */
+.vec-pane__search {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  background: var(--menu-bg);
+  backdrop-filter: var(--blur-md);
+  -webkit-backdrop-filter: var(--blur-md);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5);
+}
+
+.vec-pane__search-input {
+  width: 150px;
+  padding: 5px 8px;
+  font-size: 12px;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-xs);
+  outline: none;
+}
+
+.vec-pane__search-input:focus {
+  border-color: rgba(var(--accent-rgb), 0.7);
+}
+
+.vec-pane__search-btn {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--r-xs);
+  cursor: pointer;
+  transition: background var(--dur-select) var(--ease-out), color var(--dur-select) var(--ease-out);
+}
+
+.vec-pane__search-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Slim bar when a process has ended — keeps scrollback visible. */
+.vec-pane__ended {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 10px 7px 12px;
+  font-size: 12px;
+  color: var(--text-2);
+  background: rgba(16, 18, 24, 0.86);
+  backdrop-filter: var(--blur-sm);
+  -webkit-backdrop-filter: var(--blur-sm);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5);
+}
+
+.vec-pane__relaunch {
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(180deg, var(--accent-2), var(--accent));
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--r-xs);
+  cursor: pointer;
+  transition: filter var(--dur-select) var(--ease-out);
+}
+
+.vec-pane__relaunch:hover {
+  filter: brightness(1.07);
+}
+
+/* Right-click context menu inside a terminal */
+.vec-pane__menu-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+}
+
+.vec-pane__menu {
+  position: absolute;
+  z-index: 8;
+  min-width: 140px;
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--menu-bg);
+  backdrop-filter: var(--blur-md);
+  -webkit-backdrop-filter: var(--blur-md);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+
+.vec-pane__menu-item {
+  text-align: left;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-radius: var(--r-xs);
+  cursor: pointer;
+  transition: background var(--dur-select) var(--ease-out);
+}
+
+.vec-pane__menu-item:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.vec-pane__menu-item:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Off-screen attention pointer: a small amber chip pinned to the viewport edge
+   nearest an agent that needs you but isn't currently visible. */
+.stage__marker {
+  position: absolute;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 160px;
+  padding: 5px 10px;
+  font-size: 11px;
+  color: #1a1205;
+  font-weight: 600;
+  background: var(--status-attention);
+  border-radius: 999px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stage__marker--error {
+  background: var(--status-error);
+  color: #2a0a08;
+}
+
+.stage__marker-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Moveable is used only as a drag-detector now (grid-only reorder); its visual
+   control box/handles/lines are hidden — selection shows via the pane ring. */
+.moveable-control,
+.moveable-line {
+  display: none !important;
+}
+
+.moveable-snap-distance,
+.moveable-gap,
+.moveable-size-value,
+.moveable-dimension-viewable {
+  display: none !important;
+}
+
+/* ---------- Floating dock (liquid glass, rounded, centered) ---------- */
+.rail {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 30;
+  width: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 9px 7px;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.03) 55%);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--line-3);
+  border-radius: var(--r-xl);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.05),
+    var(--glass-shadow);
+}
+
+/* specular sheen */
+.rail::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--glass-sheen);
+  pointer-events: none;
+}
+
+.rail > * {
+  position: relative;
+  z-index: 1;
+}
+
+.rail__logo {
+  margin-bottom: 8px;
+  opacity: 0.95;
+}
+
+.rail__divider {
+  width: 22px;
+  height: 1px;
+  background: var(--hairline);
+  margin: 5px 0;
+}
+
+.rail__spacer {
+  flex: 1;
+}
+
+.rail-btn {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-sm);
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: color var(--dur-select) var(--ease-out),
+    background var(--dur-select) var(--ease-out),
+    border-color var(--dur-select) var(--ease-out);
+}
+
+.rail-btn:hover:not(:disabled) {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.rail-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.rail-btn.is-active {
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.1);
+  border-color: rgba(var(--accent-rgb), 0.22);
+}
+
+.rail-btn--primary,
+.rail-btn--primary:hover:not(:disabled) {
+  color: #fff;
+  background: linear-gradient(180deg, var(--accent-2), var(--accent));
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 3px 12px rgba(var(--accent-rgb), 0.4);
+}
+
+.rail-btn--primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+/* Attention button: only appears when an agent needs you. Amber, with a count. */
+.rail-btn--attention {
+  color: var(--status-attention);
+  background: rgba(255, 159, 10, 0.12);
+  border-color: rgba(255, 159, 10, 0.28);
+}
+
+.rail-btn--attention:hover:not(:disabled) {
+  color: var(--status-attention);
+  background: rgba(255, 159, 10, 0.18);
+}
+
+.rail-btn__badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: #1a1205;
+  background: var(--status-attention);
+  border-radius: 9px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.rail__shell {
+  position: relative;
+}
+
+.rail__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.rail__menu {
+  position: absolute;
+  left: 46px;
+  bottom: 0;
+  z-index: 41;
+  min-width: 158px;
+  padding: 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: var(--menu-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  box-shadow:
+    var(--glass-specular),
+    0 18px 50px rgba(0, 0, 0, 0.55);
+}
+
+.rail__menu-item {
+  text-align: left;
+  padding: 8px 11px;
+  font-size: 12.5px;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-radius: var(--r-xs);
+  cursor: pointer;
+  transition: background var(--dur-select) var(--ease-out), color var(--dur-select) var(--ease-out);
+}
+
+.rail__menu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.rail__menu-item.is-active {
+  color: var(--accent);
+}
+
+/* Project switcher anchors to the top of the dock instead of the bottom. */
+.rail__menu--proj {
+  top: 0;
+  bottom: auto;
+}
+
+.rail__menu-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--line-1);
+}
+
+/* ---------- Settings modal (liquid glass) ---------- */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background: rgba(4, 8, 14, 0.5);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+.settings {
+  width: 460px;
+  max-width: 90vw;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-xl);
+  overflow: hidden;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.025) 48%),
+    rgba(15, 21, 32, 0.66);
+  backdrop-filter: var(--blur-lg);
+  -webkit-backdrop-filter: var(--blur-lg);
+  border: 1px solid var(--line-2);
+  box-shadow:
+    var(--glass-specular),
+    0 30px 80px rgba(0, 0, 0, 0.6);
+}
+
+.settings__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.settings__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.settings__close {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.settings__close:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.settings__body {
+  padding: 8px 18px 18px;
+  overflow-y: auto;
+}
+
+.settings__section {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: var(--muted);
+  margin: 16px 0 6px;
+}
+
+.settings__section--muted {
+  opacity: 0.7;
+}
+
+.settings__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 0;
+}
+
+.settings__row--toggle {
+  cursor: pointer;
+}
+
+.settings__label {
+  font-size: 13px;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings__hint {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.settings__select {
+  min-width: 190px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  color: var(--text);
+  background: rgba(10, 16, 26, 0.5);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-xs);
+  outline: none;
+  transition: border-color var(--dur-select) var(--ease-out),
+    box-shadow var(--dur-select) var(--ease-out);
+}
+
+.settings__select:focus {
+  border-color: rgba(var(--accent-rgb), 0.7);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.16);
+}
+
+.settings__select option {
+  background: #0e1726;
+  color: var(--text);
+}
+
+.settings__stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings__step {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  color: var(--text);
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-xs);
+  cursor: pointer;
+  transition: border-color var(--dur-select) var(--ease-out),
+    background var(--dur-select) var(--ease-out);
+}
+
+.settings__step:hover {
+  border-color: rgba(var(--accent-rgb), 0.4);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.settings__value {
+  min-width: 22px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.settings__soon {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+/* ---------- Command palette ---------- */
+.palette {
+  width: 560px;
+  max-width: 92vw;
+  margin-top: -12vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.025) 48%),
+    rgba(15, 21, 32, 0.72);
+  backdrop-filter: var(--blur-lg);
+  -webkit-backdrop-filter: var(--blur-lg);
+  border: 1px solid var(--line-2);
+  box-shadow:
+    var(--glass-specular),
+    0 30px 80px rgba(0, 0, 0, 0.6);
+}
+
+.palette__input {
+  padding: 16px 18px;
+  font-size: 15px;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--hairline);
+  outline: none;
+}
+
+.palette__list {
+  max-height: 48vh;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.palette__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 12px;
+  text-align: left;
+  font-size: 13.5px;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-radius: var(--r-xs);
+  cursor: pointer;
+  transition: background var(--dur-select) var(--ease-out);
+}
+
+.palette__item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.palette__item.is-active {
+  background: var(--accent-muted);
+}
+
+.palette__item-hint {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.palette__empty {
+  padding: 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* ---------- Confirm dialog (destructive actions) ---------- */
+.confirm {
+  width: 400px;
+  max-width: 90vw;
+  padding: 22px;
+  border-radius: var(--r-lg);
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02) 50%),
+    rgba(15, 21, 32, 0.72);
+  backdrop-filter: var(--blur-lg);
+  -webkit-backdrop-filter: var(--blur-lg);
+  border: 1px solid var(--line-2);
+  box-shadow:
+    var(--glass-specular),
+    0 30px 80px rgba(0, 0, 0, 0.6);
+}
+
+.confirm__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.confirm__body {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.55;
+}
+
+.confirm__body b {
+  color: var(--text);
+}
+
+.confirm__actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.confirm__btn {
+  padding: 8px 14px;
+  font-size: 12.5px;
+  color: var(--text);
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-xs);
+  cursor: pointer;
+  transition: background var(--dur-select) var(--ease-out),
+    border-color var(--dur-select) var(--ease-out);
+}
+
+.confirm__btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.confirm__btn--safe {
+  color: #cfe0ff;
+  border-color: rgba(var(--accent-rgb), 0.45);
+}
+
+.confirm__btn--danger {
+  color: #ff9b94;
+  border-color: rgba(255, 107, 99, 0.4);
+}
+
+.confirm__btn--danger:hover {
+  background: rgba(255, 107, 99, 0.14);
+}
+
+.vec-pane__rename {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 12px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 1px 6px;
+  outline: none;
+}
+
+/* ---------- Empty state ---------- */
+.empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+}
+
+.empty__card {
+  position: relative;
+  text-align: center;
+  max-width: 440px;
+  padding: 44px 48px;
+  border-radius: var(--r-xl);
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.015) 50%),
+    rgba(15, 21, 32, 0.5);
+  backdrop-filter: var(--blur-md);
+  -webkit-backdrop-filter: var(--blur-md);
+  border: 1px solid var(--line-2);
+  box-shadow:
+    var(--glass-specular),
+    0 30px 80px rgba(0, 0, 0, 0.5);
+}
+
+.empty__card > svg {
+  display: block;
+  margin: 0 auto 14px;
+}
+
+.empty__card h1 {
+  margin: 0 0 8px;
+  color: #fff;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.empty__card p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.empty__btn,
+.broadcast__btn {
+  margin-top: 16px;
+  padding: 11px 20px;
+  font-size: 14px;
+  color: #fff;
+  font-weight: 600;
+  background: linear-gradient(180deg, var(--accent-2), var(--accent));
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(var(--accent-rgb), 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  transition: filter var(--dur-select) var(--ease-out),
+    box-shadow var(--dur-select) var(--ease-out);
+}
+
+.empty__btn:hover {
+  filter: brightness(1.06);
+  box-shadow: 0 8px 26px rgba(var(--accent-rgb), 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+/* ---------- Agent node (solid-translucent cold card; opaque terminal) ---------- */
+/* Root fills the node bounds and stays UNCLIPPED so resize handles aren't cut
+   off; the glass visuals live in the inner frame. */
+.agent-node {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.agent-node__frame {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--card-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 var(--glass-highlight);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Selection = a clean 1px accent ring (no handle dots, no wireframe rectangle). */
+.agent-node__frame.is-selected {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 12px 40px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 var(--glass-highlight);
+}
+
+/* Resize affordance: invisible but draggable hit-zones â€” no dots, no wireframe
+   rectangle on any card. The cursor changes to a resize arrow on edges/corners;
+   selection alone shows the glowing border above. !important beats ReactFlow's
+   default resize-control borders. */
+.react-flow__resize-control.rs-handle {
+  width: 20px;
+  height: 20px;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.react-flow__resize-control.rs-line {
+  border-color: transparent !important;
+  background: transparent !important;
+}
+
+.agent-node__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--glass-border);
+  font-size: 12px;
+  cursor: grab;
+}
+
+.agent-node__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.agent-node__title {
+  flex: 1;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-node__branch {
+  font-size: 10px;
+  color: var(--muted);
+  background: rgba(220, 235, 255, 0.07);
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  padding: 2px 6px;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-node__branch--shared {
+  color: #d3a684;
+}
+
+.agent-node__tabs {
+  display: flex;
+  gap: 2px;
+}
+
+.agent-node__tab {
+  font-size: 11px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 2px 9px;
+  cursor: pointer;
+}
+
+.agent-node__tab.is-active {
+  color: #fff;
+  background: rgba(220, 235, 255, 0.14);
+  border-color: var(--glass-border);
+}
+
+.agent-node__close {
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+}
+
+.agent-node__close:hover {
+  color: #ff6b63;
+}
+
+.agent-node__body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Terminal is intentionally OPAQUE for crisp text. */
+.agent-node__term {
+  width: 100%;
+  height: 100%;
+  padding: 6px;
+  background: var(--term-bg);
+}
+
+.agent-node__term .xterm,
+.agent-node__term .xterm-viewport {
+  height: 100%;
+}
+
+/* Terminals don't need a visible scrollbar (wheel still scrolls scrollback). */
+.agent-node__term .xterm-viewport {
+  scrollbar-width: none;
+}
+
+.agent-node__term .xterm-viewport::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* ---------- Broadcast bar (floating, glass) ---------- */
+.broadcast {
+  position: absolute;
+  bottom: 16px;
+  left: calc(50% + 26px);
+  transform: translateX(-50%);
+  z-index: 28;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(680px, 76%);
+  padding: 8px 10px 8px 14px;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02) 60%),
+    var(--menu-bg);
+  backdrop-filter: var(--blur-md);
+  -webkit-backdrop-filter: var(--blur-md);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-lg);
+  box-shadow:
+    var(--glass-specular),
+    0 18px 44px rgba(0, 0, 0, 0.5);
+}
+
+.broadcast__label {
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.broadcast__input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text);
+  background: rgba(10, 16, 26, 0.5);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-sm);
+  outline: none;
+  transition: border-color var(--dur-select) var(--ease-out),
+    box-shadow var(--dur-select) var(--ease-out);
+}
+
+.broadcast__input:focus {
+  border-color: rgba(var(--accent-rgb), 0.7);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.18);
+}
+
+.broadcast__btn {
+  margin-top: 0;
+  padding: 8px 18px;
+  font-size: 13px;
+}
+
+.broadcast__btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+  box-shadow: none;
+}
+
+/* ---------- Diff panel (solid-translucent; inside transform) ---------- */
+.diff {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(10, 16, 26, 0.92);
+}
+
+.diff__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.diff__spacer {
+  flex: 1;
+}
+
+.diff__base {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.diff__btn {
+  font-size: 11px;
+  color: var(--text);
+  background: var(--card-bg-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 4px 11px;
+  cursor: pointer;
+}
+
+.diff__btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.diff__btn--merge {
+  color: #06121c;
+  font-weight: 600;
+  background: linear-gradient(180deg, #5fe0b0, #34c08a);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.diff__btn--discard {
+  color: #ff9b94;
+  border-color: rgba(255, 120, 110, 0.35);
+}
+
+.diff__msg {
+  padding: 7px 11px;
+  font-size: 12px;
+  color: var(--text);
+  background: rgba(220, 235, 255, 0.05);
+  border-bottom: 1px solid var(--glass-border);
+  white-space: pre-wrap;
+}
+
+.diff__body {
+  flex: 1;
+  overflow: auto;
+  padding: 6px 0;
+  font-family: 'Cascadia Code', Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.diff__empty {
+  padding: 18px;
+  color: var(--muted);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+.diff__line {
+  padding: 0 10px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.diff__line--add {
+  background: rgba(64, 200, 150, 0.16);
+  color: #9bf0cf;
+}
+
+.diff__line--del {
+  background: rgba(255, 90, 90, 0.16);
+  color: #ffb0a9;
+}
+
+.diff__line--new {
+  color: #9bf0cf;
+}
+
+.diff__line--hunk {
+  color: #6fd0e0;
+}
+
+.diff__line--meta {
+  color: var(--muted);
+}
+
+.diff__tag {
+  color: var(--muted);
+}
+
+/* ---------- ReactFlow surface ---------- */
+.react-flow,
+.react-flow__pane,
+.react-flow__renderer {
+  background: transparent !important;
+}
+
+/* Settle into place on release (Tidy Up, snap commit); never during live drag. */
+.react-flow__node {
+  transition: transform 160ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.react-flow__node.dragging {
+  transition: none;
+  cursor: grabbing;
+}
+
+/* "Lift" the card while dragging â€” a deeper shadow reads as picked-up. */
+.react-flow__node.dragging .agent-node__frame {
+  box-shadow:
+    0 22px 55px rgba(0, 0, 0, 0.62),
+    inset 0 1px 0 var(--glass-highlight);
+}
+
+.react-flow__controls {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.react-flow__controls-button {
+  background: transparent;
+  border-bottom: 1px solid var(--glass-border);
+  color: var(--text);
+  fill: var(--text);
+}
+
+.react-flow__controls-button:hover {
+  background: rgba(220, 235, 255, 0.14);
+}
+
+.react-flow__minimap {
+  border-radius: 12px;
+}
+
+.react-flow__attribution {
+  display: none;
+}
