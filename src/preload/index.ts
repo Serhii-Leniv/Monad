@@ -1,0 +1,96 @@
+import { contextBridge, ipcRenderer, webFrame } from 'electron'
+
+type DataHandler = (data: string) => void
+type ExitHandler = (code: number) => void
+
+const dataListeners = new Map<string, Set<DataHandler>>()
+const exitListeners = new Map<string, Set<ExitHandler>>()
+
+ipcRenderer.on('pty:data', (_e, { id, data }: { id: string; data: string }) => {
+  dataListeners.get(id)?.forEach((cb) => cb(data))
+})
+
+ipcRenderer.on('pty:exit', (_e, { id, code }: { id: string; code: number }) => {
+  exitListeners.get(id)?.forEach((cb) => cb(code))
+})
+
+function subscribe<T>(map: Map<string, Set<T>>, id: string, cb: T): () => void {
+  let set = map.get(id)
+  if (!set) {
+    set = new Set()
+    map.set(id, set)
+  }
+  set.add(cb)
+  return () => {
+    set?.delete(cb)
+    if (set && set.size === 0) map.delete(id)
+  }
+}
+
+export interface PtySpawnOptions {
+  shell?: string
+  args?: string[]
+  cwd?: string
+  cols?: number
+  rows?: number
+  env?: Record<string, string>
+}
+
+export interface ProjectRef {
+  path: string
+  name: string
+}
+
+const api = {
+  pty: {
+    spawn: (opts: PtySpawnOptions): Promise<string> => ipcRenderer.invoke('pty:spawn', opts),
+    write: (id: string, data: string): void => ipcRenderer.send('pty:input', { id, data }),
+    resize: (id: string, cols: number, rows: number): void =>
+      ipcRenderer.send('pty:resize', { id, cols, rows }),
+    kill: (id: string): void => ipcRenderer.send('pty:kill', { id }),
+    onData: (id: string, cb: DataHandler): (() => void) => subscribe(dataListeners, id, cb),
+    onExit: (id: string, cb: ExitHandler): (() => void) => subscribe(exitListeners, id, cb)
+  },
+  shells: {
+    list: (): Promise<unknown> => ipcRenderer.invoke('shells:list')
+  },
+  openExternal: (url: string): Promise<boolean> => ipcRenderer.invoke('open:external', url),
+  zoom: {
+    set: (factor: number): void => webFrame.setZoomFactor(factor)
+  },
+  notify: {
+    agent: (payload: { id: string; title: string; body: string }): Promise<boolean> =>
+      ipcRenderer.invoke('notify:agent', payload),
+    onClick: (cb: (id: string) => void): (() => void) => {
+      const handler = (_e: unknown, { id }: { id: string }): void => cb(id)
+      ipcRenderer.on('notify:click', handler)
+      return () => ipcRenderer.removeListener('notify:click', handler)
+    }
+  },
+  project: {
+    pick: (): Promise<ProjectRef | null> => ipcRenderer.invoke('project:pick'),
+    exists: (projectPath: string): Promise<boolean> =>
+      ipcRenderer.invoke('project:exists', projectPath),
+    load: (projectPath: string): Promise<unknown> => ipcRenderer.invoke('project:load', projectPath),
+    save: (projectPath: string, data: unknown): Promise<boolean> =>
+      ipcRenderer.invoke('project:save', { projectPath, data })
+  },
+  git: {
+    info: (projectPath: string): Promise<unknown> => ipcRenderer.invoke('git:info', projectPath),
+    prune: (projectPath: string): Promise<boolean> => ipcRenderer.invoke('git:prune', projectPath),
+    diff: (projectPath: string, agentId: string): Promise<unknown> =>
+      ipcRenderer.invoke('git:diff', { projectPath, agentId }),
+    merge: (projectPath: string, agentId: string, message: string): Promise<unknown> =>
+      ipcRenderer.invoke('git:merge', { projectPath, agentId, message })
+  },
+  worktree: {
+    create: (projectPath: string, agentId: string, isolation: string): Promise<unknown> =>
+      ipcRenderer.invoke('worktree:create', { projectPath, agentId, isolation }),
+    remove: (projectPath: string, agentId: string): Promise<boolean> =>
+      ipcRenderer.invoke('worktree:remove', { projectPath, agentId })
+  }
+}
+
+contextBridge.exposeInMainWorld('api', { ...api, platform: process.platform })
+
+export type Api = typeof api
