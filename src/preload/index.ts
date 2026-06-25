@@ -55,6 +55,10 @@ const api = {
     list: (): Promise<unknown> => ipcRenderer.invoke('shells:list')
   },
   openExternal: (url: string): Promise<boolean> => ipcRenderer.invoke('open:external', url),
+  wallpaper: {
+    pick: (): Promise<string | null> => ipcRenderer.invoke('wallpaper:pick'),
+    read: (path: string): Promise<string | null> => ipcRenderer.invoke('wallpaper:read', path)
+  },
   zoom: {
     set: (factor: number): void => webFrame.setZoomFactor(factor)
   },

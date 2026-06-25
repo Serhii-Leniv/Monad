@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Titlebar from './components/Titlebar'
 import Rail from './components/Rail'
 import Stage from './components/Stage'
 import Settings from './components/Settings'
 import CommandPalette from './components/CommandPalette'
+import DiffPanel from './components/DiffPanel'
 import BroadcastBar from './components/BroadcastBar'
 import Logo from './components/Logo'
 import { useStore, toPersisted } from './store'
 import { openProjectInteractive, restoreLastProject } from './openProject'
+import { applyAccent } from './accent'
 
 function EmptyState(): JSX.Element {
   return (
@@ -30,7 +32,12 @@ export default function App(): JSX.Element {
   const setShells = useStore((s) => s.setShells)
   const settingsOpen = useStore((s) => s.settingsOpen)
   const paletteOpen = useStore((s) => s.paletteOpen)
+  const diffAgentId = useStore((s) => s.diffAgentId)
   const zoomFactor = useStore((s) => s.settings.zoomFactor)
+  const accent = useStore((s) => s.settings.accent)
+  const wallpaper = useStore((s) => s.settings.wallpaper)
+  const terminalOpacity = useStore((s) => s.settings.terminalOpacity)
+  const [wallpaperUrl, setWallpaperUrl] = useState<string | null>(null)
   const saveTimer = useRef<number>()
 
   // Detect the shells installed on this machine, once on launch.
@@ -55,13 +62,39 @@ export default function App(): JSX.Element {
     })
   }, [])
 
+  // Load the chosen wallpaper (read in main → data URL so CSP stays strict).
+  useEffect(() => {
+    if (!wallpaper) {
+      setWallpaperUrl(null)
+      return
+    }
+    let cancelled = false
+    void window.api.wallpaper.read(wallpaper).then((url) => {
+      if (!cancelled) setWallpaperUrl(url)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [wallpaper])
+
+  // Terminal background opacity (lower reveals the wallpaper behind).
+  useEffect(() => {
+    document.documentElement.style.setProperty('--term-alpha', String(terminalOpacity))
+  }, [terminalOpacity])
+
+  // Accent colour drives the whole palette.
+  useEffect(() => {
+    applyAccent(accent)
+  }, [accent])
+
   // Keyboard shortcuts: ⌘ on macOS, Ctrl+Shift on Windows/Linux (avoids the
   // shell's own Ctrl-key readline bindings).
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       const st = useStore.getState()
       if (e.key === 'Escape') {
-        if (st.paletteOpen) st.setPaletteOpen(false)
+        if (st.diffAgentId) st.setDiffAgentId(null)
+        else if (st.paletteOpen) st.setPaletteOpen(false)
         else if (st.settingsOpen) st.setSettingsOpen(false)
         else if (st.focusedId) st.clearFocus()
         return
@@ -135,6 +168,9 @@ export default function App(): JSX.Element {
 
   return (
     <div className="app">
+      {wallpaperUrl && (
+        <div className="wallpaper" style={{ backgroundImage: `url(${wallpaperUrl})` }} />
+      )}
       <Titlebar />
       <div className="app__main">
         <Rail />
@@ -143,6 +179,7 @@ export default function App(): JSX.Element {
       </div>
       {paletteOpen && <CommandPalette />}
       {settingsOpen && <Settings />}
+      {diffAgentId && <DiffPanel />}
     </div>
   )
 }

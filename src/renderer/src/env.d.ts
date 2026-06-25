@@ -81,6 +81,10 @@ interface Window {
       list: () => Promise<ShellInfo[]>
     }
     openExternal: (url: string) => Promise<boolean>
+    wallpaper: {
+      pick: () => Promise<string | null>
+      read: (path: string) => Promise<string | null>
+    }
     zoom: {
       set: (factor: number) => void
     }

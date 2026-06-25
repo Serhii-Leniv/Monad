@@ -38,7 +38,7 @@ export default function Rail(): JSX.Element {
   return (
     <div className="rail">
       <div className="rail__logo" title="Vectro">
-        <Logo size={24} />
+        <Logo size={36} />
       </div>
 
       <div className="rail__shell">

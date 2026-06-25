@@ -1,10 +1,14 @@
-import { app, BrowserWindow, session, screen } from 'electron'
+import { app, BrowserWindow, session, screen, nativeImage } from 'electron'
 import { join } from 'path'
-import { readFileSync, writeFileSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { registerIpc } from './ipc'
 import type { PtyManager } from './pty-manager'
 
 const isDev = !!process.env['ELECTRON_RENDERER_URL']
+
+// App emblem (the liquid-glass mark). build/icon.png is also what electron-builder
+// uses to generate the packaged .icns / .ico icons.
+const iconPng = join(__dirname, '../../build/icon.png')
 
 // --- Window size/position persistence (survives restarts) ---
 interface WinState {
@@ -69,6 +73,7 @@ function createWindow(): void {
     width: st.width,
     height: st.height,
     ...(onScreen(st) ? { x: st.x, y: st.y } : {}),
+    ...(process.platform !== 'darwin' && existsSync(iconPng) ? { icon: iconPng } : {}),
     minWidth: 720,
     minHeight: 480,
     // Transparent bg + Windows 11 acrylic = frosted desktop behind the app.
@@ -109,6 +114,11 @@ function createWindow(): void {
 app.whenReady().then(() => {
   applyProductionCsp()
   ptyManager = registerIpc(() => win)
+
+  // macOS dock icon (the running dev app otherwise shows the Electron icon).
+  if (process.platform === 'darwin' && app.dock && existsSync(iconPng)) {
+    app.dock.setIcon(nativeImage.createFromPath(iconPng))
+  }
 
   createWindow()
 

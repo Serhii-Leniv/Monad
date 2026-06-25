@@ -1,0 +1,43 @@
+name: Build installers
+
+# Run manually (Actions tab → Run workflow) or on a version tag.
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (Apple Silicon)
+            os: macos-14
+            script: package:mac
+          - name: macOS (Intel)
+            os: macos-13
+            script: package:mac
+          - name: Windows
+            os: windows-latest
+            script: package:win
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # .npmrc pins runtime=electron target=29.4.6 so the right prebuilt
+      # node-pty binary is fetched for this runner's OS/arch.
+      - run: npm ci
+      - run: npm run ${{ matrix.script }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Vectro-${{ matrix.os }}
+          path: |
+            dist/*.dmg
+            dist/*.exe
+            dist/*.AppImage
+          if-no-files-found: ignore
