@@ -73,6 +73,8 @@ interface AppState {
   settings: AppSettings
   settingsOpen: boolean
   paletteOpen: boolean
+  /** Agent whose worktree changes are open in the diff/merge review modal. */
+  diffAgentId: string | null
   focusedId: string | null
   prevView: { panX: number; panY: number; zoom: number } | null
 
@@ -84,6 +86,7 @@ interface AppState {
   setSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => void
   setSettingsOpen: (open: boolean) => void
   setPaletteOpen: (open: boolean) => void
+  setDiffAgentId: (id: string | null) => void
   setView: (panX: number, panY: number, zoom: number) => void
   addAgent: (opts?: { command?: string; shellId?: string }) => void
   removeAgent: (id: string, opts?: { keepWorktree?: boolean }) => void
@@ -113,8 +116,14 @@ export interface AppSettings {
   scrollback: number
   confirmClose: boolean
   zoomFactor: number
+  /** Accent colour (hex) — drives the whole UI palette. */
+  accent: string
   /** Desktop notification when a backgrounded/off-screen agent needs you. */
   notifications: boolean
+  /** Absolute path to a background image, or null for the default dark scene. */
+  wallpaper: string | null
+  /** Terminal background opacity 0.4–1 (lower reveals the wallpaper behind). */
+  terminalOpacity: number
 }
 
 /** Monospace stacks offered in Settings (first that's installed wins). */
@@ -135,7 +144,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   scrollback: 2000,
   confirmClose: true,
   zoomFactor: 1.1,
-  notifications: true
+  accent: '#3b5bd9',
+  notifications: true,
+  wallpaper: null,
+  terminalOpacity: 0.55
 }
 
 function loadSettings(): AppSettings {
@@ -165,9 +177,9 @@ function uuid(): string {
 }
 
 const GAP = 12
-const RAIL_INSET = 88 // room for the floating dock on the left
+const RAIL_INSET = 84 // room for the floating dock on the left (max adaptive width)
 const PAD = 14
-const BOTTOM_INSET = 72 // room for the floating broadcast bar at the bottom
+const BOTTOM_INSET = 80 // room for the floating broadcast bar at the bottom (max adaptive height)
 
 /**
  * Tile every terminal into the viewport at **zoom 1** (font stays fixed). Array
@@ -231,7 +243,7 @@ export const useStore = create<AppState>((set, get) => ({
   isGit: false,
   baseBranch: null,
   agents: [],
-  layoutMode: 'columns',
+  layoutMode: 'grid',
   canvasW: 1200,
   canvasH: 800,
   canvasReady: false,
@@ -241,6 +253,7 @@ export const useStore = create<AppState>((set, get) => ({
   settings: loadSettings(),
   settingsOpen: false,
   paletteOpen: false,
+  diffAgentId: null,
   focusedId: null,
   prevView: null,
   panX: 0,
@@ -252,7 +265,7 @@ export const useStore = create<AppState>((set, get) => ({
       const loaded: AgentInstance[] = (saved?.agents ?? [])
         .slice(0, MAX_AGENTS)
         .map((p) => ({ ...p, isolation: p.isolation ?? 'shared' }))
-      const mode: LayoutMode = saved?.layoutMode === 'grid' ? 'grid' : 'columns'
+      const mode: LayoutMode = saved?.layoutMode === 'columns' ? 'columns' : 'grid'
       return {
         projectPath: ref.path,
         projectName: ref.name,
@@ -313,6 +326,8 @@ export const useStore = create<AppState>((set, get) => ({
   setSettingsOpen: (open) => set({ settingsOpen: open }),
 
   setPaletteOpen: (open) => set({ paletteOpen: open }),
+
+  setDiffAgentId: (id) => set({ diffAgentId: id }),
 
   setView: (panX, panY, zoom) => set({ panX, panY, zoom }),
 

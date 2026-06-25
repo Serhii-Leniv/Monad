@@ -8,6 +8,11 @@ import { useStore, type AgentInstance, type AgentStatus } from '../store'
 import { needsAttention, stripAnsi, clampTail } from '../attention'
 import { IconClose } from './Icons'
 
+// DECSCUSR (CSI Ps SP q) — shells like PSReadLine use it to force a (fast)
+// blinking cursor. Strip it so our own calm CSS blink is the single source.
+// eslint-disable-next-line no-control-regex
+const CURSOR_STYLE_SEQ = /\x1b\[[0-9]* q/g
+
 /** Status → status-dot colour (CSS custom properties from the palette). */
 const STATUS_COLOR: Record<AgentStatus, string> = {
   starting: 'var(--status-idle)',
@@ -38,6 +43,7 @@ export default function TerminalPane({ agent }: { agent: AgentInstance }): JSX.E
   const confirmClose = useStore((s) => s.settings.confirmClose)
   const renameAgent = useStore((s) => s.renameAgent)
   const focusTerminal = useStore((s) => s.focusTerminal)
+  const setDiffAgentId = useStore((s) => s.setDiffAgentId)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<(() => void) | null>(null)
   const searchRef = useRef<SearchAddon | null>(null)
@@ -62,8 +68,9 @@ export default function TerminalPane({ agent }: { agent: AgentInstance }): JSX.E
       fontFamily,
       fontSize,
       scrollback,
-      cursorBlink: true,
-      theme: { background: '#070b12', foreground: '#cdd6e4' }
+      cursorBlink: false, // steady cursor — the blink read as a fast jitter
+      allowTransparency: true, // so the pane bg / wallpaper can show through
+      theme: { background: 'rgba(0,0,0,0)', foreground: '#cdd6e4', cursor: '#cdd6e4' }
     })
     termRef.current = term
     const fit = new FitAddon()
@@ -204,7 +211,7 @@ export default function TerminalPane({ agent }: { agent: AgentInstance }): JSX.E
       setStatus(id, 'idle')
 
       unsubs.push(window.api.pty.onData(pid, (d) => {
-        term.write(d)
+        term.write(d.replace(CURSOR_STYLE_SEQ, ''))
         onActivity(d)
       }))
       unsubs.push(
@@ -392,9 +399,17 @@ export default function TerminalPane({ agent }: { agent: AgentInstance }): JSX.E
         ) : (
           agent.isolation === 'worktree' &&
           branch && (
-            <span className="vec-pane__branch" title={`Worktree branch: ${branch}`}>
+            <button
+              className="vec-pane__branch vec-pane__branch--btn"
+              title="Review changes & merge"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation()
+                setDiffAgentId(id)
+              }}
+            >
               {branch.replace(/^canvas\//, '')}
-            </span>
+            </button>
           )
         )}
         <button

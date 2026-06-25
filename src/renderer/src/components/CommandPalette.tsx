@@ -14,6 +14,7 @@ export default function CommandPalette(): JSX.Element {
   const addAgent = useStore((s) => s.addAgent)
   const setLayoutMode = useStore((s) => s.setLayoutMode)
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
+  const setDiffAgentId = useStore((s) => s.setDiffAgentId)
   const removeAgent = useStore((s) => s.removeAgent)
   const focusTerminal = useStore((s) => s.focusTerminal)
   const shells = useStore((s) => s.shells)
@@ -44,6 +45,10 @@ export default function CommandPalette(): JSX.Element {
       list.push({ id: 'cols', title: 'Layout: Columns', hint: '⌘2', run: () => setLayoutMode('columns') })
       const sel = selectedIds[0]
       if (sel) {
+        const selAgent = agents.find((a) => a.id === sel)
+        if (selAgent?.isolation === 'worktree') {
+          list.push({ id: 'review', title: 'Review changes & merge…', run: () => setDiffAgentId(sel) })
+        }
         list.push({ id: 'focus', title: 'Focus selected terminal', run: () => focusTerminal(sel) })
         list.push({ id: 'close', title: 'Close selected terminal', hint: '⌘W', run: () => removeAgent(sel) })
       }
@@ -51,7 +56,7 @@ export default function CommandPalette(): JSX.Element {
     list.push({ id: 'open', title: 'Open project…', run: openProjectInteractive })
     list.push({ id: 'settings', title: 'Settings', run: () => setSettingsOpen(true) })
     return list
-  }, [projectPath, shells, selectedIds, agents.length, addAgent, setLayoutMode, focusTerminal, removeAgent, setSettingsOpen])
+  }, [projectPath, shells, selectedIds, agents, addAgent, setLayoutMode, focusTerminal, removeAgent, setSettingsOpen, setDiffAgentId])
 
   const q = query.trim().toLowerCase()
   const items = useMemo<Cmd[]>(() => {

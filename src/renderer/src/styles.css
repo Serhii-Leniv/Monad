@@ -20,6 +20,10 @@
   --r-lg: 16px; /* palette, menus */
   --r-xl: 20px; /* modals, dock */
 
+  /* Adaptive dock-button size — clamped so chrome stays comfortable on a 13"
+     laptop and on a 4K display (vmin tracks the screen's short side). */
+  --dock: clamp(33px, 3.4vmin, 42px);
+
   /* --- One coherent blur scale (frosted chrome only; never on terminals) --- */
   --blur-sm: blur(14px) saturate(150%); /* titlebar */
   --blur-md: blur(20px) saturate(160%); /* dock, menus, modals, palette */
@@ -85,11 +89,12 @@ body,
   font-family: 'Segoe UI', system-ui, sans-serif;
 }
 
-/* Cold scene: blue + teal glows over a dark veil (sits over OS acrylic). */
+/* Cold scene over the OS acrylic: a lighter veil so the frosted desktop /
+   wallpaper shows through translucent terminals. */
 body {
   background:
     radial-gradient(1200px 820px at 18% -6%, rgba(30, 64, 92, 0.14), transparent 55%),
-    linear-gradient(180deg, rgba(11, 12, 15, 0.84), rgba(8, 9, 12, 0.9));
+    linear-gradient(180deg, rgba(10, 12, 16, 0.42), rgba(7, 9, 12, 0.52));
 }
 
 .app {
@@ -97,6 +102,33 @@ body {
   flex-direction: column;
   height: 100vh;
   background: transparent;
+  position: relative;
+  isolation: isolate;
+}
+
+/* Optional user wallpaper behind everything (terminals can be made translucent
+   to reveal it). A subtle scrim keeps chrome/text legible. */
+.wallpaper {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+
+.wallpaper::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(6, 8, 12, 0.28), rgba(6, 8, 12, 0.46));
+}
+
+.titlebar,
+.app__main {
+  position: relative;
+  z-index: 1;
 }
 
 /* Minimal top bar = window drag region only (native buttons live top-right). */
@@ -149,7 +181,9 @@ body {
   flex-direction: column;
   border-radius: var(--r-md);
   overflow: hidden;
-  background: linear-gradient(160deg, rgba(34, 39, 50, 0.76), rgba(15, 17, 23, 0.76));
+  /* Transparent body so the terminal can be see-through; the card reads from its
+     header, border ring and shadow. */
+  background: transparent;
   border: 1px solid var(--glass-border);
   box-shadow:
     0 14px 40px rgba(0, 0, 0, 0.42),
@@ -181,6 +215,7 @@ body {
   border-color: var(--accent);
   box-shadow:
     0 0 0 1px var(--accent),
+    0 0 22px rgba(var(--accent-rgb), 0.38),
     0 14px 40px rgba(0, 0, 0, 0.45),
     inset 0 1px 0 var(--glass-highlight);
 }
@@ -226,9 +261,11 @@ body {
   gap: 8px;
   flex: 0 0 auto;
   padding: 8px 10px;
-  /* Faint top-light so the card edge catches light without blurring the
-     terminal body below (which stays fully opaque). */
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0));
+  /* Slightly opaque frosted strip so the title/status stay readable even when
+     the terminal below is see-through. */
+  background: linear-gradient(180deg, rgba(20, 24, 32, 0.62), rgba(16, 20, 27, 0.52));
+  backdrop-filter: var(--blur-sm);
+  -webkit-backdrop-filter: var(--blur-sm);
   border-bottom: 1px solid var(--line-1);
   font-size: 12px;
   cursor: grab;
@@ -299,7 +336,11 @@ body {
   position: absolute;
   inset: 0;
   padding: 6px;
-  background: var(--term-bg);
+  /* Translucent frosted terminal: --term-alpha (from settings) controls how much
+     the wallpaper / frosted desktop shows; the blur keeps text legible. */
+  background: rgba(10, 13, 18, var(--term-alpha, 0.8));
+  backdrop-filter: blur(8px) saturate(120%);
+  -webkit-backdrop-filter: blur(8px) saturate(120%);
 }
 
 .vec-pane__term .xterm,
@@ -314,6 +355,25 @@ body {
 .vec-pane__term .xterm-viewport::-webkit-scrollbar {
   width: 0;
   height: 0;
+}
+
+/* Calm, slow cursor blink (xterm's own blink read as a fast jitter). Driven by
+   us via CSS on the focused block cursor; cursorBlink is off in the Terminal. */
+@keyframes vec-cursor-blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  50.01%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.vec-pane__term .xterm.focus .xterm-cursor-block,
+.vec-pane__term .xterm.focus .xterm-cursor-bar,
+.vec-pane__term .xterm.focus .xterm-cursor-underline {
+  animation: vec-cursor-blink 1.5s step-end infinite;
 }
 
 /* Inline error state — replaces the terminal body when the shell fails to
@@ -550,19 +610,23 @@ body {
   top: 50%;
   transform: translateY(-50%);
   z-index: 30;
-  width: 52px;
+  width: calc(var(--dock) + 22px);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 9px 7px;
-  background: linear-gradient(150deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.03) 55%);
+  gap: calc(var(--dock) * 0.16);
+  padding: calc(var(--dock) * 0.28) 11px;
+  /* A defined dark-glass body (not just translucent white) so the dock reads
+     crisp over the now-transparent canvas instead of a blurry smudge. */
+  background:
+    linear-gradient(150deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03) 55%),
+    rgba(13, 16, 23, 0.66);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--line-3);
   border-radius: var(--r-xl);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
     inset 0 0 0 0.5px rgba(255, 255, 255, 0.05),
     var(--glass-shadow);
 }
@@ -583,8 +647,14 @@ body {
 }
 
 .rail__logo {
-  margin-bottom: 8px;
+  margin-bottom: calc(var(--dock) * 0.18);
   opacity: 0.95;
+}
+
+.rail__logo img,
+.rail__logo svg {
+  width: calc(var(--dock) * 0.72);
+  height: calc(var(--dock) * 0.72);
 }
 
 .rail__divider {
@@ -600,18 +670,24 @@ body {
 
 .rail-btn {
   position: relative;
-  width: 38px;
-  height: 38px;
+  width: var(--dock);
+  height: var(--dock);
   display: grid;
   place-items: center;
-  border-radius: var(--r-sm);
+  border-radius: calc(var(--dock) * 0.28);
   color: var(--muted);
   background: transparent;
   border: 1px solid transparent;
   cursor: pointer;
   transition: color var(--dur-select) var(--ease-out),
     background var(--dur-select) var(--ease-out),
-    border-color var(--dur-select) var(--ease-out);
+    border-color var(--dur-select) var(--ease-out),
+    box-shadow var(--dur-select) var(--ease-out);
+}
+
+.rail-btn svg {
+  width: calc(var(--dock) * 0.5);
+  height: calc(var(--dock) * 0.5);
 }
 
 .rail-btn:hover:not(:disabled) {
@@ -626,8 +702,13 @@ body {
 
 .rail-btn.is-active {
   color: var(--accent);
-  background: rgba(var(--accent-rgb), 0.1);
-  border-color: rgba(var(--accent-rgb), 0.22);
+  background: rgba(var(--accent-rgb), 0.12);
+  border-color: rgba(var(--accent-rgb), 0.3);
+  box-shadow: 0 0 16px rgba(var(--accent-rgb), 0.3);
+}
+
+.rail-btn.is-active svg {
+  filter: drop-shadow(0 0 6px rgba(var(--accent-rgb), 0.85));
 }
 
 .rail-btn--primary,
@@ -635,7 +716,10 @@ body {
   color: #fff;
   background: linear-gradient(180deg, var(--accent-2), var(--accent));
   border-color: rgba(255, 255, 255, 0.22);
-  box-shadow: 0 3px 12px rgba(var(--accent-rgb), 0.4);
+  /* Accent glow — the button "shines". */
+  box-shadow:
+    0 0 20px rgba(var(--accent-rgb), 0.6),
+    0 3px 14px rgba(var(--accent-rgb), 0.45);
 }
 
 .rail-btn--primary:hover:not(:disabled) {
@@ -683,7 +767,7 @@ body {
 
 .rail__menu {
   position: absolute;
-  left: 46px;
+  left: calc(var(--dock) + 14px);
   bottom: 0;
   z-index: 41;
   min-width: 158px;
@@ -886,6 +970,78 @@ body {
   background: rgba(255, 255, 255, 0.12);
 }
 
+.settings__btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-xs);
+  cursor: pointer;
+  transition: background var(--dur-select) var(--ease-out),
+    border-color var(--dur-select) var(--ease-out);
+}
+
+.settings__btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(var(--accent-rgb), 0.4);
+}
+
+.settings__swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 230px;
+}
+
+.settings__swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+  position: relative;
+  transition: transform var(--dur-select) var(--ease-out);
+}
+
+.settings__swatch:hover {
+  transform: scale(1.12);
+}
+
+.settings__swatch.is-active {
+  box-shadow:
+    0 0 0 2px rgba(16, 18, 24, 0.9),
+    0 0 0 4px #fff;
+}
+
+.settings__swatch--custom {
+  overflow: hidden;
+  background: conic-gradient(
+    from 0deg,
+    #f43f5e,
+    #f59e0b,
+    #22c55e,
+    #14b8a6,
+    #2f6bff,
+    #8b5cf6,
+    #f43f5e
+  );
+}
+
+.settings__swatch--custom input {
+  position: absolute;
+  inset: -6px;
+  width: 140%;
+  height: 140%;
+  opacity: 0;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
 .settings__value {
   min-width: 22px;
   text-align: center;
@@ -1043,6 +1199,170 @@ body {
   background: rgba(255, 107, 99, 0.14);
 }
 
+/* ---------- Diff / merge review modal ---------- */
+.review {
+  width: 780px;
+  max-width: 92vw;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02) 50%),
+    rgba(15, 21, 32, 0.74);
+  backdrop-filter: var(--blur-lg);
+  -webkit-backdrop-filter: var(--blur-lg);
+  border: 1px solid var(--line-2);
+  box-shadow:
+    var(--glass-specular),
+    0 30px 80px rgba(0, 0, 0, 0.6);
+}
+
+.review__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 16px 13px 18px;
+  border-bottom: 1px solid var(--line-1);
+}
+
+.review__title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.review__name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.review__branch {
+  font-size: 11.5px;
+  color: var(--muted);
+  font-family: 'Cascadia Code', Consolas, monospace;
+  white-space: nowrap;
+}
+
+.review__body {
+  flex: 1;
+  overflow: auto;
+  padding: 8px 0;
+  min-height: 140px;
+  font-family: 'Cascadia Code', Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.review__empty {
+  padding: 36px 18px;
+  text-align: center;
+  color: var(--muted);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 13px;
+}
+
+.review__empty--ok {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.review__error {
+  padding: 9px 18px;
+  font-size: 12px;
+  color: #ff9b94;
+  background: rgba(255, 90, 90, 0.1);
+  border-top: 1px solid var(--line-1);
+}
+
+.review__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--line-1);
+}
+
+.review__msg {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text);
+  background: rgba(10, 16, 26, 0.5);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-sm);
+  outline: none;
+  transition: border-color var(--dur-select) var(--ease-out),
+    box-shadow var(--dur-select) var(--ease-out);
+}
+
+.review__msg:focus {
+  border-color: rgba(var(--accent-rgb), 0.7);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.16);
+}
+
+.review__btn {
+  padding: 8px 16px;
+  font-size: 12.5px;
+  color: var(--text);
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--dur-select) var(--ease-out), filter var(--dur-select) var(--ease-out);
+}
+
+.review__btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.review__btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.review__btn--merge {
+  color: #06121c;
+  font-weight: 600;
+  background: linear-gradient(180deg, #5fe0b0, #34c08a);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.review__btn--merge:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.review__btn--discard {
+  color: #ff9b94;
+  border-color: rgba(255, 120, 110, 0.35);
+}
+
+.review__btn--discard:hover:not(:disabled) {
+  background: rgba(255, 107, 99, 0.14);
+}
+
+/* Clickable branch chip (opens the review) */
+.vec-pane__branch--btn {
+  font: inherit;
+  font-size: 10px;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background var(--dur-select) var(--ease-out),
+    border-color var(--dur-select) var(--ease-out), color var(--dur-select) var(--ease-out);
+}
+
+.vec-pane__branch--btn:hover {
+  color: var(--text);
+  background: rgba(var(--accent-rgb), 0.16);
+  border-color: rgba(var(--accent-rgb), 0.5);
+}
+
 .vec-pane__rename {
   flex: 1;
   min-width: 0;
@@ -1080,7 +1400,8 @@ body {
     0 30px 80px rgba(0, 0, 0, 0.5);
 }
 
-.empty__card > svg {
+.empty__card > svg,
+.empty__card > img {
   display: block;
   margin: 0 auto 14px;
 }
@@ -1108,14 +1429,21 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: var(--r-md);
   cursor: pointer;
-  box-shadow: 0 6px 20px rgba(var(--accent-rgb), 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  box-shadow:
+    0 0 18px rgba(var(--accent-rgb), 0.45),
+    0 6px 20px rgba(var(--accent-rgb), 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
   transition: filter var(--dur-select) var(--ease-out),
     box-shadow var(--dur-select) var(--ease-out);
 }
 
-.empty__btn:hover {
+.empty__btn:hover,
+.broadcast__btn:hover {
   filter: brightness(1.06);
-  box-shadow: 0 8px 26px rgba(var(--accent-rgb), 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  box-shadow:
+    0 0 24px rgba(var(--accent-rgb), 0.55),
+    0 8px 26px rgba(var(--accent-rgb), 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 /* ---------- Agent node (solid-translucent cold card; opaque terminal) ---------- */
@@ -1277,15 +1605,17 @@ body {
 /* ---------- Broadcast bar (floating, glass) ---------- */
 .broadcast {
   position: absolute;
-  bottom: 16px;
-  left: calc(50% + 26px);
+  bottom: clamp(12px, 1.7vmin, 18px);
+  /* centre in the canvas area to the right of the dock */
+  left: calc(50% + 16px + var(--dock) * 0.5);
   transform: translateX(-50%);
   z-index: 28;
   display: flex;
   align-items: center;
-  gap: 10px;
-  width: min(680px, 76%);
-  padding: 8px 10px 8px 14px;
+  gap: clamp(9px, 1.2vmin, 12px);
+  width: min(700px, 80%);
+  padding: clamp(7px, 0.9vmin, 10px) clamp(8px, 1vmin, 11px) clamp(7px, 0.9vmin, 10px)
+    clamp(12px, 1.4vmin, 16px);
   background: linear-gradient(150deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02) 60%),
     var(--menu-bg);
   backdrop-filter: var(--blur-md);
@@ -1298,7 +1628,7 @@ body {
 }
 
 .broadcast__label {
-  font-size: 11.5px;
+  font-size: clamp(11px, 1.05vmin, 12.5px);
   color: var(--muted);
   white-space: nowrap;
 }
@@ -1306,8 +1636,8 @@ body {
 .broadcast__input {
   flex: 1;
   min-width: 0;
-  padding: 8px 12px;
-  font-size: 13px;
+  padding: clamp(7px, 0.9vmin, 10px) clamp(10px, 1.15vmin, 13px);
+  font-size: clamp(12.5px, 1.2vmin, 14px);
   color: var(--text);
   background: rgba(10, 16, 26, 0.5);
   border: 1px solid var(--glass-border);
@@ -1324,8 +1654,8 @@ body {
 
 .broadcast__btn {
   margin-top: 0;
-  padding: 8px 18px;
-  font-size: 13px;
+  padding: clamp(7px, 0.9vmin, 10px) clamp(16px, 1.9vmin, 22px);
+  font-size: clamp(12.5px, 1.2vmin, 14px);
 }
 
 .broadcast__btn:disabled {

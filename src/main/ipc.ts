@@ -44,6 +44,37 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
 
   ipcMain.handle('shells:list', () => detectShells())
 
+  // --- Wallpaper: pick an image, and read it as a data URL (CSP-safe) ---
+  ipcMain.handle('wallpaper:pick', async () => {
+    const win = getWindow()
+    if (!win) return null
+    const r = await dialog.showOpenDialog(win, {
+      properties: ['openFile'],
+      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'avif'] }]
+    })
+    return r.canceled || !r.filePaths[0] ? null : r.filePaths[0]
+  })
+
+  ipcMain.handle('wallpaper:read', async (_e, p: string) => {
+    try {
+      const ext = p.split('.').pop()?.toLowerCase()
+      const mime =
+        ext === 'jpg' || ext === 'jpeg'
+          ? 'image/jpeg'
+          : ext === 'webp'
+            ? 'image/webp'
+            : ext === 'gif'
+              ? 'image/gif'
+              : ext === 'avif'
+                ? 'image/avif'
+                : 'image/png'
+      const buf = await fs.readFile(p)
+      return `data:${mime};base64,${buf.toString('base64')}`
+    } catch {
+      return null
+    }
+  })
+
   // Open a URL from a terminal (web-links addon) in the user's real browser.
   ipcMain.handle('open:external', (_e, url: string) => {
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
