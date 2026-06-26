@@ -6,9 +6,10 @@ import Settings from './components/Settings'
 import CommandPalette from './components/CommandPalette'
 import DiffPanel from './components/DiffPanel'
 import BroadcastBar from './components/BroadcastBar'
+import Toasts from './components/Toasts'
 import Logo from './components/Logo'
 import { useStore, toPersisted } from './store'
-import { openProjectInteractive, restoreLastProject } from './openProject'
+import { openProjectInteractive, openProjectByPath, restoreLastProject } from './openProject'
 import { applyAccent } from './accent'
 
 function EmptyState(): JSX.Element {
@@ -82,6 +83,12 @@ export default function App(): JSX.Element {
     document.documentElement.style.setProperty('--term-alpha', String(terminalOpacity))
   }, [terminalOpacity])
 
+  // Frosted-glass blur on terminals is only enabled with a wallpaper (it's the
+  // most expensive thing to animate; off otherwise for max smoothness).
+  useEffect(() => {
+    document.body.classList.toggle('has-wallpaper', !!wallpaperUrl)
+  }, [wallpaperUrl])
+
   // Accent colour drives the whole palette.
   useEffect(() => {
     applyAccent(accent)
@@ -97,6 +104,14 @@ export default function App(): JSX.Element {
         else if (st.paletteOpen) st.setPaletteOpen(false)
         else if (st.settingsOpen) st.setSettingsOpen(false)
         else if (st.focusedId) st.clearFocus()
+        return
+      }
+      // Switch workspace — ⌘⌥1…9 (Ctrl+Alt on Win/Linux). Saves the current
+      // canvas first; no-op if that slot is already open or empty.
+      if ((e.metaKey || e.ctrlKey) && e.altKey && /^[1-9]$/.test(e.key)) {
+        e.preventDefault()
+        const ws = st.workspaces[Number(e.key) - 1]
+        if (ws) void openProjectByPath(ws)
         return
       }
       // Interface zoom — plain ⌘/Ctrl with +/−/0 (like browsers / VS Code).
@@ -168,9 +183,15 @@ export default function App(): JSX.Element {
 
   return (
     <div className="app">
+      <div className="aurora" aria-hidden="true">
+        <span className="aurora__orb aurora__orb--1" />
+        <span className="aurora__orb aurora__orb--2" />
+        <span className="aurora__orb aurora__orb--3" />
+      </div>
       {wallpaperUrl && (
         <div className="wallpaper" style={{ backgroundImage: `url(${wallpaperUrl})` }} />
       )}
+      <div className="grain" aria-hidden="true" />
       <Titlebar />
       <div className="app__main">
         <Rail />
@@ -180,6 +201,7 @@ export default function App(): JSX.Element {
       {paletteOpen && <CommandPalette />}
       {settingsOpen && <Settings />}
       {diffAgentId && <DiffPanel />}
+      <Toasts />
     </div>
   )
 }

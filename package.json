@@ -1,6 +1,6 @@
 {
   "name": "vectro",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Vectro — a cross-platform canvas for running terminals and AI agents in parallel",
   "main": "./out/main/index.js",
   "author": "Serhii Leniv",
@@ -10,6 +10,7 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "setup:voice": "node scripts/fetch-voice-model.cjs",
     "package": "electron-vite build && electron-builder --publish never",
     "package:win": "electron-vite build && electron-builder --win --publish never",
     "package:mac": "electron-vite build && electron-builder --mac --publish never",
@@ -21,6 +22,7 @@
   },
   "dependencies": {
     "@homebridge/node-pty-prebuilt-multiarch": "^0.13.1",
+    "@huggingface/transformers": "^4.2.0",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/addon-search": "^0.15.0",
     "@xterm/addon-web-links": "^0.11.0",
@@ -39,6 +41,7 @@
     "electron": "^29.4.6",
     "electron-builder": "^26.15.3",
     "electron-vite": "^2.3.0",
+    "playwright-core": "^1.61.1",
     "typescript": "^5.6.2",
     "vite": "^5.4.8"
   }

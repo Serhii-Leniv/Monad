@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -29,7 +29,7 @@ const STATUS_COLOR: Record<AgentStatus, string> = {
  * positioned (driven by Moveable). Status is detected from PTY output so the
  * canvas can show, at a glance, which agent is working / idle / waiting on you.
  */
-export default function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
+function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
   const id = agent.id
   const termHostRef = useRef<HTMLDivElement>(null)
   const branch = useStore((s) => s.agents.find((a) => a.id === id)?.branch)
@@ -127,18 +127,23 @@ export default function TerminalPane({ agent }: { agent: AgentInstance }): JSX.E
     let disposed = false
     let tail = ''
     let working = false
+    let workingSince = 0
     let idleTimer: ReturnType<typeof setTimeout> | undefined
     let lastNotify = 0
     const unsubs: Array<() => void> = []
+    // A working burst shorter than this reads as routine shell echo (ls, cd…),
+    // not a task — don't notify on those settling back to idle.
+    const DONE_AFTER_MS = 8000
 
     const labelOf = (): string =>
       useStore.getState().agents.find((a) => a.id === id)?.label ?? 'Terminal'
 
     // Notify only for a backgrounded agent: app window unfocused OR the card is
     // off-screen. Never nag about the terminal you're already watching.
-    const maybeNotify = (kind: AgentStatus): void => {
+    const maybeNotify = (kind: 'attention' | 'done' | 'exited' | 'error'): void => {
       const st = useStore.getState()
       if (!st.settings.notifications) return
+      if (kind === 'done' && !st.settings.notifyOnDone) return
       const a = st.agents.find((x) => x.id === id)
       if (!a) return
       const wz = a.w * st.zoom
@@ -154,18 +159,24 @@ export default function TerminalPane({ agent }: { agent: AgentInstance }): JSX.E
       const body =
         kind === 'attention'
           ? 'Waiting for your input'
-          : kind === 'error'
-            ? 'Process exited with an error'
-            : 'Process finished'
+          : kind === 'done'
+            ? 'Finished — ready for you'
+            : kind === 'error'
+              ? 'Process exited with an error'
+              : 'Process finished'
       window.api.notify.agent({ id, title: labelOf(), body })
     }
 
     const evaluateIdle = (): void => {
       if (disposed) return
+      const ranFor = workingSince ? Date.now() - workingSince : 0
       working = false
+      workingSince = 0
       const next: AgentStatus = needsAttention(tail) ? 'attention' : 'idle'
       setStatus(id, next)
       if (next === 'attention') maybeNotify('attention')
+      // A real task wrapped up (worked a while, then went quiet without a prompt).
+      else if (ranFor >= DONE_AFTER_MS) maybeNotify('done')
     }
 
     // Coalesce a stream of output into a single "working" flip (avoids a store
@@ -174,6 +185,7 @@ export default function TerminalPane({ agent }: { agent: AgentInstance }): JSX.E
       tail = clampTail(tail + stripAnsi(d))
       if (!working) {
         working = true
+        workingSince = Date.now()
         setStatus(id, 'working')
       }
       clearTimeout(idleTimer)
@@ -218,10 +230,10 @@ export default function TerminalPane({ agent }: { agent: AgentInstance }): JSX.E
         window.api.pty.onExit(pid, (code) => {
           clearTimeout(idleTimer)
           ptyRef.current = null
-          const next: AgentStatus = code && code !== 0 ? 'error' : 'exited'
-          setStatus(id, next)
+          const errored = !!code && code !== 0
+          setStatus(id, errored ? 'error' : 'exited')
           term.write('\r\n\x1b[31m[process exited]\x1b[0m\r\n')
-          maybeNotify(next)
+          maybeNotify(errored ? 'error' : 'exited')
         })
       )
       term.onData((d) => window.api.pty.write(pid, d))
@@ -357,7 +369,11 @@ export default function TerminalPane({ agent }: { agent: AgentInstance }): JSX.E
     >
       <div className="vec-pane__header" onDoubleClick={() => focusTerminal(id)}>
         <span
-          className={'vec-pane__dot' + (status === 'exited' ? ' vec-pane__dot--done' : '')}
+          className={
+            'vec-pane__dot' +
+            (status === 'exited' ? ' vec-pane__dot--done' : '') +
+            (status === 'working' ? ' vec-pane__dot--working' : '')
+          }
           style={{ background: dotColor }}
         />
         {editing ? (
@@ -588,3 +604,7 @@ export default function TerminalPane({ agent }: { agent: AgentInstance }): JSX.E
     </>
   )
 }
+
+// Memoized: when the store changes, only panes whose agent object actually
+// changed re-render (status flips touch a single agent, not the whole list).
+export default memo(TerminalPane)

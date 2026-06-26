@@ -232,6 +232,19 @@ export default function Settings(): JSX.Element {
             />
           </label>
 
+          <label className="settings__row settings__row--toggle">
+            <span className="settings__label">
+              Notify when an agent finishes
+              <span className="settings__hint">ping me when a long task settles back to idle</span>
+            </span>
+            <input
+              type="checkbox"
+              checked={settings.notifyOnDone}
+              disabled={!settings.notifications}
+              onChange={(e) => setSetting('notifyOnDone', e.target.checked)}
+            />
+          </label>
+
           <div className="settings__section settings__section--muted">Coming soon</div>
           <div className="settings__soon">
             Theme &amp; accent · Agent command presets · Keybindings · Live-preview browser ·

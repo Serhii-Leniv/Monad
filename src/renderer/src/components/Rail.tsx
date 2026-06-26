@@ -1,13 +1,19 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef } from 'react'
 import Logo from './Logo'
 import { IconFolder, IconPlus, IconGrid, IconColumns, IconSettings, IconBell } from './Icons'
 import { useStore, NEEDS_ATTENTION, MAX_AGENTS } from '../store'
-import { openProjectInteractive, openProjectByPath, getRecent } from '../openProject'
+import { openProjectInteractive, openProjectByPath } from '../openProject'
+
+/** First letter/number of a workspace name → the tile's emblem. */
+function initial(name: string): string {
+  const m = name.match(/[a-z0-9]/i)
+  return (m ? m[0] : name.charAt(0) || '?').toUpperCase()
+}
 
 /** Minimal floating dock — icons only, refined liquid glass. */
 export default function Rail(): JSX.Element {
-  const projectName = useStore((s) => s.projectName)
   const projectPath = useStore((s) => s.projectPath)
+  const workspaces = useStore((s) => s.workspaces)
   const agents = useStore((s) => s.agents)
   const agentCount = agents.length
   const full = agentCount >= MAX_AGENTS
@@ -22,9 +28,6 @@ export default function Rail(): JSX.Element {
   const setLayoutMode = useStore((s) => s.setLayoutMode)
   const focusTerminal = useStore((s) => s.focusTerminal)
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
-
-  const [projMenu, setProjMenu] = useState(false)
-  const recent = projMenu ? getRecent() : []
 
   // Cycle focus through the agents that currently need you.
   const cycleRef = useRef(0)
@@ -41,45 +44,31 @@ export default function Rail(): JSX.Element {
         <Logo size={36} />
       </div>
 
-      <div className="rail__shell">
-        <button
-          className="rail-btn"
-          onClick={() => setProjMenu((v) => !v)}
-          title={projectName ? `Project: ${projectName}` : 'Open project'}
-        >
-          <IconFolder />
-        </button>
-        {projMenu && (
-          <>
-            <div className="rail__backdrop" onClick={() => setProjMenu(false)} />
-            <div className="rail__menu rail__menu--proj">
+      {/* Workspace switcher — one tile per opened folder; agents are saved &
+          restored per workspace. Only shown once there's somewhere to switch
+          TO (2+ folders) — a lone self-tile just reads as a dead button. */}
+      {workspaces.length >= 2 && (
+        <div className="rail__ws" role="group" aria-label="Workspaces">
+          {workspaces.map((w, i) => {
+            const active = w.path === projectPath
+            return (
               <button
-                className="rail__menu-item"
-                onClick={() => {
-                  setProjMenu(false)
-                  void openProjectInteractive()
-                }}
+                key={w.path}
+                className={'rail__ws-tile' + (active ? ' is-active' : '')}
+                title={`${w.name}\n${w.path}${i < 9 ? `\n⌘⌥${i + 1}` : ''}`}
+                onClick={() => void openProjectByPath(w)}
               >
-                Open folder…
+                {initial(w.name)}
+                {active && attentionIds.length > 0 && <span className="rail__ws-dot" />}
               </button>
-              {recent.length > 0 && <div className="rail__menu-sep" />}
-              {recent.map((r) => (
-                <button
-                  key={r.path}
-                  className={'rail__menu-item' + (r.path === projectPath ? ' is-active' : '')}
-                  title={r.path}
-                  onClick={() => {
-                    setProjMenu(false)
-                    void openProjectByPath(r)
-                  }}
-                >
-                  {r.name}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
+            )
+          })}
+        </div>
+      )}
+
+      <button className="rail-btn" onClick={() => void openProjectInteractive()} title="Open folder…">
+        <IconFolder />
+      </button>
 
       {projectPath && (
         <>
@@ -87,27 +76,30 @@ export default function Rail(): JSX.Element {
             className="rail-btn rail-btn--primary"
             onClick={() => addAgent()}
             disabled={full}
-            title={full ? `Maximum ${MAX_AGENTS} terminals` : 'New terminal'}
+            title={full ? `Maximum ${MAX_AGENTS} terminals` : 'New terminal  (⌘T)'}
           >
             <IconPlus />
           </button>
 
           <div className="rail__divider" />
 
-          <button
-            className={'rail-btn' + (layoutMode === 'grid' ? ' is-active' : '')}
-            onClick={() => setLayoutMode('grid')}
-            title="Grid layout"
-          >
-            <IconGrid />
-          </button>
-          <button
-            className={'rail-btn' + (layoutMode === 'columns' ? ' is-active' : '')}
-            onClick={() => setLayoutMode('columns')}
-            title="Columns layout"
-          >
-            <IconColumns />
-          </button>
+          {/* Layout is one choice → one segmented control, not two buttons. */}
+          <div className="rail__seg" role="group" aria-label="Layout" data-mode={layoutMode}>
+            <button
+              className={'rail__seg-btn' + (layoutMode === 'grid' ? ' is-active' : '')}
+              onClick={() => setLayoutMode('grid')}
+              title="Grid  (⌘1)"
+            >
+              <IconGrid />
+            </button>
+            <button
+              className={'rail__seg-btn' + (layoutMode === 'columns' ? ' is-active' : '')}
+              onClick={() => setLayoutMode('columns')}
+              title="Columns  (⌘2)"
+            >
+              <IconColumns />
+            </button>
+          </div>
         </>
       )}
 
