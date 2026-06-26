@@ -237,7 +237,24 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
           maybeNotify(errored ? 'error' : 'exited')
         })
       )
-      term.onData((d) => window.api.pty.write(pid, d))
+      term.onData((d) => {
+        window.api.pty.write(pid, d)
+        // When the user runs a command, tag the terminal if it's a known agent —
+        // so the badge appears even when an agent is started by hand.
+        if (d.includes('\r')) {
+          const buf = term.buffer.active
+          const line = buf.getLine(buf.baseY + buf.cursorY)?.translateToString(true) ?? ''
+          // Take the command after the last shell-prompt character.
+          const cmd = (line.match(/.*[>$#%]\s*(\S.*)$/)?.[1] ?? '').trim().split(/\s+/)[0]
+          const base = (cmd.split(/[\\/]/).pop() ?? '').toLowerCase()
+          if (base) {
+            const hit = useStore
+              .getState()
+              .agentClis.find((c) => c.command.toLowerCase() === base || c.id === base)
+            if (hit) setAgentRuntime(id, { agentId: hit.id, agentLabel: hit.label })
+          }
+        }
+      })
 
       if (wt.cwd) {
         const sid = shell?.id
