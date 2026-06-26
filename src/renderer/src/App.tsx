@@ -5,32 +5,18 @@ import Stage from './components/Stage'
 import Settings from './components/Settings'
 import CommandPalette from './components/CommandPalette'
 import DiffPanel from './components/DiffPanel'
-import BroadcastBar from './components/BroadcastBar'
 import Toasts from './components/Toasts'
-import Logo from './components/Logo'
+import Home from './components/Home'
+import ProjectBar from './components/ProjectBar'
 import { useStore, toPersisted } from './store'
-import { openProjectInteractive, openProjectByPath, restoreLastProject } from './openProject'
+import { openProjectByPath, restoreLastProject } from './openProject'
 import { applyAccent } from './accent'
-
-function EmptyState(): JSX.Element {
-  return (
-    <div className="empty">
-      <div className="empty__card">
-        <Logo size={64} />
-        <h1>Vectro</h1>
-        <p>Open a project folder, then add terminals to work with your agents in parallel.</p>
-        <button className="empty__btn" onClick={openProjectInteractive}>
-          Open project
-        </button>
-      </div>
-    </div>
-  )
-}
 
 export default function App(): JSX.Element {
   const projectPath = useStore((s) => s.projectPath)
   const agents = useStore((s) => s.agents)
   const setShells = useStore((s) => s.setShells)
+  const setAgentClis = useStore((s) => s.setAgentClis)
   const settingsOpen = useStore((s) => s.settingsOpen)
   const paletteOpen = useStore((s) => s.paletteOpen)
   const diffAgentId = useStore((s) => s.diffAgentId)
@@ -41,10 +27,11 @@ export default function App(): JSX.Element {
   const [wallpaperUrl, setWallpaperUrl] = useState<string | null>(null)
   const saveTimer = useRef<number>()
 
-  // Detect the shells installed on this machine, once on launch.
+  // Detect the shells + agent CLIs installed on this machine, once on launch.
   useEffect(() => {
     void window.api.shells.list().then(setShells)
-  }, [setShells])
+    void window.api.agents.list().then(setAgentClis)
+  }, [setShells, setAgentClis])
 
   // Reopen the last project on launch (if its folder still exists).
   useEffect(() => {
@@ -193,10 +180,11 @@ export default function App(): JSX.Element {
       )}
       <div className="grain" aria-hidden="true" />
       <Titlebar />
+      <ProjectBar />
       <div className="app__main">
         <Rail />
-        <div className="app__canvas">{projectPath ? <Stage /> : <EmptyState />}</div>
-        {projectPath && <BroadcastBar />}
+        <div className="app__canvas">{projectPath ? <Stage /> : <Home />}</div>
+        {/* Broadcast bar hidden for now (unused) — re-enable when needed. */}
       </div>
       {paletteOpen && <CommandPalette />}
       {settingsOpen && <Settings />}

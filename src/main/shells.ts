@@ -26,6 +26,33 @@ function onPath(exe: string): string | null {
   return null
 }
 
+export interface AgentCli {
+  id: string
+  label: string
+  command: string
+}
+
+// Known AI coding-agent CLIs, in rough order of popularity.
+const KNOWN_AGENTS: { id: string; label: string; bins: string[] }[] = [
+  { id: 'claude', label: 'Claude Code', bins: ['claude'] },
+  { id: 'codex', label: 'Codex', bins: ['codex'] },
+  { id: 'gemini', label: 'Gemini', bins: ['gemini'] },
+  { id: 'aider', label: 'Aider', bins: ['aider'] },
+  { id: 'cursor', label: 'Cursor Agent', bins: ['cursor-agent'] },
+  { id: 'opencode', label: 'opencode', bins: ['opencode'] },
+  { id: 'qwen', label: 'Qwen Code', bins: ['qwen'] }
+]
+
+/** Detect which agent CLIs are installed on PATH, so they can be launched in one click. */
+export function detectAgents(): AgentCli[] {
+  const out: AgentCli[] = []
+  for (const a of KNOWN_AGENTS) {
+    const bin = a.bins.find((b) => onPath(b))
+    if (bin) out.push({ id: a.id, label: a.label, command: bin })
+  }
+  return out
+}
+
 /** Detect the shells/terminals actually installed on this machine. */
 export function detectShells(): ShellInfo[] {
   const shells: ShellInfo[] = []

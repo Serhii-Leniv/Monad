@@ -54,6 +54,9 @@ const api = {
   shells: {
     list: (): Promise<unknown> => ipcRenderer.invoke('shells:list')
   },
+  agents: {
+    list: (): Promise<unknown> => ipcRenderer.invoke('agents:list')
+  },
   openExternal: (url: string): Promise<boolean> => ipcRenderer.invoke('open:external', url),
   wallpaper: {
     pick: (): Promise<string | null> => ipcRenderer.invoke('wallpaper:pick'),

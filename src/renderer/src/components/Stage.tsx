@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { flushSync } from 'react-dom'
 import Moveable from 'react-moveable'
 import Selecto from 'react-selecto'
 import TerminalPane from './TerminalPane'
@@ -51,7 +50,7 @@ export default function Stage(): JSX.Element {
   const idOf = (el: HTMLElement | null): string | undefined =>
     (el?.closest('.vec-pane') as HTMLElement | null)?.dataset.id
 
-  // Where does this drop land? The slot whose centre is nearest the dropped
+  // Where does this drop land? The slot whose centre is nearest the dragged
   // card's centre — that index becomes the card's new place in the order.
   const nearestIndex = (cx: number, cy: number): number => {
     const list = useStore.getState().agents
@@ -104,7 +103,9 @@ export default function Stage(): JSX.Element {
         draggable
         resizable={false}
         origin={false}
-        flushSync={flushSync}
+        // NB: deliberately NOT passing flushSync — it forced a *synchronous*
+        // re-render of every xterm pane on each pointer-move (the drag "flicker").
+        // Let React batch the reorder re-renders instead.
         onDragStart={(e: any) => {
           draggingRef.current = true
           stageRef.current?.classList.add('is-dragging-any')
@@ -126,8 +127,9 @@ export default function Stage(): JSX.Element {
           const st = useStore.getState()
           const a = st.agents.find((x) => x.id === id)
           if (!a) return
+          const cur = st.agents.findIndex((x) => x.id === id)
           const target = nearestIndex(t[0] + a.w / 2, t[1] + a.h / 2)
-          if (target !== st.agents.findIndex((x) => x.id === id)) reorderAgent(id, target)
+          if (target !== cur) reorderAgent(id, target)
         }}
         onDragEnd={(e: any) => {
           draggingRef.current = false

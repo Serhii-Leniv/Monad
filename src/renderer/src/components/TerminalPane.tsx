@@ -450,6 +450,13 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
           <div
             className="vec-pane__term"
             ref={termHostRef}
+            // Focusing/typing in a terminal selects it (React onFocus fires when
+            // xterm's hidden textarea gains focus). Guarded so it only updates
+            // the store when the selection actually changes.
+            onFocus={() => {
+              const s = useStore.getState()
+              if (s.selectedIds.length !== 1 || s.selectedIds[0] !== id) s.setSelected([id])
+            }}
             onContextMenu={(e) => {
               e.preventDefault()
               setMenu({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY })
