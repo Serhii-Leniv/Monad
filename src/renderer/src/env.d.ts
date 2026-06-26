@@ -24,6 +24,12 @@ interface ShellInfo {
   args: string[]
 }
 
+interface AgentCli {
+  id: string
+  label: string
+  command: string
+}
+
 interface GitInfo {
   isGit: boolean
   repoRoot: string | null
@@ -57,7 +63,6 @@ interface PersistedCanvas {
   previewUrl?: string
   agents: Array<{
     id: string
-    num?: number
     label: string
     x: number
     y: number
@@ -80,6 +85,9 @@ interface Window {
     }
     shells: {
       list: () => Promise<ShellInfo[]>
+    }
+    agents: {
+      list: () => Promise<AgentCli[]>
     }
     openExternal: (url: string) => Promise<boolean>
     wallpaper: {

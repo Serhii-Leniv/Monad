@@ -56,6 +56,9 @@ export async function openProjectByPath(ref: RecentProject): Promise<void> {
   void window.api.git.prune(ref.path)
   pushRecent(ref)
   useStore.getState().openProject(ref, saved, git)
+  // Always land on at least one terminal so a freshly-opened project isn't a
+  // bare canvas.
+  if (useStore.getState().agents.length === 0) useStore.getState().addAgent()
 }
 
 /** Pick a folder via the OS dialog, then open it. */
