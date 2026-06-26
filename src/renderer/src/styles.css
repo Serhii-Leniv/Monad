@@ -1674,9 +1674,10 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .settings {
-  width: 460px;
-  max-width: 90vw;
-  max-height: 82vh;
+  width: 600px;
+  max-width: 92vw;
+  height: 480px;
+  max-height: 84vh;
   display: flex;
   flex-direction: column;
   border-radius: var(--r-xl);
@@ -1723,9 +1724,93 @@ body.has-wallpaper .vec-pane__term {
   background: rgba(255, 255, 255, 0.08);
 }
 
+/* Two-column body: category sidebar + the active category's settings. */
+.settings__main {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.settings__nav {
+  flex: 0 0 164px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 10px;
+  border-right: 1px solid var(--hairline);
+}
+.settings__nav-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 11px;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition:
+    color var(--dur-select) var(--ease-out),
+    background var(--dur-select) var(--ease-out);
+}
+.settings__nav-item svg {
+  flex: 0 0 auto;
+  opacity: 0.85;
+}
+.settings__nav-item:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+.settings__nav-item.is-active {
+  color: #fff;
+  background: rgba(var(--accent-rgb), 0.18);
+}
+.settings__nav-item.is-active svg {
+  opacity: 1;
+  color: var(--accent);
+}
+
 .settings__body {
-  padding: 8px 18px 18px;
+  flex: 1;
+  padding: 14px 20px 18px;
   overflow-y: auto;
+}
+
+/* Slider control (replaces +/− steppers for continuous values). */
+.settings__slider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.settings__slider input[type='range'] {
+  width: 150px;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.settings__slider input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  transition: transform var(--dur-select) var(--ease-out);
+}
+.settings__slider input[type='range']::-webkit-slider-thumb:hover {
+  transform: scale(1.12);
+}
+.settings__slider .settings__value {
+  min-width: 48px;
+  text-align: right;
 }
 
 .settings__section {
