@@ -15,6 +15,7 @@ export default function Stage(): JSX.Element {
   const relayout = useStore((s) => s.relayout)
   const setDraggingId = useStore((s) => s.setDraggingId)
   const setCanvasSize = useStore((s) => s.setCanvasSize)
+  const draggingId = useStore((s) => s.draggingId)
   const panX = useStore((s) => s.panX)
   const panY = useStore((s) => s.panY)
   const zoom = useStore((s) => s.zoom)
@@ -71,12 +72,24 @@ export default function Stage(): JSX.Element {
       ? (targets[0].querySelector('.vec-pane__header') as HTMLElement) ?? undefined
       : undefined
 
+  const dragAgent = draggingId ? agents.find((a) => a.id === draggingId) : undefined
+
   return (
     <div className="stage" ref={stageRef}>
       <div
         className="stage__panes"
         style={{ transform: `translate(${panX}px, ${panY}px) scale(${zoom})` }}
       >
+        {dragAgent && dragAgent.dropX != null && (
+          <div
+            className="stage__placeholder"
+            style={{
+              transform: `translate(${dragAgent.dropX}px, ${dragAgent.dropY}px)`,
+              width: dragAgent.dropW,
+              height: dragAgent.dropH
+            }}
+          />
+        )}
         {agents.map((a) => (
           <TerminalPane key={a.id} agent={a} />
         ))}
@@ -94,8 +107,13 @@ export default function Stage(): JSX.Element {
         flushSync={flushSync}
         onDragStart={(e: any) => {
           draggingRef.current = true
+          stageRef.current?.classList.add('is-dragging-any')
+          document.body.classList.add('dragging')
           const id = idOf(e.target)
-          if (id) setDraggingId(id)
+          if (id) {
+            setDraggingId(id)
+            relayout() // marks the dragged card's slot so the placeholder shows
+          }
           e.target.classList.add('is-dragging')
         }}
         onDrag={(e: any) => {
@@ -113,6 +131,8 @@ export default function Stage(): JSX.Element {
         }}
         onDragEnd={(e: any) => {
           draggingRef.current = false
+          stageRef.current?.classList.remove('is-dragging-any')
+          document.body.classList.remove('dragging')
           e.target.classList.remove('is-dragging')
           setDraggingId(null) // clear first so relayout drops it into its slot
           relayout()

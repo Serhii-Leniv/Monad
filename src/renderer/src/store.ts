@@ -3,6 +3,18 @@ import { create } from 'zustand'
 export type Isolation = 'worktree' | 'shared'
 export type LayoutMode = 'grid' | 'columns'
 
+/** An opened project folder, surfaced as a switchable workspace in the dock. */
+export interface Workspace {
+  path: string
+  name: string
+}
+
+export interface Toast {
+  id: string
+  text: string
+  kind: 'info' | 'success' | 'error'
+}
+
 /** Hard cap — more than this on one canvas is unreadable. */
 export const MAX_AGENTS = 9
 
@@ -22,6 +34,8 @@ export const NEEDS_ATTENTION: AgentStatus[] = ['attention', 'error', 'exited']
 
 export interface AgentInstance {
   id: string
+  /** Stable numeric name, assigned from 0. Freed numbers are reused on add. */
+  num: number
   label: string
   x: number
   y: number
@@ -39,11 +53,17 @@ export interface AgentInstance {
   status?: AgentStatus
   /** False when an isolated terminal silently fell back to the shared dir. */
   isolated?: boolean
+  /** While this card is the one being dragged: the slot it will drop into. */
+  dropX?: number
+  dropY?: number
+  dropW?: number
+  dropH?: number
 }
 
 /** Fields written to .agent-canvas/canvas.json (runtime fields stripped). */
 export interface PersistedAgent {
   id: string
+  num: number
   label: string
   x: number
   y: number
@@ -58,6 +78,8 @@ interface AppState {
   projectName: string | null
   isGit: boolean
   baseBranch: string | null
+  /** Recently-opened folders, newest first — the dock's workspace switcher. */
+  workspaces: Workspace[]
   agents: AgentInstance[]
   layoutMode: LayoutMode
   canvasW: number
@@ -77,9 +99,11 @@ interface AppState {
   diffAgentId: string | null
   focusedId: string | null
   prevView: { panX: number; panY: number; zoom: number } | null
+  toasts: Toast[]
 
   openProject: (ref: ProjectRef, saved: PersistedCanvas | null, git: GitInfo) => void
   closeProject: () => void
+  setWorkspaces: (workspaces: Workspace[]) => void
   setCanvasSize: (w: number, h: number) => void
   setShells: (shells: ShellInfo[]) => void
   setSelected: (ids: string[]) => void
@@ -100,6 +124,9 @@ interface AppState {
   setAgentRuntime: (id: string, rt: Partial<AgentInstance>) => void
   setStatus: (id: string, status: AgentStatus) => void
   broadcast: (text: string) => void
+  sendTo: (id: string, text: string) => void
+  pushToast: (text: string, kind?: Toast['kind']) => void
+  dismissToast: (id: string) => void
 }
 
 const DEFAULT_W = 520
@@ -120,11 +147,21 @@ export interface AppSettings {
   accent: string
   /** Desktop notification when a backgrounded/off-screen agent needs you. */
   notifications: boolean
+  /** Also notify when a long-running agent finishes a task (working → idle). */
+  notifyOnDone: boolean
   /** Absolute path to a background image, or null for the default dark scene. */
   wallpaper: string | null
   /** Terminal background opacity 0.4–1 (lower reveals the wallpaper behind). */
   terminalOpacity: number
+  /** KeyboardEvent.code that triggers dictation (default: Right Shift on Windows/Linux, Right Option on macOS). */
+  voiceKey: string
+  /** How the trigger key behaves: hold-to-talk (ptt) or tap-to-start/stop (toggle). */
+  voiceActivation: 'toggle' | 'ptt'
 }
+
+/** Right Shift everywhere except macOS, where Right Option is the natural spare key. */
+const DEFAULT_VOICE_KEY =
+  typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform) ? 'AltRight' : 'ShiftRight'
 
 /** Monospace stacks offered in Settings (first that's installed wins). */
 export const FONT_FAMILIES: { id: string; label: string; stack: string }[] = [
@@ -146,8 +183,11 @@ const DEFAULT_SETTINGS: AppSettings = {
   zoomFactor: 1.1,
   accent: '#3b5bd9',
   notifications: true,
+  notifyOnDone: true,
   wallpaper: null,
-  terminalOpacity: 0.55
+  terminalOpacity: 0.55,
+  voiceKey: DEFAULT_VOICE_KEY,
+  voiceActivation: 'ptt'
 }
 
 function loadSettings(): AppSettings {
@@ -164,6 +204,16 @@ function saveSettings(s: AppSettings): void {
     localStorage.setItem('vectro.settings', JSON.stringify(s))
   } catch {
     /* ignore */
+  }
+}
+
+/** Seed the workspace switcher from the persisted recent-projects list. */
+function loadWorkspaces(): Workspace[] {
+  try {
+    const raw = localStorage.getItem('vectro.recent')
+    return raw ? (JSON.parse(raw) as Workspace[]) : []
+  } catch {
+    return []
   }
 }
 
@@ -214,19 +264,31 @@ function laidOut(
     const cw = (availW - GAP * (cols - 1)) / cols
     for (let c = 0; c < cols; c++) {
       const a = agents[i++]
+      const x = RAIL_INSET + c * (cw + GAP)
+      const y = PAD + r * (ch + GAP)
       // The dragged card keeps its position constant so React never fights
       // Moveable for its transform — it follows the cursor; its slot stays an
-      // empty gap that the other cards reflow around.
-      if (skipId && a.id === skipId) out.push(a)
-      else out.push({ ...a, x: RAIL_INSET + c * (cw + GAP), y: PAD + r * (ch + GAP), w: cw, h: ch })
+      // empty gap that the other cards reflow around. We stash that slot in
+      // drop* so the canvas can draw a placeholder there.
+      if (skipId && a.id === skipId) out.push({ ...a, dropX: x, dropY: y, dropW: cw, dropH: ch })
+      else out.push({ ...a, x, y, w: cw, h: ch, dropX: undefined, dropY: undefined })
     }
   }
   return out
 }
 
+/** Smallest non-negative integer not currently used as a terminal name. */
+function nextNum(agents: AgentInstance[]): number {
+  const used = new Set(agents.map((a) => a.num))
+  let n = 0
+  while (used.has(n)) n++
+  return n
+}
+
 export function toPersisted(agents: AgentInstance[]): PersistedAgent[] {
   return agents.map((a) => ({
     id: a.id,
+    num: a.num,
     label: a.label,
     x: a.x,
     y: a.y,
@@ -242,6 +304,7 @@ export const useStore = create<AppState>((set, get) => ({
   projectName: null,
   isGit: false,
   baseBranch: null,
+  workspaces: loadWorkspaces(),
   agents: [],
   layoutMode: 'grid',
   canvasW: 1200,
@@ -256,6 +319,7 @@ export const useStore = create<AppState>((set, get) => ({
   diffAgentId: null,
   focusedId: null,
   prevView: null,
+  toasts: [],
   panX: 0,
   panY: 0,
   zoom: 1,
@@ -264,7 +328,7 @@ export const useStore = create<AppState>((set, get) => ({
     set((s) => {
       const loaded: AgentInstance[] = (saved?.agents ?? [])
         .slice(0, MAX_AGENTS)
-        .map((p) => ({ ...p, isolation: p.isolation ?? 'shared' }))
+        .map((p, i) => ({ ...p, num: p.num ?? i, isolation: p.isolation ?? 'shared' }))
       const mode: LayoutMode = saved?.layoutMode === 'columns' ? 'columns' : 'grid'
       return {
         projectPath: ref.path,
@@ -291,6 +355,8 @@ export const useStore = create<AppState>((set, get) => ({
       agents: [],
       selectedIds: []
     }),
+
+  setWorkspaces: (workspaces) => set({ workspaces }),
 
   // Re-tile to the new viewport (zoom stays 1 → font fixed; terminals re-flow).
   setCanvasSize: (w, h) =>
@@ -334,14 +400,14 @@ export const useStore = create<AppState>((set, get) => ({
   addAgent: (opts) =>
     set((s) => {
       if (s.agents.length >= MAX_AGENTS) return {} // capped — ignore
-      const count = s.agents.length + 1
+      const num = nextNum(s.agents)
       const isolation: Isolation =
         s.isGit && s.settings.defaultIsolation === 'worktree' ? 'worktree' : 'shared'
       const shellId = opts?.shellId ?? s.settings.defaultShellId ?? undefined
-      const shell = s.shells.find((sh) => sh.id === shellId)
       const agent: AgentInstance = {
         id: uuid(),
-        label: shell ? shell.label : `Terminal ${count}`,
+        num,
+        label: String(num),
         x: 0,
         y: 0,
         w: DEFAULT_W,
@@ -458,7 +524,17 @@ export const useStore = create<AppState>((set, get) => ({
     for (const a of get().agents) {
       if (a.ptyId) window.api.pty.write(a.ptyId, text + '\r')
     }
-  }
+  },
+
+  sendTo: (id, text) => {
+    const a = get().agents.find((x) => x.id === id)
+    if (a?.ptyId) window.api.pty.write(a.ptyId, text + '\r')
+  },
+
+  pushToast: (text, kind = 'info') =>
+    set((s) => ({ toasts: [...s.toasts, { id: uuid(), text, kind }] })),
+
+  dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }))
 }))
 
 // Exposed for diagnostics / debugging from the main process.
