@@ -1,9 +1,10 @@
-import { siClaude, siGooglegemini, siCursor, siQwen } from 'simple-icons'
+import { siClaude, siGooglegemini, siCursor, siQwen, siOpencode } from 'simple-icons'
 
 /**
- * A small icon badge marking which agent a terminal runs. Uses the official
- * brand marks (via simple-icons) where available, falling back to a simple
- * original glyph / colored monogram for agents that have no published icon.
+ * A small transparent icon marking which agent a terminal runs. Uses the official
+ * brand mark (via simple-icons) in its brand colour where available, with a
+ * contrast guard so near-black logos stay visible on the dark header. Agents with
+ * no published icon fall back to a simple original glyph / colored monogram.
  */
 
 interface Brand {
@@ -11,31 +12,29 @@ interface Brand {
   path: string
 }
 
-// Official brand icons (simple-icons). The white mark sits on the brand colour.
 const BRAND: Record<string, Brand> = {
   claude: siClaude,
   gemini: siGooglegemini,
   cursor: siCursor,
-  qwen: siQwen
+  qwen: siQwen,
+  opencode: siOpencode
+}
+
+/** Brand colour, lightened when it's too dark to read on the header. */
+function markColor(hex: string): string {
+  const r = parseInt(hex.slice(0, 2), 16)
+  const g = parseInt(hex.slice(2, 4), 16)
+  const b = parseInt(hex.slice(4, 6), 16)
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+  return lum < 0.34 ? '#e2e6ee' : `#${hex}`
 }
 
 // Fallback glyphs for agents with no published brand icon.
 const Chevrons = (): JSX.Element => (
-  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" aria-hidden="true">
+  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" aria-hidden="true">
     <path
       d="M9 8l-4 4 4 4M15 8l4 4-4 4"
-      stroke="#fff"
-      strokeWidth={2.2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-)
-const Prompt = (): JSX.Element => (
-  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" aria-hidden="true">
-    <path
-      d="M6 8l4 4-4 4M13 16h5"
-      stroke="#fff"
+      stroke="currentColor"
       strokeWidth={2.2}
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -45,8 +44,7 @@ const Prompt = (): JSX.Element => (
 
 const FALLBACK: Record<string, { color: string; glyph?: () => JSX.Element }> = {
   codex: { color: '#10A37F', glyph: Chevrons },
-  opencode: { color: '#E0823D', glyph: Prompt },
-  aider: { color: '#6E56CF' }
+  aider: { color: '#9b8cff' }
 }
 
 export default function AgentBadge({
@@ -61,9 +59,9 @@ export default function AgentBadge({
   const brand = id ? BRAND[id] : undefined
   if (brand) {
     return (
-      <span className="vec-pane__agent" style={{ background: `#${brand.hex}` }} title={label ?? id}>
-        <svg viewBox="0 0 24 24" width="12.5" height="12.5" aria-hidden="true">
-          <path d={brand.path} fill="#fff" />
+      <span className="vec-pane__agent" title={label ?? id}>
+        <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+          <path d={brand.path} fill={markColor(brand.hex)} />
         </svg>
       </span>
     )
@@ -71,16 +69,15 @@ export default function AgentBadge({
 
   const fb = id ? FALLBACK[id] : undefined
   const Glyph = fb?.glyph
+  const color = fb?.color ?? 'var(--accent)'
   return (
-    <span
-      className="vec-pane__agent"
-      style={{ background: fb?.color ?? 'var(--accent)' }}
-      title={label ?? id}
-    >
+    <span className="vec-pane__agent" title={label ?? id} style={{ color }}>
       {Glyph ? (
         <Glyph />
       ) : (
-        <span className="vec-pane__agent-mono">{(label ?? id ?? '?').charAt(0).toUpperCase()}</span>
+        <span className="vec-pane__agent-mono" style={{ color }}>
+          {(label ?? id ?? '?').charAt(0).toUpperCase()}
+        </span>
       )}
     </span>
   )

@@ -873,22 +873,17 @@ body.has-wallpaper .aurora {
   white-space: nowrap;
 }
 
-/* Icon badge showing which agent a terminal is running. */
+/* Agent mark next to the terminal name — transparent, the brand logo stands alone. */
 .vec-pane__agent {
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  width: 21px;
-  height: 21px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
-  /* background colour is set inline, per agent */
+  width: 18px;
+  height: 18px;
 }
 .vec-pane__agent-mono {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  color: #fff;
 }
 
 .vec-pane__branch--shared {
