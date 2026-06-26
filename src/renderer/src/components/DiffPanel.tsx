@@ -28,6 +28,7 @@ export default function DiffPanel(): JSX.Element {
   const baseBranch = useStore((s) => s.baseBranch)
   const setDiffAgentId = useStore((s) => s.setDiffAgentId)
   const removeAgent = useStore((s) => s.removeAgent)
+  const pushToast = useStore((s) => s.pushToast)
 
   const [diff, setDiff] = useState<DiffResult | null>(null)
   const [loading, setLoading] = useState(true)
@@ -60,8 +61,10 @@ export default function DiffPanel(): JSX.Element {
     setError(null)
     const r = await window.api.git.merge(projectPath, id, message.trim() || `Merge ${diff?.branch}`)
     setBusy(false)
-    if (r.ok) setMerged(true)
-    else setError(r.error || 'Merge failed')
+    if (r.ok) {
+      setMerged(true)
+      pushToast(`Merged “${label}” into ${baseBranch || 'base'}`, 'success')
+    } else setError(r.error || 'Merge failed')
   }
 
   const doDiscard = (): void => {
@@ -70,13 +73,17 @@ export default function DiffPanel(): JSX.Element {
     )
     if (ok) {
       removeAgent(id)
+      pushToast(`Discarded “${label}”`, 'info')
       close()
     }
   }
 
   return (
     <div className="modal" onPointerDown={close}>
-      <div className="review" onPointerDown={(e) => e.stopPropagation()}>
+      <div
+        className={'review' + (merged ? ' is-merged' : '')}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
         <div className="review__head">
           <div className="review__title">
             <span className="review__name">{label}</span>

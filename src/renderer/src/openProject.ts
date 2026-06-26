@@ -1,4 +1,4 @@
-import { useStore } from './store'
+import { useStore, toPersisted } from './store'
 
 export interface RecentProject {
   path: string
@@ -21,14 +21,34 @@ function pushRecent(ref: RecentProject): void {
   try {
     const list = getRecent().filter((r) => r.path !== ref.path)
     list.unshift({ path: ref.path, name: ref.name })
-    localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 8)))
+    const trimmed = list.slice(0, 8)
+    localStorage.setItem(RECENT_KEY, JSON.stringify(trimmed))
+    // Mirror into the store so the dock's workspace switcher updates live.
+    useStore.getState().setWorkspaces(trimmed)
   } catch {
     /* ignore */
   }
 }
 
+/**
+ * Flush the open project's canvas to disk before we tear it down. Autosave is
+ * debounced, so a quick switch right after a layout change could otherwise lose
+ * it (the timer is cancelled when the panes unmount).
+ */
+function saveCurrent(): void {
+  const st = useStore.getState()
+  if (!st.projectPath) return
+  void window.api.project.save(st.projectPath, {
+    agents: toPersisted(st.agents),
+    layoutMode: st.layoutMode
+  })
+}
+
 /** Load a project's saved canvas + git info, prune stale worktrees, open it. */
 export async function openProjectByPath(ref: RecentProject): Promise<void> {
+  // Switching to the already-open workspace is a no-op (don't respawn agents).
+  if (useStore.getState().projectPath === ref.path) return
+  saveCurrent()
   const [saved, git] = await Promise.all([
     window.api.project.load(ref.path),
     window.api.git.info(ref.path)

@@ -57,6 +57,7 @@ interface PersistedCanvas {
   previewUrl?: string
   agents: Array<{
     id: string
+    num?: number
     label: string
     x: number
     y: number
