@@ -43,7 +43,7 @@ export default function CommandPalette(): JSX.Element {
       if (!full) {
         list.push({ id: 'new', title: 'New terminal', hint: '⌘T', run: () => addAgent() })
         agentClis.forEach((a) =>
-          list.push({ id: 'agent-' + a.id, title: `Start ${a.label}`, run: () => addAgent({ command: a.command, agentLabel: a.label }) })
+          list.push({ id: 'agent-' + a.id, title: `Start ${a.label}`, run: () => addAgent({ command: a.command, agentLabel: a.label, agentId: a.id }) })
         )
         shells.forEach((sh) =>
           list.push({ id: 'new-' + sh.id, title: `New terminal · ${sh.label}`, run: () => addAgent({ shellId: sh.id }) })
