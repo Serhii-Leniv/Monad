@@ -34,8 +34,6 @@ export const NEEDS_ATTENTION: AgentStatus[] = ['attention', 'error', 'exited']
 
 export interface AgentInstance {
   id: string
-  /** Stable numeric name, assigned from 0. Freed numbers are reused on add. */
-  num: number
   label: string
   x: number
   y: number
@@ -63,7 +61,6 @@ export interface AgentInstance {
 /** Fields written to .agent-canvas/canvas.json (runtime fields stripped). */
 export interface PersistedAgent {
   id: string
-  num: number
   label: string
   x: number
   y: number
@@ -87,6 +84,9 @@ interface AppState {
   /** True once the stage has been measured at least once (real viewport size). */
   canvasReady: boolean
   shells: ShellInfo[]
+  agentClis: AgentCli[]
+  /** Snapshot of the most recently closed terminal, for reopen. */
+  lastClosed: { label: string; shellId?: string; isolation: Isolation; startupCommand?: string } | null
   selectedIds: string[]
   draggingId: string | null
   panX: number
@@ -106,6 +106,7 @@ interface AppState {
   setWorkspaces: (workspaces: Workspace[]) => void
   setCanvasSize: (w: number, h: number) => void
   setShells: (shells: ShellInfo[]) => void
+  setAgentClis: (agentClis: AgentCli[]) => void
   setSelected: (ids: string[]) => void
   setSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => void
   setSettingsOpen: (open: boolean) => void
@@ -114,6 +115,7 @@ interface AppState {
   setView: (panX: number, panY: number, zoom: number) => void
   addAgent: (opts?: { command?: string; shellId?: string }) => void
   removeAgent: (id: string, opts?: { keepWorktree?: boolean }) => void
+  reopenLast: () => void
   renameAgent: (id: string, label: string) => void
   setLayoutMode: (mode: LayoutMode) => void
   setDraggingId: (id: string | null) => void
@@ -175,7 +177,7 @@ export const FONT_FAMILIES: { id: string; label: string; stack: string }[] = [
 
 const DEFAULT_SETTINGS: AppSettings = {
   defaultShellId: null,
-  defaultIsolation: 'worktree',
+  defaultIsolation: 'shared',
   fontSize: 14,
   fontFamily: 'Cascadia Code, Consolas, monospace',
   scrollback: 2000,
@@ -277,18 +279,34 @@ function laidOut(
   return out
 }
 
-/** Smallest non-negative integer not currently used as a terminal name. */
-function nextNum(agents: AgentInstance[]): number {
-  const used = new Set(agents.map((a) => a.num))
-  let n = 0
-  while (used.has(n)) n++
-  return n
+// Soft consonants + vowels → short, pronounceable names like "Robi", "Dan",
+// "Rori" (alternating C/V so they always read aloud cleanly).
+const CONSONANTS = 'bdfgjklmnprstvz'
+const VOWELS = 'aeiou'
+
+function pronounceable(): string {
+  const len = 3 + Math.floor(Math.random() * 2) // 3–4 letters
+  let name = ''
+  for (let i = 0; i < len; i++) {
+    const pool = i % 2 === 0 ? CONSONANTS : VOWELS
+    name += pool[Math.floor(Math.random() * pool.length)]
+  }
+  return name.charAt(0).toUpperCase() + name.slice(1)
+}
+
+/** A short, pronounceable terminal name unique among `agents`. */
+function uniqueName(agents: AgentInstance[]): string {
+  const taken = new Set(agents.map((a) => a.label.toLowerCase()))
+  for (let attempt = 0; attempt < 60; attempt++) {
+    const name = pronounceable()
+    if (!taken.has(name.toLowerCase())) return name
+  }
+  return 'Term' + (agents.length + 1)
 }
 
 export function toPersisted(agents: AgentInstance[]): PersistedAgent[] {
   return agents.map((a) => ({
     id: a.id,
-    num: a.num,
     label: a.label,
     x: a.x,
     y: a.y,
@@ -311,6 +329,8 @@ export const useStore = create<AppState>((set, get) => ({
   canvasH: 800,
   canvasReady: false,
   shells: [],
+  agentClis: [],
+  lastClosed: null,
   selectedIds: [],
   draggingId: null,
   settings: loadSettings(),
@@ -326,9 +346,13 @@ export const useStore = create<AppState>((set, get) => ({
 
   openProject: (ref, saved, git) =>
     set((s) => {
-      const loaded: AgentInstance[] = (saved?.agents ?? [])
-        .slice(0, MAX_AGENTS)
-        .map((p, i) => ({ ...p, num: p.num ?? i, isolation: p.isolation ?? 'shared' }))
+      const loaded: AgentInstance[] = []
+      for (const p of (saved?.agents ?? []).slice(0, MAX_AGENTS)) {
+        // Migrate old numeric auto-names (and blanks) to short random names;
+        // preserve any custom rename the user made.
+        const label = !p.label || /^\d+$/.test(p.label.trim()) ? uniqueName(loaded) : p.label
+        loaded.push({ ...p, label, isolation: p.isolation ?? 'shared' })
+      }
       const mode: LayoutMode = saved?.layoutMode === 'columns' ? 'columns' : 'grid'
       return {
         projectPath: ref.path,
@@ -380,6 +404,8 @@ export const useStore = create<AppState>((set, get) => ({
       return { shells }
     }),
 
+  setAgentClis: (agentClis) => set({ agentClis }),
+
   setSelected: (ids) => set({ selectedIds: ids }),
 
   setSetting: (key, value) =>
@@ -400,14 +426,12 @@ export const useStore = create<AppState>((set, get) => ({
   addAgent: (opts) =>
     set((s) => {
       if (s.agents.length >= MAX_AGENTS) return {} // capped — ignore
-      const num = nextNum(s.agents)
       const isolation: Isolation =
         s.isGit && s.settings.defaultIsolation === 'worktree' ? 'worktree' : 'shared'
       const shellId = opts?.shellId ?? s.settings.defaultShellId ?? undefined
       const agent: AgentInstance = {
         id: uuid(),
-        num,
-        label: String(num),
+        label: uniqueName(s.agents),
         x: 0,
         y: 0,
         w: DEFAULT_W,
@@ -438,6 +462,41 @@ export const useStore = create<AppState>((set, get) => ({
         agents: laidOut(rest, s.layoutMode, s.canvasW, s.canvasH),
         selectedIds: s.selectedIds.filter((sid) => sid !== id),
         focusedId: s.focusedId === id ? null : s.focusedId,
+        lastClosed: agent
+          ? {
+              label: agent.label,
+              shellId: agent.shellId,
+              isolation: agent.isolation,
+              startupCommand: agent.startupCommand
+            }
+          : s.lastClosed,
+        panX: 0,
+        panY: 0,
+        zoom: 1
+      }
+    }),
+
+  reopenLast: () =>
+    set((s) => {
+      const lc = s.lastClosed
+      if (!lc || s.agents.length >= MAX_AGENTS) return {}
+      const taken = new Set(s.agents.map((a) => a.label.toLowerCase()))
+      const agent: AgentInstance = {
+        id: uuid(),
+        label: taken.has(lc.label.toLowerCase()) ? uniqueName(s.agents) : lc.label,
+        x: 0,
+        y: 0,
+        w: DEFAULT_W,
+        h: DEFAULT_H,
+        isolation: lc.isolation,
+        shellId: lc.shellId,
+        startupCommand: lc.startupCommand
+      }
+      return {
+        agents: laidOut([...s.agents, agent], s.layoutMode, s.canvasW, s.canvasH),
+        selectedIds: [agent.id],
+        focusedId: null,
+        lastClosed: null,
         panX: 0,
         panY: 0,
         zoom: 1

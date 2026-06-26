@@ -1,22 +1,16 @@
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import Logo from './Logo'
-import { IconFolder, IconPlus, IconGrid, IconColumns, IconSettings, IconBell } from './Icons'
+import { IconTerminal, IconGrid, IconColumns, IconSettings, IconBell } from './Icons'
 import { useStore, NEEDS_ATTENTION, MAX_AGENTS } from '../store'
-import { openProjectInteractive, openProjectByPath } from '../openProject'
 
-/** First letter/number of a workspace name → the tile's emblem. */
-function initial(name: string): string {
-  const m = name.match(/[a-z0-9]/i)
-  return (m ? m[0] : name.charAt(0) || '?').toUpperCase()
-}
-
-/** Minimal floating dock — icons only, refined liquid glass. */
+/** Minimal floating dock — icons only, refined liquid glass. Project switching
+ *  lives in the top bar; the rail is just identity + per-canvas tools. */
 export default function Rail(): JSX.Element {
   const projectPath = useStore((s) => s.projectPath)
-  const workspaces = useStore((s) => s.workspaces)
   const agents = useStore((s) => s.agents)
-  const agentCount = agents.length
-  const full = agentCount >= MAX_AGENTS
+  const agentClis = useStore((s) => s.agentClis)
+  const full = agents.length >= MAX_AGENTS
+  const [newOpen, setNewOpen] = useState(false)
   const layoutMode = useStore((s) => s.layoutMode)
   // Derive with useMemo — a selector that returns a fresh array on every call
   // breaks React 18's useSyncExternalStore (unstable snapshot → render crash).
@@ -41,45 +35,50 @@ export default function Rail(): JSX.Element {
   return (
     <div className="rail">
       <div className="rail__logo" title="Vectro">
-        <Logo size={36} />
+        <Logo size={34} />
       </div>
-
-      {/* Workspace switcher — one tile per opened folder; agents are saved &
-          restored per workspace. Only shown once there's somewhere to switch
-          TO (2+ folders) — a lone self-tile just reads as a dead button. */}
-      {workspaces.length >= 2 && (
-        <div className="rail__ws" role="group" aria-label="Workspaces">
-          {workspaces.map((w, i) => {
-            const active = w.path === projectPath
-            return (
-              <button
-                key={w.path}
-                className={'rail__ws-tile' + (active ? ' is-active' : '')}
-                title={`${w.name}\n${w.path}${i < 9 ? `\n⌘⌥${i + 1}` : ''}`}
-                onClick={() => void openProjectByPath(w)}
-              >
-                {initial(w.name)}
-                {active && attentionIds.length > 0 && <span className="rail__ws-dot" />}
-              </button>
-            )
-          })}
-        </div>
-      )}
-
-      <button className="rail-btn" onClick={() => void openProjectInteractive()} title="Open folder…">
-        <IconFolder />
-      </button>
 
       {projectPath && (
         <>
-          <button
-            className="rail-btn rail-btn--primary"
-            onClick={() => addAgent()}
-            disabled={full}
-            title={full ? `Maximum ${MAX_AGENTS} terminals` : 'New terminal  (⌘T)'}
-          >
-            <IconPlus />
-          </button>
+          <div className="rail__new">
+            <button
+              className="rail-btn rail-btn--primary"
+              onClick={() => (agentClis.length ? setNewOpen((v) => !v) : addAgent())}
+              disabled={full}
+              title={full ? `Maximum ${MAX_AGENTS} terminals` : 'New terminal  (⌘T)'}
+            >
+              <IconTerminal />
+            </button>
+            {newOpen && (
+              <>
+                <div className="rail__backdrop" onClick={() => setNewOpen(false)} />
+                <div className="rail__menu rail__newmenu">
+                  <button
+                    className="rail__menu-item"
+                    onClick={() => {
+                      setNewOpen(false)
+                      addAgent()
+                    }}
+                  >
+                    New terminal
+                  </button>
+                  <div className="rail__menu-sep" />
+                  {agentClis.map((a) => (
+                    <button
+                      key={a.id}
+                      className="rail__menu-item"
+                      onClick={() => {
+                        setNewOpen(false)
+                        addAgent({ command: a.command })
+                      }}
+                    >
+                      Start {a.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
 
           <div className="rail__divider" />
 

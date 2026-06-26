@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useStore, MAX_AGENTS } from '../store'
-import { openProjectInteractive } from '../openProject'
+import { openProjectInteractive, openProjectByPath } from '../openProject'
 
 interface Cmd {
   id: string
@@ -16,8 +16,13 @@ export default function CommandPalette(): JSX.Element {
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
   const setDiffAgentId = useStore((s) => s.setDiffAgentId)
   const removeAgent = useStore((s) => s.removeAgent)
+  const reopenLast = useStore((s) => s.reopenLast)
+  const lastClosed = useStore((s) => s.lastClosed)
+  const closeProject = useStore((s) => s.closeProject)
   const focusTerminal = useStore((s) => s.focusTerminal)
   const shells = useStore((s) => s.shells)
+  const agentClis = useStore((s) => s.agentClis)
+  const workspaces = useStore((s) => s.workspaces)
   const agents = useStore((s) => s.agents)
   const selectedIds = useStore((s) => s.selectedIds)
   const projectPath = useStore((s) => s.projectPath)
@@ -37,9 +42,15 @@ export default function CommandPalette(): JSX.Element {
     if (projectPath) {
       if (!full) {
         list.push({ id: 'new', title: 'New terminal', hint: '⌘T', run: () => addAgent() })
+        agentClis.forEach((a) =>
+          list.push({ id: 'agent-' + a.id, title: `Start ${a.label}`, run: () => addAgent({ command: a.command }) })
+        )
         shells.forEach((sh) =>
           list.push({ id: 'new-' + sh.id, title: `New terminal · ${sh.label}`, run: () => addAgent({ shellId: sh.id }) })
         )
+        if (lastClosed) {
+          list.push({ id: 'reopen', title: `Reopen closed terminal · ${lastClosed.label}`, run: reopenLast })
+        }
       }
       list.push({ id: 'grid', title: 'Layout: Grid', hint: '⌘1', run: () => setLayoutMode('grid') })
       list.push({ id: 'cols', title: 'Layout: Columns', hint: '⌘2', run: () => setLayoutMode('columns') })
@@ -54,9 +65,17 @@ export default function CommandPalette(): JSX.Element {
       }
     }
     list.push({ id: 'open', title: 'Open project…', run: openProjectInteractive })
+    workspaces
+      .filter((w) => w.path !== projectPath)
+      .forEach((w) =>
+        list.push({ id: 'switch-' + w.path, title: `Switch to ${w.name}`, run: () => void openProjectByPath(w) })
+      )
+    if (projectPath) {
+      list.push({ id: 'close-project', title: 'Close project', run: closeProject })
+    }
     list.push({ id: 'settings', title: 'Settings', run: () => setSettingsOpen(true) })
     return list
-  }, [projectPath, shells, selectedIds, agents, addAgent, setLayoutMode, focusTerminal, removeAgent, setSettingsOpen, setDiffAgentId])
+  }, [projectPath, shells, agentClis, workspaces, selectedIds, agents, lastClosed, addAgent, setLayoutMode, focusTerminal, removeAgent, reopenLast, closeProject, setSettingsOpen, setDiffAgentId])
 
   const q = query.trim().toLowerCase()
   const items = useMemo<Cmd[]>(() => {

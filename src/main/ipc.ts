@@ -11,7 +11,7 @@ import {
   getAgentDiff,
   mergeAgent
 } from './git'
-import { detectShells } from './shells'
+import { detectShells, detectAgents } from './shells'
 
 /**
  * Registers every main-process IPC handler against a window accessor.
@@ -43,6 +43,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
   ipcMain.on('pty:kill', (_e, { id }: { id: string }) => ptyManager.kill(id))
 
   ipcMain.handle('shells:list', () => detectShells())
+  ipcMain.handle('agents:list', () => detectAgents())
 
   // --- Wallpaper: pick an image, and read it as a data URL (CSP-safe) ---
   ipcMain.handle('wallpaper:pick', async () => {
