@@ -873,6 +873,23 @@ body.has-wallpaper .aurora {
   white-space: nowrap;
 }
 
+/* Tag showing which agent a terminal is running (e.g. "Claude Code"). */
+.vec-pane__agent {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(180deg, var(--accent-2), var(--accent));
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  padding: 2px 7px;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
 .vec-pane__branch--shared {
   color: #d3a684;
 }
