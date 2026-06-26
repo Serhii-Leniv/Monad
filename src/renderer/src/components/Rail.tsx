@@ -69,7 +69,7 @@ export default function Rail(): JSX.Element {
                       className="rail__menu-item"
                       onClick={() => {
                         setNewOpen(false)
-                        addAgent({ command: a.command })
+                        addAgent({ command: a.command, agentLabel: a.label })
                       }}
                     >
                       Start {a.label}

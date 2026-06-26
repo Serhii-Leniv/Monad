@@ -405,6 +405,7 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
             {agent.label}
           </span>
         )}
+        {agent.agentLabel && <span className="vec-pane__agent">{agent.agentLabel}</span>}
         {downgraded ? (
           <span
             className="vec-pane__branch vec-pane__branch--shared"
