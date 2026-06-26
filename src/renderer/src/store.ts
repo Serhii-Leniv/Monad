@@ -46,6 +46,8 @@ export interface AgentInstance {
   startupCommand?: string
   /** Friendly name of the agent launched here (e.g. "Claude Code"), shown as a tag. */
   agentLabel?: string
+  /** Id of the launched agent (claude/codex/gemini/…) → drives its icon. */
+  agentId?: string
   // --- runtime only (never persisted) ---
   ptyId?: string
   branch?: string | null
@@ -94,6 +96,7 @@ interface AppState {
     isolation: Isolation
     startupCommand?: string
     agentLabel?: string
+    agentId?: string
   } | null
   selectedIds: string[]
   draggingId: string | null
@@ -121,7 +124,12 @@ interface AppState {
   setPaletteOpen: (open: boolean) => void
   setDiffAgentId: (id: string | null) => void
   setView: (panX: number, panY: number, zoom: number) => void
-  addAgent: (opts?: { command?: string; shellId?: string; agentLabel?: string }) => void
+  addAgent: (opts?: {
+    command?: string
+    shellId?: string
+    agentLabel?: string
+    agentId?: string
+  }) => void
   removeAgent: (id: string, opts?: { keepWorktree?: boolean }) => void
   reopenLast: () => void
   renameAgent: (id: string, label: string) => void
@@ -447,7 +455,8 @@ export const useStore = create<AppState>((set, get) => ({
         isolation,
         shellId,
         startupCommand: opts?.command,
-        agentLabel: opts?.agentLabel
+        agentLabel: opts?.agentLabel,
+        agentId: opts?.agentId
       }
       return {
         agents: laidOut([...s.agents, agent], s.layoutMode, s.canvasW, s.canvasH),
@@ -477,7 +486,8 @@ export const useStore = create<AppState>((set, get) => ({
               shellId: agent.shellId,
               isolation: agent.isolation,
               startupCommand: agent.startupCommand,
-              agentLabel: agent.agentLabel
+              agentLabel: agent.agentLabel,
+              agentId: agent.agentId
             }
           : s.lastClosed,
         panX: 0,
@@ -501,7 +511,8 @@ export const useStore = create<AppState>((set, get) => ({
         isolation: lc.isolation,
         shellId: lc.shellId,
         startupCommand: lc.startupCommand,
-        agentLabel: lc.agentLabel
+        agentLabel: lc.agentLabel,
+        agentId: lc.agentId
       }
       return {
         agents: laidOut([...s.agents, agent], s.layoutMode, s.canvasW, s.canvasH),

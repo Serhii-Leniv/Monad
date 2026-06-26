@@ -7,6 +7,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { useStore, type AgentInstance, type AgentStatus } from '../store'
 import { needsAttention, stripAnsi, clampTail } from '../attention'
 import { IconClose } from './Icons'
+import AgentBadge from './AgentBadge'
 
 // DECSCUSR (CSI Ps SP q) — shells like PSReadLine use it to force a (fast)
 // blinking cursor. Strip it so our own calm CSS blink is the single source.
@@ -376,6 +377,7 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
           }
           style={{ background: dotColor }}
         />
+        <AgentBadge id={agent.agentId} label={agent.agentLabel} />
         {editing ? (
           <input
             className="vec-pane__rename"
@@ -405,7 +407,6 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
             {agent.label}
           </span>
         )}
-        {agent.agentLabel && <span className="vec-pane__agent">{agent.agentLabel}</span>}
         {downgraded ? (
           <span
             className="vec-pane__branch vec-pane__branch--shared"
