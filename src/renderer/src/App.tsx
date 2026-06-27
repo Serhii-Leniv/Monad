@@ -9,7 +9,7 @@ import Toasts from './components/Toasts'
 import Home from './components/Home'
 import ProjectBar from './components/ProjectBar'
 import { useStore, toPersisted } from './store'
-import { openProjectByPath, restoreLastProject } from './openProject'
+import { openProjectByPath, restoreLastProject, saveCanvas } from './openProject'
 import { applyAccent } from './accent'
 
 export default function App(): JSX.Element {
@@ -143,7 +143,8 @@ export default function App(): JSX.Element {
         const sel = st.selectedIds[0]
         if (sel) {
           e.preventDefault()
-          st.removeAgent(sel)
+          // Guarded close (worktree dirty-check + confirm) — never force-delete.
+          st.requestClose(sel)
         }
       }
     }
@@ -152,17 +153,24 @@ export default function App(): JSX.Element {
   }, [])
 
   // Only the persisted fields drive autosave, so runtime churn (status/pty id)
-  // doesn't trigger disk writes. The string key gates the effect; the object is
-  // passed straight to save (no parse round-trip).
+  // doesn't trigger disk writes. The compact key gates the effect (a flat join of
+  // just the persisted fields — no JSON pass on every status flip); the object is
+  // passed straight to save.
   const persisted = useMemo(() => toPersisted(agents), [agents])
-  const persistedKey = useMemo(() => JSON.stringify(persisted), [persisted])
+  const persistedKey = useMemo(
+    () =>
+      persisted
+        .map((p) => `${p.id}:${p.x},${p.y},${p.w},${p.h}:${p.isolation}:${p.shellId ?? ''}:${p.label}`)
+        .join('|'),
+    [persisted]
+  )
   const layoutMode = useStore((s) => s.layoutMode)
 
   useEffect(() => {
     if (!projectPath) return
     window.clearTimeout(saveTimer.current)
     saveTimer.current = window.setTimeout(() => {
-      void window.api.project.save(projectPath, { agents: persisted, layoutMode })
+      saveCanvas(projectPath, persisted, layoutMode)
     }, 400)
     return () => window.clearTimeout(saveTimer.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps

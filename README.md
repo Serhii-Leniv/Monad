@@ -27,9 +27,9 @@ npm run preview
 ```
 
 In the app: **Open Project…** → pick a folder (a git repo enables worktree isolation) →
-add agents from the toolbar. Each card is a real terminal; the **Broadcast** bar sends one
-command to every agent. On a git repo, each agent runs in its own worktree/branch — use the
-card's **Diff** tab to review and **Merge** or **Discard** its work.
+add agents from the toolbar. Each card is a real terminal. On a git repo, each agent runs in
+its own worktree/branch — use the card's **Diff** tab to review and **Merge** or **Discard**
+its work.
 
 ## Architecture
 
@@ -42,7 +42,7 @@ src/
     git.ts         git + worktree + diff/merge (shells out to `git`)
   preload/     contextBridge API (window.api.{pty,project,git,worktree,platform})
   renderer/    React + @xyflow/react canvas
-    components/  Canvas, AgentNode (terminal + Diff tabs), Toolbar, BroadcastBar, DiffPanel
+    components/  Stage (canvas), TerminalPane, Rail, CommandPalette, DiffPanel, Settings
     store.ts     Zustand state
 ```
 
@@ -59,7 +59,7 @@ Integration smoke tests drive the real built bundles + IPC under Electron:
 ```bash
 npm run smoke:pty   # PTY loads under Electron ABI + shell echo
 npm run smoke:p1    # preload bridge, project save/load, renderer PTY
-npm run smoke:p2    # git detect, worktree isolation, broadcast, teardown
+npm run smoke:p2    # git detect, worktree isolation, pty fan-out, teardown
 npm run smoke:p3    # diff sees changes, merge lands work on base branch
 ```
 

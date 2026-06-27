@@ -8,7 +8,3 @@ dist/
 # Per-project runtime data (terminal layout) + agent worktrees
 .agent-canvas/
 .agent-canvas-worktrees/
-
-# Bundled voice-dictation assets — fetched via `npm run setup:voice` (large)
-src/renderer/public/voice/models/
-src/renderer/public/voice/ort/

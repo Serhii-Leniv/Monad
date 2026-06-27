@@ -41,8 +41,10 @@ export async function getRepoRootSafe(dir: string): Promise<string | null> {
   return (await getGitInfo(dir)).repoRoot
 }
 
+// 12 chars of the (already-unique) agent UUID — long enough that two agents in a
+// session can't collide onto the same branch/worktree, short enough to stay readable.
 function shortId(agentId: string): string {
-  return agentId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8)
+  return agentId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 12)
 }
 
 /** Deterministic worktree location/branch for an agent, kept OUTSIDE the repo

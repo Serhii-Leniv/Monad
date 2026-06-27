@@ -4,7 +4,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { WebLinksAddon } from '@xterm/addon-web-links'
-import { useStore, type AgentInstance, type AgentStatus } from '../store'
+import { useStore, displayBranch, type AgentInstance, type AgentStatus } from '../store'
 import { needsAttention, stripAnsi, clampTail } from '../attention'
 import { IconClose } from './Icons'
 import AgentBadge from './AgentBadge'
@@ -45,6 +45,8 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
   const renameAgent = useStore((s) => s.renameAgent)
   const focusTerminal = useStore((s) => s.focusTerminal)
   const setDiffAgentId = useStore((s) => s.setDiffAgentId)
+  const pendingClose = useStore((s) => s.pendingCloseId === id)
+  const clearPendingClose = useStore((s) => s.clearPendingClose)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<(() => void) | null>(null)
   const searchRef = useRef<SearchAddon | null>(null)
@@ -59,6 +61,14 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
   const [closePrompt, setClosePrompt] = useState<{ checking: boolean; dirty: boolean; count: number } | null>(
     null
   )
+
+  // Read the clipboard and type it into the live pty — shared by Ctrl/Cmd-V and
+  // the context-menu Paste.
+  const pasteFromClipboard = (): void => {
+    void navigator.clipboard.readText().then((t) => {
+      if (ptyRef.current) window.api.pty.write(ptyRef.current, t)
+    })
+  }
 
   useEffect(() => {
     const host = termHostRef.current
@@ -94,9 +104,7 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
         return false
       }
       if (mod && k === 'v') {
-        void navigator.clipboard.readText().then((t) => {
-          if (ptyRef.current) window.api.pty.write(ptyRef.current, t)
-        })
+        pasteFromClipboard()
         return false
       }
       if (mod && k === 'f') {
@@ -304,8 +312,7 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     fitRef.current?.()
   }, [fontSize, fontFamily, scrollback])
 
-  const onClose = async (e: React.MouseEvent): Promise<void> => {
-    e.stopPropagation()
+  const beginClose = async (): Promise<void> => {
     // Shared dir (or downgraded): nothing is deleted on disk.
     if (agent.isolation !== 'worktree' || isolated === false) {
       if (confirmClose && !window.confirm('Remove this terminal?')) return
@@ -332,6 +339,17 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     }
   }
 
+  // A close requested from outside the pane (⌘W / command palette) runs the same
+  // guarded flow as the × button, so a worktree's uncommitted work is never
+  // force-deleted without a prompt. Ref keeps the effect off beginClose's identity.
+  const beginCloseRef = useRef(beginClose)
+  beginCloseRef.current = beginClose
+  useEffect(() => {
+    if (!pendingClose) return
+    clearPendingClose()
+    void beginCloseRef.current()
+  }, [pendingClose, clearPendingClose])
+
   const relaunch = (): void => {
     setSpawnError(null)
     setSearchOpen(false)
@@ -344,9 +362,7 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     setMenu(null)
   }
   const paste = (): void => {
-    void navigator.clipboard.readText().then((t) => {
-      if (ptyRef.current) window.api.pty.write(ptyRef.current, t)
-    })
+    pasteFromClipboard()
     setMenu(null)
   }
 
@@ -443,7 +459,7 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
                 setDiffAgentId(id)
               }}
             >
-              {branch.replace(/^canvas\//, '')}
+              {displayBranch(branch)}
             </button>
           )
         )}
@@ -451,7 +467,10 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
           className="vec-pane__close"
           title="Remove terminal"
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={onClose}
+          onClick={(e) => {
+            e.stopPropagation()
+            void beginClose()
+          }}
         >
           <IconClose />
         </button>
