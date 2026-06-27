@@ -3,27 +3,34 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Vectro — run your AI coding agents in parallel</title>
+    <title>Vectro — run every AI coding agent at once</title>
     <meta
       name="description"
-      content="Vectro is a desktop canvas that runs multiple AI coding agents in parallel — each isolated in its own git worktree, with one-click diff & merge."
+      content="Vectro is a desktop canvas for parallel AI coding agents. Run a whole team of CLIs side by side — each sealed in its own git worktree — and review, merge, or discard their work without leaving the screen. Local, private, bring your own agents."
     />
     <link rel="icon" href="icon.png" />
-    <meta property="og:title" content="Vectro" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Vectro — run every AI coding agent at once" />
     <meta
       property="og:description"
-      content="Run your AI coding agents in parallel — isolated git worktrees, one-click diff & merge."
+      content="A tiled canvas of live terminals. Run your AI coding agents in parallel — isolated git worktrees, live status, diff & merge built in. Bring your own CLIs."
     />
     <meta property="og:image" content="icon.png" />
+    <meta name="twitter:card" content="summary_large_image" />
     <style>
       :root {
         --accent-rgb: 59, 91, 217;
         --accent: rgb(var(--accent-rgb));
         --accent-2: #5a78ef;
-        --text: rgba(255, 255, 255, 0.95);
-        --muted: rgba(235, 235, 245, 0.55);
+        --text: rgba(255, 255, 255, 0.96);
+        --muted: rgba(235, 235, 245, 0.56);
+        --faint: rgba(235, 235, 245, 0.38);
         --line: rgba(255, 255, 255, 0.12);
         --glass: rgba(255, 255, 255, 0.04);
+        --working: #3b82f6;
+        --idle: #8a93a6;
+        --attn: #ff9f0a;
+        --done: #30d158;
       }
       * {
         box-sizing: border-box;
@@ -36,56 +43,111 @@
         font-family: -apple-system, 'Segoe UI', system-ui, sans-serif;
         color: var(--text);
         background:
-          radial-gradient(1100px 700px at 50% -10%, rgba(var(--accent-rgb), 0.22), transparent 60%),
-          radial-gradient(900px 600px at 85% 20%, rgba(90, 120, 239, 0.12), transparent 55%),
+          radial-gradient(1100px 700px at 50% -10%, rgba(var(--accent-rgb), 0.24), transparent 60%),
+          radial-gradient(900px 600px at 88% 12%, rgba(90, 120, 239, 0.13), transparent 55%),
+          radial-gradient(800px 600px at 8% 40%, rgba(122, 92, 222, 0.1), transparent 55%),
           linear-gradient(180deg, #0a0c12, #07090d);
+        background-attachment: fixed;
         min-height: 100vh;
         -webkit-font-smoothing: antialiased;
+        line-height: 1.5;
       }
       .wrap {
-        max-width: 1000px;
+        max-width: 1060px;
         margin: 0 auto;
         padding: 0 24px;
       }
+      a {
+        color: inherit;
+      }
+
+      /* ---- top nav ---- */
+      nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 22px 0;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 650;
+        font-size: 17px;
+        letter-spacing: -0.01em;
+      }
+      .brand img {
+        width: 30px;
+        height: 30px;
+        object-fit: contain;
+      }
+      .nav-links {
+        display: flex;
+        gap: 26px;
+        font-size: 14px;
+      }
+      .nav-links a {
+        color: var(--muted);
+        text-decoration: none;
+        transition: color 0.15s ease;
+      }
+      .nav-links a:hover {
+        color: var(--text);
+      }
+      @media (max-width: 640px) {
+        .nav-links {
+          display: none;
+        }
+      }
+
+      /* ---- hero ---- */
       header {
-        padding: 64px 0 28px;
+        padding: 52px 0 8px;
         text-align: center;
       }
-      .mark {
-        width: 132px;
-        height: 132px;
-        object-fit: contain;
-        filter: drop-shadow(0 0 38px rgba(var(--accent-rgb), 0.55));
-        animation: float 6s ease-in-out infinite;
-      }
-      @keyframes float {
-        0%,
-        100% {
-          transform: translateY(0);
-        }
-        50% {
-          transform: translateY(-9px);
-        }
+      .eyebrow {
+        display: inline-block;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--accent-2);
+        margin-bottom: 18px;
+        padding: 6px 14px;
+        border-radius: 999px;
+        background: rgba(var(--accent-rgb), 0.1);
+        border: 1px solid rgba(var(--accent-rgb), 0.25);
       }
       h1 {
-        font-size: clamp(40px, 7vw, 64px);
-        letter-spacing: -0.02em;
-        margin: 18px 0 10px;
-        font-weight: 700;
+        font-size: clamp(42px, 7.4vw, 72px);
+        letter-spacing: -0.03em;
+        margin: 6px 0 18px;
+        font-weight: 720;
+        line-height: 1.04;
+      }
+      h1 .grad {
+        background: linear-gradient(120deg, #fff 20%, var(--accent-2) 75%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
       }
       .tag {
-        font-size: clamp(16px, 2.4vw, 21px);
+        font-size: clamp(17px, 2.2vw, 21px);
         color: var(--muted);
-        max-width: 620px;
+        max-width: 660px;
         margin: 0 auto;
-        line-height: 1.5;
       }
+      .tag b {
+        color: var(--text);
+        font-weight: 600;
+      }
+
       .downloads {
         display: flex;
         flex-wrap: wrap;
         gap: 12px;
         justify-content: center;
-        margin: 36px 0 12px;
+        margin: 34px 0 12px;
       }
       .btn {
         display: inline-flex;
@@ -110,8 +172,8 @@
         background: linear-gradient(180deg, var(--accent-2), var(--accent));
         border-color: rgba(255, 255, 255, 0.25);
         box-shadow:
-          0 0 26px rgba(var(--accent-rgb), 0.6),
-          0 8px 24px rgba(var(--accent-rgb), 0.35);
+          0 0 26px rgba(var(--accent-rgb), 0.55),
+          0 8px 24px rgba(var(--accent-rgb), 0.32);
       }
       .btn--primary:hover {
         filter: brightness(1.07);
@@ -120,59 +182,330 @@
         width: 18px;
         height: 18px;
       }
+      .btn .sub {
+        opacity: 0.7;
+        font-weight: 500;
+      }
       .note {
         text-align: center;
-        color: var(--muted);
+        color: var(--faint);
         font-size: 13px;
-        margin-top: 8px;
+        margin-top: 10px;
       }
-      .note code {
-        color: var(--text);
-        background: rgba(255, 255, 255, 0.07);
-        padding: 1px 6px;
-        border-radius: 5px;
-        font-size: 12px;
+      .note b {
+        color: var(--muted);
       }
-      .features {
+
+      /* ---- product mockup ---- */
+      .shot {
+        margin: 50px auto 0;
+        max-width: 920px;
+        border-radius: 18px;
+        border: 1px solid var(--line);
+        background: linear-gradient(160deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+        box-shadow:
+          0 40px 120px rgba(0, 0, 0, 0.6),
+          0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+        overflow: hidden;
+      }
+      .shot__bar {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 11px 14px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(0, 0, 0, 0.2);
+      }
+      .shot__bar i {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        background: #3a3f4b;
+        display: block;
+      }
+      .shot__body {
+        display: flex;
+        gap: 12px;
+        padding: 14px;
+        min-height: 320px;
+      }
+      .dock {
+        flex: 0 0 46px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 9px;
+        padding: 12px 0;
+        border-radius: 13px;
+        background: rgba(13, 16, 23, 0.6);
+        border: 1px solid var(--line);
+      }
+      .dock span {
+        width: 24px;
+        height: 24px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.06);
+      }
+      .dock span.on {
+        background: linear-gradient(180deg, var(--accent-2), var(--accent));
+        box-shadow: 0 0 14px rgba(var(--accent-rgb), 0.5);
+      }
+      .dock span.plus {
+        background: rgba(var(--accent-rgb), 0.18);
+        border: 1px solid rgba(var(--accent-rgb), 0.4);
+      }
+      .panes {
+        flex: 1;
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 14px;
-        margin: 64px 0;
+        grid-template-columns: 1fr 1fr;
+        grid-auto-rows: 1fr;
+        gap: 12px;
       }
-      .card {
-        padding: 22px;
+      .pane {
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        background: rgba(10, 13, 18, 0.66);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      .pane__h {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .pane__h .d {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex: 0 0 8px;
+      }
+      .pane__h .br {
+        margin-left: auto;
+        font-size: 10.5px;
+        color: var(--accent-2);
+        background: rgba(var(--accent-rgb), 0.12);
+        border: 1px solid rgba(var(--accent-rgb), 0.25);
+        padding: 1px 7px;
+        border-radius: 999px;
+      }
+      .pane__t {
+        padding: 9px 11px;
+        font-family: 'Cascadia Code', 'SF Mono', Consolas, monospace;
+        font-size: 11px;
+        line-height: 1.7;
+        color: #aeb6c6;
+      }
+      .pane__t .g {
+        color: var(--done);
+      }
+      .pane__t .b {
+        color: var(--accent-2);
+      }
+      .pane__t .m {
+        color: var(--faint);
+      }
+      .pane__t .cur {
+        display: inline-block;
+        width: 7px;
+        height: 13px;
+        vertical-align: -2px;
+        background: #aeb6c6;
+        animation: blink 2s step-end infinite;
+      }
+      @keyframes blink {
+        0%, 62% { opacity: 1; }
+        62.01%, 100% { opacity: 0.15; }
+      }
+      .cmd {
+        margin: 0 14px 14px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 13px;
+        border-radius: 11px;
+        background: rgba(13, 16, 23, 0.66);
+        border: 1px solid var(--line);
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .cmd .chip {
+        font-size: 11px;
+        color: var(--accent-2);
+        background: rgba(var(--accent-rgb), 0.12);
+        border: 1px solid rgba(var(--accent-rgb), 0.25);
+        padding: 2px 9px;
+        border-radius: 999px;
+      }
+      .cmd .mic {
+        margin-left: auto;
+        width: 20px;
+        height: 20px;
+        color: var(--faint);
+      }
+      @media (max-width: 600px) {
+        .panes {
+          grid-template-columns: 1fr;
+        }
+        .pane:nth-child(n + 3) {
+          display: none;
+        }
+      }
+
+      /* ---- shift band ---- */
+      .shift {
+        text-align: center;
+        max-width: 720px;
+        margin: 92px auto;
+      }
+      .shift h2 {
+        font-size: clamp(26px, 4vw, 38px);
+        letter-spacing: -0.02em;
+        margin: 0 0 14px;
+        line-height: 1.15;
+      }
+      .shift p {
+        font-size: 18px;
+        color: var(--muted);
+        margin: 0;
+      }
+
+      /* ---- sections ---- */
+      .sec-h {
+        text-align: center;
+        margin: 0 0 38px;
+      }
+      .sec-h h2 {
+        font-size: clamp(26px, 4vw, 36px);
+        letter-spacing: -0.02em;
+        margin: 0 0 10px;
+      }
+      .sec-h p {
+        color: var(--muted);
+        margin: 0;
+        font-size: 16px;
+      }
+      section.block {
+        margin: 92px 0;
+      }
+
+      .steps {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 18px;
+      }
+      .step {
+        padding: 26px;
         border-radius: 16px;
         background: var(--glass);
         border: 1px solid var(--line);
-        backdrop-filter: blur(14px);
       }
-      .card h3 {
-        margin: 0 0 8px;
-        font-size: 16px;
+      .step .n {
+        width: 34px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        border-radius: 10px;
+        font-weight: 700;
+        font-size: 15px;
+        color: #fff;
+        background: linear-gradient(180deg, var(--accent-2), var(--accent));
+        box-shadow: 0 0 18px rgba(var(--accent-rgb), 0.4);
+        margin-bottom: 16px;
       }
-      .card p {
+      .step h3 {
+        margin: 0 0 7px;
+        font-size: 17px;
+      }
+      .step p {
         margin: 0;
         color: var(--muted);
-        font-size: 14px;
-        line-height: 1.55;
+        font-size: 14.5px;
       }
-      .dot {
+
+      .features {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 14px;
+      }
+      .card {
+        padding: 24px;
+        border-radius: 16px;
+        background: var(--glass);
+        border: 1px solid var(--line);
+      }
+      .card h3 {
+        margin: 0 0 9px;
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+      .card .dot {
         width: 9px;
         height: 9px;
         border-radius: 50%;
         background: var(--accent);
         box-shadow: 0 0 10px var(--accent);
-        display: inline-block;
-        margin-right: 8px;
+        flex: 0 0 9px;
+      }
+      .card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14.5px;
+      }
+
+      /* ---- trust ---- */
+      .trust {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+        text-align: center;
+      }
+      .trust div {
+        padding: 22px;
+      }
+      .trust h3 {
+        margin: 0 0 8px;
+        font-size: 16px;
+      }
+      .trust p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      /* ---- final cta ---- */
+      .cta {
+        text-align: center;
+        padding: 58px 28px;
+        border-radius: 24px;
+        background:
+          radial-gradient(600px 300px at 50% 0%, rgba(var(--accent-rgb), 0.22), transparent 70%),
+          var(--glass);
+        border: 1px solid var(--line);
+      }
+      .cta h2 {
+        font-size: clamp(28px, 4.5vw, 42px);
+        letter-spacing: -0.02em;
+        margin: 0 0 12px;
+      }
+      .cta p {
+        color: var(--muted);
+        margin: 0 0 28px;
+        font-size: 17px;
       }
       .ver {
         display: inline-block;
-        margin-top: 18px;
+        margin-top: 16px;
         padding: 5px 13px;
         border-radius: 999px;
         font-size: 12.5px;
         font-weight: 600;
-        letter-spacing: 0.02em;
         color: var(--text);
         background: var(--glass);
         border: 1px solid var(--line);
@@ -182,58 +515,206 @@
       }
       footer {
         text-align: center;
-        color: var(--muted);
+        color: var(--faint);
         font-size: 13px;
-        padding: 28px 0 56px;
+        padding: 44px 0 60px;
+        margin-top: 80px;
         border-top: 1px solid var(--line);
       }
     </style>
   </head>
   <body>
     <div class="wrap">
-      <header>
-        <img class="mark" src="logo.png" alt="Vectro" />
-        <h1>Vectro</h1>
+      <nav>
+        <div class="brand"><img src="logo.png" alt="" />Vectro</div>
+        <div class="nav-links">
+          <a href="#how">How it works</a>
+          <a href="#features">Features</a>
+          <a href="#download">Download</a>
+        </div>
+      </nav>
+
+      <header id="download">
+        <span class="eyebrow">The agentic coding canvas</span>
+        <h1>Run <span class="grad">every AI agent</span><br />at once.</h1>
         <p class="tag">
-          Run your AI coding agents in parallel — each isolated in its own git worktree, with
-          one-click diff &amp; merge. Bring your own CLIs.
+          Vectro turns one screen into a tiled canvas of live terminals — a whole team of coding
+          agents working <b>in parallel</b>, each sealed in its own git worktree, with diff &amp;
+          merge built in. <b>Bring your own CLIs.</b>
         </p>
-        <div class="ver">Latest release · <b>v0.1.4</b></div>
 
         <div class="downloads">
-          <a class="btn btn--primary" href="https://github.com/Serhii-Leniv/vectro-site/releases/latest/download/Vectro-macOS-arm64.dmg">
+          <a
+            class="btn btn--primary"
+            href="https://github.com/Serhii-Leniv/vectro-site/releases/latest/download/Vectro-macOS-arm64.dmg"
+          >
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 1.6c.1 1-.3 2-.9 2.7-.6.8-1.6 1.4-2.6 1.3-.1-1 .4-2 .9-2.6.6-.8 1.7-1.3 2.6-1.4zM19 17.3c-.5 1.1-.7 1.6-1.3 2.6-.9 1.4-2.1 3.1-3.6 3.1-1.3 0-1.7-.8-3.4-.8-1.8 0-2.2.8-3.5.9-1.5 0-2.6-1.5-3.5-2.9C-.1 16.6-.6 11 1.6 8c1-1.4 2.6-2.3 4.1-2.3 1.5 0 2.5.9 3.7.9 1.2 0 1.9-.9 3.7-.9 1.3 0 2.7.7 3.7 2-3.2 1.7-2.7 6.2.5 7.6z"/></svg>
-            Download for Mac
-            <span style="opacity:.7;font-weight:500">Apple Silicon</span>
+            Download for Mac <span class="sub">Apple Silicon</span>
           </a>
-          <a class="btn" href="https://github.com/Serhii-Leniv/vectro-site/releases/latest/download/Vectro-Windows-Setup.exe">
+          <a
+            class="btn"
+            href="https://github.com/Serhii-Leniv/vectro-site/releases/latest/download/Vectro-Windows-Setup.exe"
+          >
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5 11 4.3v7.4H3V5.5zm0 13L11 19.7v-7.2H3v6zm9-14.4L21 3v8.7h-9V4.1zm0 8.4h9V21l-9-1.4v-7.1z"/></svg>
-            Windows
+            Download for Windows
           </a>
         </div>
         <p class="note">
-          Free · the app spawns your already-installed agent CLIs (Claude Code, Codex, Gemini…).<br />
-          Unsigned build — on first launch <b>right-click → Open</b> (macOS) / <b>More info → Run anyway</b> (Windows).
+          Free · runs on your machine, with your own agent CLIs (Claude Code, Codex, Gemini…).<br />
+          Unsigned beta build — first launch: <b>right-click → Open</b> (macOS) /
+          <b>More info → Run anyway</b> (Windows).
         </p>
+
+        <!-- product mockup -->
+        <div class="shot" aria-hidden="true">
+          <div class="shot__bar"><i></i><i></i><i></i></div>
+          <div class="shot__body">
+            <div class="dock">
+              <span class="on"></span><span></span><span></span><span class="plus"></span>
+            </div>
+            <div class="panes">
+              <div class="pane">
+                <div class="pane__h"><span class="d" style="background:var(--working)"></span>auth-refactor<span class="br">canvas/auth</span></div>
+                <div class="pane__t">
+                  <span class="m">$</span> claude<br />
+                  <span class="g">+</span> refactored <span class="b">session.ts</span><br />
+                  running tests…<span class="cur"></span>
+                </div>
+              </div>
+              <div class="pane">
+                <div class="pane__h"><span class="d" style="background:var(--attn)"></span>api-endpoints<span class="br">canvas/api</span></div>
+                <div class="pane__t">
+                  <span class="m">$</span> codex<br />
+                  apply this patch? <span class="b">(y/n)</span><span class="cur"></span>
+                </div>
+              </div>
+              <div class="pane">
+                <div class="pane__h"><span class="d" style="background:var(--done)"></span>docs-pass<span class="br">canvas/docs</span></div>
+                <div class="pane__t">
+                  <span class="m">$</span> gemini<br />
+                  <span class="g">✓</span> updated 6 files<br />
+                  <span class="m">ready to merge</span>
+                </div>
+              </div>
+              <div class="pane">
+                <div class="pane__h"><span class="d" style="background:var(--idle)"></span>perf-pass<span class="br">canvas/perf</span></div>
+                <div class="pane__t">
+                  <span class="m">$</span> claude<br />
+                  <span class="m">idle — awaiting task</span><span class="cur"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="cmd">
+            <span class="chip">All · 4</span>
+            <span>run the test suite and report failures</span>
+            <svg class="mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10a7 7 0 0 1-14 0M12 17v4"/></svg>
+          </div>
+        </div>
       </header>
 
-      <section class="features">
-        <div class="card">
-          <h3><span class="dot"></span>Agents in parallel</h3>
-          <p>A tiled canvas of live terminals. Run several coding agents at once and see who's working, idle, or waiting on you at a glance.</p>
+      <div class="shift">
+        <h2>One agent at a time is the bottleneck.</h2>
+        <p>
+          You can only babysit one terminal while it thinks. Vectro lets you start five, keep them
+          from stepping on each other, and merge the one that got it right.
+        </p>
+      </div>
+
+      <section class="block" id="how">
+        <div class="sec-h">
+          <h2>How it works</h2>
+          <p>From a cold repo to merged work in three moves.</p>
         </div>
-        <div class="card">
-          <h3><span class="dot"></span>Git-worktree isolation</h3>
-          <p>Every agent gets its own branch + worktree, so parallel edits never clobber each other.</p>
+        <div class="steps">
+          <div class="step">
+            <div class="n">1</div>
+            <h3>Open your repo</h3>
+            <p>Point Vectro at any git project. Your layout and terminals are saved per workspace and restored when you come back.</p>
+          </div>
+          <div class="step">
+            <div class="n">2</div>
+            <h3>Spin up agents</h3>
+            <p>Every terminal runs your own CLI in its own branch + git worktree — up to nine, tiled automatically. Drag to reorder; the grid re-flows itself.</p>
+          </div>
+          <div class="step">
+            <div class="n">3</div>
+            <h3>Review &amp; merge</h3>
+            <p>See who's working, idle, or waiting on you. Read each agent's diff and merge into your base — or discard the branch — without leaving the canvas.</p>
+          </div>
         </div>
-        <div class="card">
-          <h3><span class="dot"></span>One-click diff &amp; merge</h3>
-          <p>Review each agent's changes in-app and merge into your base branch — or discard — without leaving the canvas.</p>
+      </section>
+
+      <section class="block" id="features">
+        <div class="sec-h">
+          <h2>Built for running many agents</h2>
+          <p>Not another terminal. A control room for parallel AI coding.</p>
         </div>
-        <div class="card">
-          <h3><span class="dot"></span>Make it yours</h3>
-          <p>Liquid-glass UI with your own accent colour, wallpaper, and adjustable terminal transparency.</p>
+        <div class="features">
+          <div class="card">
+            <h3><span class="dot"></span>Parallel by design</h3>
+            <p>A tiled canvas of live terminals with automatic layout. Start a swarm, watch them all at once — no tab-juggling.</p>
+          </div>
+          <div class="card">
+            <h3><span class="dot"></span>True isolation</h3>
+            <p>A dedicated branch and git worktree per agent, so parallel edits never clobber each other or your working tree.</p>
+          </div>
+          <div class="card">
+            <h3><span class="dot"></span>Diff &amp; merge in-app</h3>
+            <p>Review an agent's changes against your base branch and land them — or throw the branch away — without breaking focus.</p>
+          </div>
+          <div class="card">
+            <h3><span class="dot"></span>Knows who needs you</h3>
+            <p>Live per-agent status — working, idle, or waiting for input — plus a desktop ping when a backgrounded agent finishes or gets stuck.</p>
+          </div>
+          <div class="card">
+            <h3><span class="dot"></span>Broadcast once</h3>
+            <p>Send one instruction to every agent at the same time, or target a single terminal. One command bar drives the whole fleet.</p>
+          </div>
+          <div class="card">
+            <h3><span class="dot"></span>Yours to theme</h3>
+            <p>A premium liquid-glass interface with your own accent colour, wallpaper, and adjustable terminal transparency.</p>
+          </div>
         </div>
+      </section>
+
+      <section class="block">
+        <div class="trust">
+          <div>
+            <h3>Local &amp; private</h3>
+            <p>Runs on your machine, against your repo. No code is uploaded anywhere — agents use your own keys.</p>
+          </div>
+          <div>
+            <h3>Bring your own agents</h3>
+            <p>Claude Code, Codex, Gemini, or any CLI you already run. Vectro orchestrates — it never locks you in.</p>
+          </div>
+          <div>
+            <h3>Free while in beta</h3>
+            <p>Download, run a whole team of agents, keep your workflow. No account, no paywall today.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="cta">
+        <h2>Give your agents room to work.</h2>
+        <p>Download Vectro and run your first parallel agents in under a minute.</p>
+        <div class="downloads" style="margin-bottom: 0">
+          <a
+            class="btn btn--primary"
+            href="https://github.com/Serhii-Leniv/vectro-site/releases/latest/download/Vectro-macOS-arm64.dmg"
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 1.6c.1 1-.3 2-.9 2.7-.6.8-1.6 1.4-2.6 1.3-.1-1 .4-2 .9-2.6.6-.8 1.7-1.3 2.6-1.4zM19 17.3c-.5 1.1-.7 1.6-1.3 2.6-.9 1.4-2.1 3.1-3.6 3.1-1.3 0-1.7-.8-3.4-.8-1.8 0-2.2.8-3.5.9-1.5 0-2.6-1.5-3.5-2.9C-.1 16.6-.6 11 1.6 8c1-1.4 2.6-2.3 4.1-2.3 1.5 0 2.5.9 3.7.9 1.2 0 1.9-.9 3.7-.9 1.3 0 2.7.7 3.7 2-3.2 1.7-2.7 6.2.5 7.6z"/></svg>
+            Download for Mac <span class="sub">Apple Silicon</span>
+          </a>
+          <a
+            class="btn"
+            href="https://github.com/Serhii-Leniv/vectro-site/releases/latest/download/Vectro-Windows-Setup.exe"
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5 11 4.3v7.4H3V5.5zm0 13L11 19.7v-7.2H3v6zm9-14.4L21 3v8.7h-9V4.1zm0 8.4h9V21l-9-1.4v-7.1z"/></svg>
+            Download for Windows
+          </a>
+        </div>
+        <div class="ver">Latest release · <b>v0.1.4</b></div>
       </section>
 
       <footer>Built by Serhii Leniv · BYO agents, your machine, your repo.</footer>
