@@ -1,20 +1,12 @@
-import { useStore, toPersisted } from './store'
+import { useStore, toPersisted, type LayoutMode, type PersistedAgent } from './store'
+import { RECENT_KEY, getRecent, type RecentProject } from './recent'
 
-export interface RecentProject {
-  path: string
-  name: string
-}
+export type { RecentProject }
 
-const RECENT_KEY = 'vectro.recent'
-
-/** Most-recently-opened projects (newest first), persisted in localStorage. */
-export function getRecent(): RecentProject[] {
-  try {
-    const raw = localStorage.getItem(RECENT_KEY)
-    return raw ? (JSON.parse(raw) as RecentProject[]) : []
-  } catch {
-    return []
-  }
+/** Single writer for a project's canvas file — shared by the debounced autosave
+ *  in App and the flush-on-switch below, so the on-disk shape stays in one place. */
+export function saveCanvas(projectPath: string, agents: PersistedAgent[], layoutMode: LayoutMode): void {
+  void window.api.project.save(projectPath, { agents, layoutMode })
 }
 
 function pushRecent(ref: RecentProject): void {
@@ -38,10 +30,7 @@ function pushRecent(ref: RecentProject): void {
 function saveCurrent(): void {
   const st = useStore.getState()
   if (!st.projectPath) return
-  void window.api.project.save(st.projectPath, {
-    agents: toPersisted(st.agents),
-    layoutMode: st.layoutMode
-  })
+  saveCanvas(st.projectPath, toPersisted(st.agents), st.layoutMode)
 }
 
 /** Load a project's saved canvas + git info, prune stale worktrees, open it. */

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { getRecent } from './recent'
 
 export type Isolation = 'worktree' | 'shared'
 export type LayoutMode = 'grid' | 'columns'
@@ -108,6 +109,9 @@ interface AppState {
   paletteOpen: boolean
   /** Agent whose worktree changes are open in the diff/merge review modal. */
   diffAgentId: string | null
+  /** Agent the user asked to close from outside its pane (⌘W / palette) — the
+   *  matching TerminalPane picks this up and runs its guarded close flow. */
+  pendingCloseId: string | null
   focusedId: string | null
   prevView: { panX: number; panY: number; zoom: number } | null
   toasts: Toast[]
@@ -123,6 +127,8 @@ interface AppState {
   setSettingsOpen: (open: boolean) => void
   setPaletteOpen: (open: boolean) => void
   setDiffAgentId: (id: string | null) => void
+  requestClose: (id: string) => void
+  clearPendingClose: () => void
   setView: (panX: number, panY: number, zoom: number) => void
   addAgent: (opts?: {
     command?: string
@@ -141,8 +147,6 @@ interface AppState {
   clearFocus: () => void
   setAgentRuntime: (id: string, rt: Partial<AgentInstance>) => void
   setStatus: (id: string, status: AgentStatus) => void
-  broadcast: (text: string) => void
-  sendTo: (id: string, text: string) => void
   pushToast: (text: string, kind?: Toast['kind']) => void
   dismissToast: (id: string) => void
 }
@@ -171,15 +175,7 @@ export interface AppSettings {
   wallpaper: string | null
   /** Terminal background opacity 0.4–1 (lower reveals the wallpaper behind). */
   terminalOpacity: number
-  /** KeyboardEvent.code that triggers dictation (default: Right Shift on Windows/Linux, Right Option on macOS). */
-  voiceKey: string
-  /** How the trigger key behaves: hold-to-talk (ptt) or tap-to-start/stop (toggle). */
-  voiceActivation: 'toggle' | 'ptt'
 }
-
-/** Right Shift everywhere except macOS, where Right Option is the natural spare key. */
-const DEFAULT_VOICE_KEY =
-  typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform) ? 'AltRight' : 'ShiftRight'
 
 /** Monospace stacks offered in Settings (first that's installed wins). */
 export const FONT_FAMILIES: { id: string; label: string; stack: string }[] = [
@@ -203,9 +199,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   notifications: true,
   notifyOnDone: true,
   wallpaper: null,
-  terminalOpacity: 0.55,
-  voiceKey: DEFAULT_VOICE_KEY,
-  voiceActivation: 'ptt'
+  terminalOpacity: 0.55
 }
 
 function loadSettings(): AppSettings {
@@ -222,16 +216,6 @@ function saveSettings(s: AppSettings): void {
     localStorage.setItem('vectro.settings', JSON.stringify(s))
   } catch {
     /* ignore */
-  }
-}
-
-/** Seed the workspace switcher from the persisted recent-projects list. */
-function loadWorkspaces(): Workspace[] {
-  try {
-    const raw = localStorage.getItem('vectro.recent')
-    return raw ? (JSON.parse(raw) as Workspace[]) : []
-  } catch {
-    return []
   }
 }
 
@@ -288,8 +272,19 @@ function laidOut(
       // Moveable for its transform — it follows the cursor; its slot stays an
       // empty gap that the other cards reflow around. We stash that slot in
       // drop* so the canvas can draw a placeholder there.
-      if (skipId && a.id === skipId) out.push({ ...a, dropX: x, dropY: y, dropW: cw, dropH: ch })
-      else out.push({ ...a, x, y, w: cw, h: ch, dropX: undefined, dropY: undefined })
+      if (skipId && a.id === skipId) {
+        out.push({ ...a, dropX: x, dropY: y, dropW: cw, dropH: ch })
+        continue
+      }
+      // Reuse the SAME object when its slot is unchanged — a fresh `{...a}` every
+      // relayout would give each pane a new identity and defeat TerminalPane's
+      // memo, re-rendering every xterm on each drag-cross / resize tick.
+      const unchanged =
+        a.x === x && a.y === y && a.w === cw && a.h === ch &&
+        a.dropX === undefined && a.dropY === undefined &&
+        a.dropW === undefined && a.dropH === undefined
+      if (unchanged) out.push(a)
+      else out.push({ ...a, x, y, w: cw, h: ch, dropX: undefined, dropY: undefined, dropW: undefined, dropH: undefined })
     }
   }
   return out
@@ -320,6 +315,11 @@ function uniqueName(agents: AgentInstance[]): string {
   return 'Term' + (agents.length + 1)
 }
 
+/** A worktree branch as shown to the user — drop the internal `canvas/` prefix. */
+export function displayBranch(branch: string): string {
+  return branch.replace(/^canvas\//, '')
+}
+
 export function toPersisted(agents: AgentInstance[]): PersistedAgent[] {
   return agents.map((a) => ({
     id: a.id,
@@ -333,12 +333,12 @@ export function toPersisted(agents: AgentInstance[]): PersistedAgent[] {
   }))
 }
 
-export const useStore = create<AppState>((set, get) => ({
+export const useStore = create<AppState>((set) => ({
   projectPath: null,
   projectName: null,
   isGit: false,
   baseBranch: null,
-  workspaces: loadWorkspaces(),
+  workspaces: getRecent(),
   agents: [],
   layoutMode: 'grid',
   canvasW: 1200,
@@ -353,6 +353,7 @@ export const useStore = create<AppState>((set, get) => ({
   settingsOpen: false,
   paletteOpen: false,
   diffAgentId: null,
+  pendingCloseId: null,
   focusedId: null,
   prevView: null,
   toasts: [],
@@ -437,6 +438,11 @@ export const useStore = create<AppState>((set, get) => ({
 
   setDiffAgentId: (id) => set({ diffAgentId: id }),
 
+  // The pane owning `id` runs the guarded close (dirty-check + confirm); these
+  // just hand the request to it and clear it once picked up.
+  requestClose: (id) => set({ pendingCloseId: id }),
+  clearPendingClose: () => set({ pendingCloseId: null }),
+
   setView: (panX, panY, zoom) => set({ panX, panY, zoom }),
 
   addAgent: (opts) =>
@@ -480,6 +486,7 @@ export const useStore = create<AppState>((set, get) => ({
         agents: laidOut(rest, s.layoutMode, s.canvasW, s.canvasH),
         selectedIds: s.selectedIds.filter((sid) => sid !== id),
         focusedId: s.focusedId === id ? null : s.focusedId,
+        pendingCloseId: s.pendingCloseId === id ? null : s.pendingCloseId,
         lastClosed: agent
           ? {
               label: agent.label,
@@ -600,17 +607,6 @@ export const useStore = create<AppState>((set, get) => ({
 
   setStatus: (id, status) =>
     set((s) => ({ agents: s.agents.map((a) => (a.id === id ? { ...a, status } : a)) })),
-
-  broadcast: (text) => {
-    for (const a of get().agents) {
-      if (a.ptyId) window.api.pty.write(a.ptyId, text + '\r')
-    }
-  },
-
-  sendTo: (id, text) => {
-    const a = get().agents.find((x) => x.id === id)
-    if (a?.ptyId) window.api.pty.write(a.ptyId, text + '\r')
-  },
 
   pushToast: (text, kind = 'info') =>
     set((s) => ({ toasts: [...s.toasts, { id: uuid(), text, kind }] })),

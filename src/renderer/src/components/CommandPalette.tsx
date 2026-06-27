@@ -15,7 +15,7 @@ export default function CommandPalette(): JSX.Element {
   const setLayoutMode = useStore((s) => s.setLayoutMode)
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
   const setDiffAgentId = useStore((s) => s.setDiffAgentId)
-  const removeAgent = useStore((s) => s.removeAgent)
+  const requestClose = useStore((s) => s.requestClose)
   const reopenLast = useStore((s) => s.reopenLast)
   const lastClosed = useStore((s) => s.lastClosed)
   const closeProject = useStore((s) => s.closeProject)
@@ -61,7 +61,7 @@ export default function CommandPalette(): JSX.Element {
           list.push({ id: 'review', title: 'Review changes & merge…', run: () => setDiffAgentId(sel) })
         }
         list.push({ id: 'focus', title: 'Focus selected terminal', run: () => focusTerminal(sel) })
-        list.push({ id: 'close', title: 'Close selected terminal', hint: '⌘W', run: () => removeAgent(sel) })
+        list.push({ id: 'close', title: 'Close selected terminal', hint: '⌘W', run: () => requestClose(sel) })
       }
     }
     list.push({ id: 'open', title: 'Open project…', run: openProjectInteractive })
@@ -75,7 +75,7 @@ export default function CommandPalette(): JSX.Element {
     }
     list.push({ id: 'settings', title: 'Settings', run: () => setSettingsOpen(true) })
     return list
-  }, [projectPath, shells, agentClis, workspaces, selectedIds, agents, lastClosed, addAgent, setLayoutMode, focusTerminal, removeAgent, reopenLast, closeProject, setSettingsOpen, setDiffAgentId])
+  }, [projectPath, shells, agentClis, workspaces, selectedIds, agents, lastClosed, addAgent, setLayoutMode, focusTerminal, requestClose, reopenLast, closeProject, setSettingsOpen, setDiffAgentId])
 
   const q = query.trim().toLowerCase()
   const items = useMemo<Cmd[]>(() => {

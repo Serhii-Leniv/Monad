@@ -78,7 +78,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
 
   // Open a URL from a terminal (web-links addon) in the user's real browser.
   ipcMain.handle('open:external', (_e, url: string) => {
-    if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
+    if (!/^https?:\/\//i.test(url)) return false
+    void shell.openExternal(url)
     return true
   })
 
