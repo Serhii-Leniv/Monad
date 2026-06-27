@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useStore } from '../store'
+import { useStore, displayBranch } from '../store'
 import { IconClose } from './Icons'
 
 function lineClass(l: string): string {
@@ -46,7 +46,7 @@ export default function DiffPanel(): JSX.Element {
     void window.api.git.diff(projectPath, id).then((d) => {
       setDiff(d)
       setLoading(false)
-      setMessage(`Merge ${d.branch.replace(/^canvas\//, '') || label}`)
+      setMessage(`Merge ${displayBranch(d.branch) || label}`)
     })
   }
 
@@ -89,7 +89,7 @@ export default function DiffPanel(): JSX.Element {
             <span className="review__name">{label}</span>
             {diff && (
               <span className="review__branch">
-                {diff.branch.replace(/^canvas\//, '')}
+                {displayBranch(diff.branch)}
                 {diff.base ? ` → ${diff.base}` : ''}
               </span>
             )}
