@@ -37,12 +37,33 @@ export default function ProjectBar(): JSX.Element {
             <span className="projbar__emblem" style={emblemStyle(projectPath)}>
               {initial(projectName ?? '?')}
             </span>
-            <span className="projbar__name">{projectName}</span>
+            <span className="projbar__text">
+              <span className="projbar__label">Project</span>
+              <span className="projbar__name">{projectName}</span>
+            </span>
           </>
         ) : (
-          <span className="projbar__name projbar__name--muted">No project open</span>
+          <>
+            <span className="projbar__emblem projbar__emblem--empty">+</span>
+            <span className="projbar__name projbar__name--muted">Open a project</span>
+          </>
         )}
-        <span className="projbar__caret">▾</span>
+        <svg
+          className="projbar__caret"
+          viewBox="0 0 24 24"
+          width="13"
+          height="13"
+          aria-hidden="true"
+        >
+          <path
+            d="M7 10l5 5 5-5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
       </button>
 
       {open && (
