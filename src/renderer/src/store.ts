@@ -200,7 +200,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   scrollback: 2000,
   confirmClose: true,
   zoomFactor: 1.1,
-  accent: '#3b5bd9',
+  accent: '#ff453a',
   notifications: true,
   notifyOnDone: true,
   wallpaper: null,

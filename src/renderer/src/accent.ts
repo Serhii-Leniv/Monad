@@ -1,5 +1,6 @@
-/** Curated accent presets (all read well on the dark UI). First = default navy. */
+/** Curated accent presets (all read well on the dark UI). First = default brand red. */
 export const ACCENT_PRESETS: { name: string; hex: string }[] = [
+  { name: 'Brand', hex: '#ff453a' },
   { name: 'Navy', hex: '#3b5bd9' },
   { name: 'Blue', hex: '#2f6bff' },
   { name: 'Indigo', hex: '#6366f1' },
