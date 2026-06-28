@@ -39,8 +39,10 @@ mac:
   # opens via right-click → Open the first time. Signing/notarization later.
   identity: null
 
+# Fixed (version-less) names so the site can link to a stable
+# releases/latest/download/<name> URL that never goes stale.
 dmg:
-  artifactName: ${productName}-${version}-${arch}.dmg
+  artifactName: ${productName}-macOS-${arch}.dmg
 
 win:
   target:
@@ -51,10 +53,13 @@ nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
-  artifactName: ${productName}-${version}-setup.${ext}
+  artifactName: ${productName}-Windows-Setup.${ext}
 
 linux:
   target:
     - AppImage
   category: Development
   icon: build/icon.png
+
+appImage:
+  artifactName: ${productName}-Linux-${arch}.${ext}
