@@ -25,15 +25,17 @@
   --text: rgba(255, 255, 255, 0.95);
   --text-2: rgba(235, 235, 245, 0.6);
   --muted: rgba(235, 235, 245, 0.45);
-  /* Serious navy-blue accent (replaces the old neon cyan). One RGB triple
-     drives every translucent tint so the whole UI stays in the same family. */
-  --accent-rgb: 59, 91, 217;
-  --accent: rgb(var(--accent-rgb)); /* #3b5bd9 */
-  --accent-2: #5a78ef; /* lighter top for gradients */
-  --accent-active: #2c45ad; /* pressed / deeper navy */
+  /* Brand red accent. One RGB triple drives every translucent tint so the
+     whole UI stays in the same family. */
+  --accent-rgb: 255, 69, 58;
+  --accent: rgb(var(--accent-rgb)); /* #ff453a */
+  --accent-2: #ff7269; /* lighter top for gradients */
+  --accent-active: #b8322a; /* pressed / deeper red */
   --accent-muted: rgba(var(--accent-rgb), 0.16);
-  /* Brand mark sits a touch brighter, still in the blue family. */
-  --brand: #6d8bff;
+  /* Secondary brand: navy blue. Lives in the ambient background so the red
+     accent always has a cool counter-tone to read against. */
+  --brand-rgb: 59, 91, 217;
+  --brand: rgb(var(--brand-rgb)); /* #3b5bd9 */
 
   /* --- Type system (see @font-face above). System faces are the fallback so
      the UI still renders cleanly before the woff2 swaps in. --- */
@@ -191,7 +193,8 @@ body {
   height: 52vmax;
   left: -10%;
   top: -20%;
-  background: radial-gradient(circle, rgba(var(--accent-rgb), 0.34), transparent 62%);
+  /* Secondary-brand navy — stays blue even though the accent is red. */
+  background: radial-gradient(circle, rgba(var(--brand-rgb), 0.34), transparent 62%);
 }
 
 .aurora__orb--2 {
