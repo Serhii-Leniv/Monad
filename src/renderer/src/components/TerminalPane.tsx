@@ -266,10 +266,19 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
           const cmd = (line.match(/.*[>$#%]\s*(\S.*)$/)?.[1] ?? '').trim().split(/\s+/)[0]
           const base = (cmd.split(/[\\/]/).pop() ?? '').toLowerCase()
           if (base) {
-            const hit = useStore
-              .getState()
-              .agentClis.find((c) => c.command.toLowerCase() === base || c.id === base)
-            if (hit) setAgentRuntime(id, { agentId: hit.id, agentLabel: hit.label })
+            const st = useStore.getState()
+            const hit = st.agentClis.find((c) => c.command.toLowerCase() === base || c.id === base)
+            if (hit) {
+              // Remember the launch command too (unless one's already set from the
+              // "Start <agent>" menu) so a hand-started agent relaunches on reopen
+              // instead of coming back as a bare shell.
+              const had = st.agents.find((a) => a.id === id)?.startupCommand
+              setAgentRuntime(id, {
+                agentId: hit.id,
+                agentLabel: hit.label,
+                ...(had ? {} : { startupCommand: hit.command })
+              })
+            }
           }
         }
       })

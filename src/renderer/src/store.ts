@@ -73,6 +73,11 @@ export interface PersistedAgent {
   h: number
   isolation: Isolation
   shellId?: string
+  /** Re-run when the terminal respawns on reopen, so the agent (e.g. Claude)
+   *  comes back up — not just a bare shell. */
+  startupCommand?: string
+  agentLabel?: string
+  agentId?: string
 }
 
 interface AppState {
@@ -329,7 +334,10 @@ export function toPersisted(agents: AgentInstance[]): PersistedAgent[] {
     w: a.w,
     h: a.h,
     isolation: a.isolation,
-    shellId: a.shellId
+    shellId: a.shellId,
+    startupCommand: a.startupCommand,
+    agentLabel: a.agentLabel,
+    agentId: a.agentId
   }))
 }
 
