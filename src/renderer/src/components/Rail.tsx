@@ -3,6 +3,10 @@ import Logo from './Logo'
 import { IconTerminal, IconGrid, IconColumns, IconSettings, IconBell } from './Icons'
 import { useStore, NEEDS_ATTENTION, MAX_AGENTS } from '../store'
 
+/** Below this many terminals, grid and columns produce the same layout, so the
+ *  layout toggle is hidden to keep the dock uncluttered. */
+const LAYOUT_TOGGLE_MIN = 3
+
 /** Minimal floating dock — icons only, refined liquid glass. Project switching
  *  lives in the top bar; the rail is just identity + per-canvas tools. */
 export default function Rail(): JSX.Element {
@@ -80,25 +84,32 @@ export default function Rail(): JSX.Element {
             )}
           </div>
 
-          <div className="rail__divider" />
+          {/* Grid vs columns only diverge once there are enough panes to tile;
+             with 1–2 terminals both look the same, so the toggle just adds noise.
+             Show it only at 3+. */}
+          {agents.length >= LAYOUT_TOGGLE_MIN && (
+            <>
+              <div className="rail__divider" />
 
-          {/* Layout is one choice → one segmented control, not two buttons. */}
-          <div className="rail__seg" role="group" aria-label="Layout" data-mode={layoutMode}>
-            <button
-              className={'rail__seg-btn' + (layoutMode === 'grid' ? ' is-active' : '')}
-              onClick={() => setLayoutMode('grid')}
-              title="Grid  (⌘1)"
-            >
-              <IconGrid />
-            </button>
-            <button
-              className={'rail__seg-btn' + (layoutMode === 'columns' ? ' is-active' : '')}
-              onClick={() => setLayoutMode('columns')}
-              title="Columns  (⌘2)"
-            >
-              <IconColumns />
-            </button>
-          </div>
+              {/* Layout is one choice → one segmented control, not two buttons. */}
+              <div className="rail__seg" role="group" aria-label="Layout" data-mode={layoutMode}>
+                <button
+                  className={'rail__seg-btn' + (layoutMode === 'grid' ? ' is-active' : '')}
+                  onClick={() => setLayoutMode('grid')}
+                  title="Grid  (⌘1)"
+                >
+                  <IconGrid />
+                </button>
+                <button
+                  className={'rail__seg-btn' + (layoutMode === 'columns' ? ' is-active' : '')}
+                  onClick={() => setLayoutMode('columns')}
+                  title="Columns  (⌘2)"
+                >
+                  <IconColumns />
+                </button>
+              </div>
+            </>
+          )}
         </>
       )}
 
