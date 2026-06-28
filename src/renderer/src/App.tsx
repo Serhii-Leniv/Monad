@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import Titlebar from './components/Titlebar'
 import Rail from './components/Rail'
 import Stage from './components/Stage'
-import Settings from './components/Settings'
-import CommandPalette from './components/CommandPalette'
-import DiffPanel from './components/DiffPanel'
 import Toasts from './components/Toasts'
 import Home from './components/Home'
 import ProjectBar from './components/ProjectBar'
+
+// On-demand overlays — split out of the initial chunk. They're never the first
+// view, and fallback={null} means no visible loading state.
+const Settings = lazy(() => import('./components/Settings'))
+const CommandPalette = lazy(() => import('./components/CommandPalette'))
+const DiffPanel = lazy(() => import('./components/DiffPanel'))
 import { useStore, toPersisted } from './store'
 import { openProjectByPath, restoreLastProject, saveCanvas } from './openProject'
 import { applyAccent } from './accent'
@@ -194,9 +197,11 @@ export default function App(): JSX.Element {
         <div className="app__canvas">{projectPath ? <Stage /> : <Home />}</div>
         {/* Broadcast bar hidden for now (unused) — re-enable when needed. */}
       </div>
-      {paletteOpen && <CommandPalette />}
-      {settingsOpen && <Settings />}
-      {diffAgentId && <DiffPanel />}
+      <Suspense fallback={null}>
+        {paletteOpen && <CommandPalette />}
+        {settingsOpen && <Settings />}
+        {diffAgentId && <DiffPanel />}
+      </Suspense>
       <Toasts />
     </div>
   )
