@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Moveable from 'react-moveable'
 import Selecto from 'react-selecto'
 import TerminalPane from './TerminalPane'
@@ -25,26 +25,44 @@ export default function Stage(): JSX.Element {
   const draggingRef = useRef(false)
   const [targets, setTargets] = useState<HTMLElement[]>([])
 
+  // Re-tile only when the pane set changes (add/remove) or the selection
+  // changes — not on every status/ptyId tick that mutates `agents`.
+  const agentCount = agents.length
+  // A signature of just the layout geometry; status/branch/ptyId churn doesn't
+  // change it, so the Moveable rect isn't recomputed for non-layout updates.
+  const layoutSig = useMemo(
+    () => agents.map((a) => `${a.x},${a.y},${a.w},${a.h}`).join('|'),
+    [agents]
+  )
+
   useEffect(() => {
     const vp = stageRef.current
     if (!vp) return
     const all = Array.from(vp.querySelectorAll<HTMLElement>('.vec-pane'))
     const sel = new Set(selectedIds)
     setTargets(all.filter((c) => sel.has(c.dataset.id ?? '')))
-  }, [selectedIds, agents])
+  }, [selectedIds, agentCount])
 
   useEffect(() => {
     // Don't poke Moveable mid-drag — the live reorder re-tiles every cross and
     // updateRect would fight the in-progress drag.
     if (!draggingRef.current) moveableRef.current?.updateRect()
-  }, [panX, panY, zoom, agents])
+  }, [panX, panY, zoom, layoutSig])
 
   useEffect(() => {
     const el = stageRef.current
     if (!el) return
-    const ro = new ResizeObserver(() => setCanvasSize(el.clientWidth, el.clientHeight))
+    // Coalesce a burst of resize callbacks into one update per frame.
+    let raf = 0
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => setCanvasSize(el.clientWidth, el.clientHeight))
+    })
     ro.observe(el)
-    return () => ro.disconnect()
+    return () => {
+      cancelAnimationFrame(raf)
+      ro.disconnect()
+    }
   }, [setCanvasSize])
 
   const idOf = (el: HTMLElement | null): string | undefined =>
