@@ -30,11 +30,6 @@ export default defineConfig({
         '@': resolve(__dirname, 'src/renderer/src')
       }
     },
-    // Pre-bundle at startup so adding it never triggers a mid-session
-    // re-optimize + page reload (which blanks the canvas).
-    optimizeDeps: {
-      include: ['simple-icons']
-    },
     build: {
       rollupOptions: {
         input: { index: resolve(__dirname, 'src/renderer/index.html') }

@@ -1,4 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { createPortal } from 'react-dom'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -33,9 +34,18 @@ const STATUS_COLOR: Record<AgentStatus, string> = {
 function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
   const id = agent.id
   const termHostRef = useRef<HTMLDivElement>(null)
-  const branch = useStore((s) => s.agents.find((a) => a.id === id)?.branch)
-  const isolated = useStore((s) => s.agents.find((a) => a.id === id)?.isolated)
-  const status = useStore((s) => s.agents.find((a) => a.id === id)?.status ?? 'starting')
+  // One array traversal for the three per-agent fields we read; useShallow keeps
+  // the re-render gated to actual changes in branch / isolated / status.
+  const { branch, isolated, status } = useStore(
+    useShallow((s) => {
+      const a = s.agents.find((x) => x.id === id)
+      return {
+        branch: a?.branch,
+        isolated: a?.isolated,
+        status: a?.status ?? ('starting' as AgentStatus)
+      }
+    })
+  )
   const selected = useStore((s) => s.selectedIds.includes(id))
   const removeAgent = useStore((s) => s.removeAgent)
   const fontSize = useStore((s) => s.settings.fontSize)
