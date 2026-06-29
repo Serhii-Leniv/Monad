@@ -22,6 +22,7 @@ function prettyPath(p: string): string {
  */
 export default function Home(): JSX.Element {
   const workspaces = useStore((s) => s.workspaces)
+  const noAgents = useStore((s) => s.agentClisLoaded && s.agentClis.length === 0)
   return (
     <div className="home">
       <div className="home__hero">
@@ -33,6 +34,19 @@ export default function Home(): JSX.Element {
         <button className="home__open" onClick={openProjectInteractive}>
           Open folder…
         </button>
+        {noAgents && (
+          <p className="home__hint">
+            No agent CLIs detected yet. Install{' '}
+            <button
+              className="home__hint-link"
+              onClick={() => void window.api.openExternal('https://docs.claude.com/en/docs/claude-code/overview')}
+            >
+              Claude Code
+            </button>
+            , Codex, Gemini, or opencode and they’ll show up here automatically. You can still open
+            a plain terminal in the meantime.
+          </p>
+        )}
       </div>
 
       {workspaces.length > 0 && (

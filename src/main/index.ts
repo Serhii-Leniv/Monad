@@ -6,6 +6,16 @@ import type { PtyManager } from './pty-manager'
 
 const isDev = !!process.env['ELECTRON_RENDERER_URL']
 
+// Last-resort guards: on a stranger's machine a stray native error (a dead pty,
+// a quarantined .node, a flaky FS) must never take the whole app down silently.
+// Log and keep running; the worst case degrades to a single broken pane.
+process.on('uncaughtException', (err) => {
+  console.error('[vectro] uncaughtException:', err)
+})
+process.on('unhandledRejection', (reason) => {
+  console.error('[vectro] unhandledRejection:', reason)
+})
+
 // App emblem (the liquid-glass mark). build/icon.png is also what electron-builder
 // uses to generate the packaged .icns / .ico icons.
 const iconPng = join(__dirname, '../../build/icon.png')
@@ -94,11 +104,33 @@ function createWindow(): void {
     }
   })
 
-  if (process.env['ELECTRON_RENDERER_URL']) {
-    win.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'))
+  const loadRenderer = (): void => {
+    if (process.env['ELECTRON_RENDERER_URL']) {
+      win?.loadURL(process.env['ELECTRON_RENDERER_URL']).catch((e) =>
+        console.error('[vectro] loadURL failed:', e)
+      )
+    } else {
+      win?.loadFile(join(__dirname, '../renderer/index.html')).catch((e) =>
+        console.error('[vectro] loadFile failed:', e)
+      )
+    }
   }
+  loadRenderer()
+
+  // If the renderer crashes or fails to load (corrupt/locked asset, GPU process
+  // gone), reload once instead of leaving the user staring at a blank window.
+  let recoveries = 0
+  const recover = (why: string): void => {
+    if (recoveries >= 3 || !win || win.isDestroyed()) return
+    recoveries++
+    console.error(`[vectro] renderer ${why} — reloading (attempt ${recoveries})`)
+    setTimeout(loadRenderer, 400)
+  }
+  win.webContents.on('did-fail-load', (_e, code, desc) => {
+    // -3 is ERR_ABORTED (a superseded in-flight nav) — not a real failure.
+    if (code !== -3) recover(`did-fail-load (${code} ${desc})`)
+  })
+  win.webContents.on('render-process-gone', (_e, details) => recover(`gone (${details.reason})`))
 
   // Persist size/position (debounced) so the window reopens where you left it.
   let saveTimer: ReturnType<typeof setTimeout> | undefined
@@ -125,6 +157,9 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+}).catch((e) => {
+  console.error('[vectro] failed to start:', e)
+  app.quit()
 })
 
 app.on('window-all-closed', () => {
