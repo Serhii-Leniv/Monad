@@ -9,7 +9,8 @@ import {
   removeWorktree,
   pruneWorktrees,
   getAgentDiff,
-  mergeAgent
+  mergeAgent,
+  friendlyGitError
 } from './git'
 import { detectShells, detectAgents } from './shells'
 
@@ -113,10 +114,17 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
   ipcMain.handle(
     'project:save',
     async (_e, { projectPath, data }: { projectPath: string; data: unknown }) => {
-      const dir = join(projectPath, '.agent-canvas')
-      await fs.mkdir(dir, { recursive: true })
-      await fs.writeFile(join(dir, 'canvas.json'), JSON.stringify(data, null, 2), 'utf8')
-      return true
+      // Read-only folder / network share / disk full must not become an
+      // unhandled rejection in the renderer — report failure instead.
+      try {
+        const dir = join(projectPath, '.agent-canvas')
+        await fs.mkdir(dir, { recursive: true })
+        await fs.writeFile(join(dir, 'canvas.json'), JSON.stringify(data, null, 2), 'utf8')
+        return true
+      } catch (e) {
+        console.error('[vectro] project:save failed:', e)
+        return false
+      }
     }
   )
 
@@ -152,7 +160,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
           cwd: projectPath,
           branch: null,
           isolated: false,
-          reason: e instanceof Error ? e.message : 'Could not create worktree'
+          reason: friendlyGitError(e)
         }
       }
     }
