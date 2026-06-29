@@ -95,6 +95,9 @@ interface AppState {
   canvasReady: boolean
   shells: ShellInfo[]
   agentClis: AgentCli[]
+  /** True once detectAgents has returned — gates the "no CLIs" first-run hint so
+   *  it never flashes during the initial async detect. */
+  agentClisLoaded: boolean
   /** Snapshot of the most recently closed terminal, for reopen. */
   lastClosed: {
     label: string
@@ -354,6 +357,7 @@ export const useStore = create<AppState>((set) => ({
   canvasReady: false,
   shells: [],
   agentClis: [],
+  agentClisLoaded: false,
   lastClosed: null,
   selectedIds: [],
   draggingId: null,
@@ -429,7 +433,7 @@ export const useStore = create<AppState>((set) => ({
       return { shells }
     }),
 
-  setAgentClis: (agentClis) => set({ agentClis }),
+  setAgentClis: (agentClis) => set({ agentClis, agentClisLoaded: true }),
 
   setSelected: (ids) => set({ selectedIds: ids }),
 

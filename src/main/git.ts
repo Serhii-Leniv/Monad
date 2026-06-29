@@ -178,7 +178,7 @@ export async function mergeAgent(
       await git(path, ['commit', '-m', message || `Work from ${branch}`])
     }
   } catch (e) {
-    return { ok: false, error: errText(e) }
+    return { ok: false, error: friendlyGitError(e) }
   }
   try {
     await git(repoRoot, ['merge', '--no-ff', branch, '-m', `Merge ${branch}`])
@@ -189,11 +189,33 @@ export async function mergeAgent(
     } catch {
       /* nothing to abort */
     }
-    return { ok: false, error: errText(e) }
+    return { ok: false, error: friendlyGitError(e) }
   }
 }
 
 function errText(e: unknown): string {
   const err = e as { stderr?: string; message?: string }
   return (err.stderr || err.message || String(e)).trim()
+}
+
+/** Map a raw git failure to a message a non-expert can act on. Falls back to the
+ *  first line of git's own output. */
+export function friendlyGitError(e: unknown): string {
+  const err = e as { code?: string; stderr?: string; message?: string }
+  const raw = errText(e)
+  // execFile couldn't find the git binary at all.
+  if (err.code === 'ENOENT' || /\bENOENT\b/.test(raw) || /is not recognized|not found/i.test(raw)) {
+    return 'Git isn’t installed or isn’t on your PATH. Install Git, then reopen this project.'
+  }
+  if (/does not have any commits yet|ambiguous argument 'HEAD'|invalid reference: HEAD|unknown revision/i.test(raw)) {
+    return 'This repository has no commits yet — make an initial commit, then add an isolated agent.'
+  }
+  if (/is already checked out|already used by worktree/i.test(raw)) {
+    return 'That branch is already checked out in another worktree.'
+  }
+  if (/your local changes|would be overwritten|not something we can merge/i.test(raw)) {
+    return 'Couldn’t merge cleanly into your working tree — commit or stash your changes first.'
+  }
+  // Otherwise surface git's own first line, trimmed of the noisy "fatal: " prefix.
+  return raw.split('\n')[0].replace(/^fatal:\s*/i, '').trim() || 'Git command failed.'
 }
