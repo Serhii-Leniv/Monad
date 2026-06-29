@@ -20,12 +20,14 @@ jobs:
           - name: macOS (Apple Silicon)
             os: macos-14
             script: package:mac
-          - name: macOS (Intel)
-            os: macos-13
-            script: package:mac
           - name: Windows
             os: windows-latest
             script: package:win
+          # macOS (Intel / macos-13) is intentionally omitted: those runners sit
+          # queued for 24h in this project and blocked every release (the release
+          # job needs the whole matrix). The site only offers Apple Silicon + Windows.
+          # Re-add `{ name: macOS (Intel), os: macos-13, script: package:mac }` when
+          # an Intel build is actually shipped.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -66,7 +68,10 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: Vectro ${{ github.ref_name }}
           draft: false
-          prerelease: true
+          # Must be a full release, not a prerelease: the site's download buttons
+          # use GitHub's releases/latest API, which skips prereleases — a prerelease
+          # would publish but never be served to users.
+          prerelease: false
           fail_on_unmatched_files: false
           files: |
             artifacts/*.dmg
