@@ -1,5 +1,5 @@
 import { useStore, toPersisted, type LayoutMode, type PersistedAgent } from './store'
-import { RECENT_KEY, getRecent, type RecentProject } from './recent'
+import { RECENT_KEY, getRecent, removeRecent, type RecentProject } from './recent'
 
 export type { RecentProject }
 
@@ -35,26 +35,47 @@ function saveCurrent(): void {
 
 /** Load a project's saved canvas + git info, prune stale worktrees, open it. */
 export async function openProjectByPath(ref: RecentProject): Promise<void> {
+  const store = useStore.getState()
   // Switching to the already-open workspace is a no-op (don't respawn agents).
-  if (useStore.getState().projectPath === ref.path) return
+  if (store.projectPath === ref.path) return
+
+  // A recent card may point at a folder that's since been moved or deleted.
+  // Opening it would spawn a canvas full of dead terminals — refuse and prune.
+  const exists = await window.api.project.exists(ref.path)
+  if (!exists) {
+    store.setWorkspaces(removeRecent(ref.path))
+    store.pushToast(`“${ref.name}” no longer exists at that location`, 'error')
+    return
+  }
+
   saveCurrent()
-  const [saved, git] = await Promise.all([
-    window.api.project.load(ref.path),
-    window.api.git.info(ref.path)
-  ])
-  void window.api.git.prune(ref.path)
-  pushRecent(ref)
-  useStore.getState().openProject(ref, saved, git)
-  // Always land on at least one terminal so a freshly-opened project isn't a
-  // bare canvas.
-  if (useStore.getState().agents.length === 0) useStore.getState().addAgent()
+  try {
+    const [saved, git] = await Promise.all([
+      window.api.project.load(ref.path),
+      window.api.git.info(ref.path)
+    ])
+    void window.api.git.prune(ref.path)
+    pushRecent(ref)
+    useStore.getState().openProject(ref, saved, git)
+    // Always land on at least one terminal so a freshly-opened project isn't a
+    // bare canvas.
+    if (useStore.getState().agents.length === 0) useStore.getState().addAgent()
+  } catch (e) {
+    console.error('[vectro] open project failed:', e)
+    useStore.getState().pushToast(`Couldn’t open “${ref.name}”`, 'error')
+  }
 }
 
 /** Pick a folder via the OS dialog, then open it. */
 export async function openProjectInteractive(): Promise<void> {
-  const ref = await window.api.project.pick()
-  if (!ref) return
-  await openProjectByPath(ref)
+  try {
+    const ref = await window.api.project.pick()
+    if (!ref) return
+    await openProjectByPath(ref)
+  } catch (e) {
+    console.error('[vectro] open folder failed:', e)
+    useStore.getState().pushToast('Couldn’t open that folder', 'error')
+  }
 }
 
 /** On launch, reopen the last project if its folder still exists. */
