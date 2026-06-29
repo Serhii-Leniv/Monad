@@ -58,7 +58,12 @@ export class PtyManager {
   }
 
   write(id: string, data: string): void {
-    this.sessions.get(id)?.write(data)
+    try {
+      this.sessions.get(id)?.write(data)
+    } catch {
+      /* writing to a closed conpty/pipe throws (EPIPE/EPERM) — the process
+         already exited; the exit handler will clean up. Ignore. */
+    }
   }
 
   resize(id: string, cols: number, rows: number): void {
@@ -70,7 +75,11 @@ export class PtyManager {
   }
 
   kill(id: string): void {
-    this.sessions.get(id)?.kill()
+    try {
+      this.sessions.get(id)?.kill()
+    } catch {
+      /* killing an already-dead pty throws on Windows conpty; ignore */
+    }
     this.sessions.delete(id)
   }
 
