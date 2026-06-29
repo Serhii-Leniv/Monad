@@ -311,181 +311,12 @@
           0 0 0 1px rgba(255, 255, 255, 0.03) inset;
         overflow: hidden;
       }
-      .shot__bar {
-        position: relative;
-        display: flex;
-        align-items: center;
-        gap: 7px;
-        padding: 12px 14px;
-        border-bottom: 1px solid var(--line);
-        background: rgba(0, 0, 0, 0.24);
-      }
-      .shot__bar i {
-        width: 11px;
-        height: 11px;
-        border-radius: 50%;
-        background: #3a3f4b;
+      .demo {
         display: block;
+        width: 100%;
+        height: auto;
+        border-radius: 18px;
       }
-      /* the floating project pill, like the app's top bar */
-      .shot__proj {
-        position: absolute;
-        left: 50%;
-        transform: translateX(-50%);
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 5px 12px 5px 6px;
-        border-radius: 999px;
-        background: linear-gradient(150deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.03)),
-          rgba(16, 22, 34, 0.8);
-        border: 1px solid var(--line-2);
-        font-size: 12px;
-      }
-      .shot__proj b {
-        width: 18px;
-        height: 18px;
-        border-radius: 6px;
-        display: grid;
-        place-items: center;
-        font-family: var(--font-display);
-        font-size: 10px;
-        color: #fff;
-        background: linear-gradient(180deg, var(--accent-2), var(--accent));
-      }
-      .shot__proj .pl {
-        font-size: 8px;
-        letter-spacing: 0.12em;
-        color: var(--faint);
-        text-transform: uppercase;
-        margin-left: 2px;
-      }
-      .shot__body {
-        display: flex;
-        gap: 12px;
-        padding: 14px;
-        min-height: 330px;
-      }
-      .dock {
-        flex: 0 0 46px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 9px;
-        padding: 12px 0;
-        border-radius: 13px;
-        background: rgba(13, 16, 23, 0.6);
-        border: 1px solid var(--line);
-      }
-      .dock span {
-        width: 24px;
-        height: 24px;
-        border-radius: 8px;
-        background: rgba(255, 255, 255, 0.06);
-      }
-      .dock span.logo {
-        background: rgba(255, 255, 255, 0.1);
-      }
-      .dock span.plus {
-        background: linear-gradient(180deg, var(--accent-2), var(--accent));
-        box-shadow: 0 0 14px rgba(var(--accent-rgb), 0.5);
-      }
-      .dock .seg {
-        width: 26px;
-        height: 44px;
-        border-radius: 9px;
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid var(--line);
-        display: flex;
-        flex-direction: column;
-        padding: 2px;
-        gap: 2px;
-      }
-      .dock .seg b {
-        flex: 1;
-        border-radius: 6px;
-      }
-      .dock .seg b.on {
-        background: rgba(var(--accent-rgb), 0.9);
-        box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.5);
-      }
-      .panes {
-        flex: 1;
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        grid-auto-rows: 1fr;
-        gap: 12px;
-      }
-      .pane {
-        border-radius: 12px;
-        border: 1px solid var(--line);
-        background: rgba(10, 13, 18, 0.66);
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-      }
-      .pane__h {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 10px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-        font-size: 12px;
-        color: var(--muted);
-      }
-      .pane__h .d {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        flex: 0 0 8px;
-      }
-      .pane__h .br {
-        margin-left: auto;
-        font-size: 10.5px;
-        font-family: var(--font-mono);
-        color: var(--accent-2);
-        background: rgba(var(--accent-rgb), 0.12);
-        border: 1px solid rgba(var(--accent-rgb), 0.25);
-        padding: 1px 7px;
-        border-radius: 999px;
-      }
-      .pane__t {
-        padding: 9px 11px;
-        font-family: var(--font-mono);
-        font-size: 11px;
-        line-height: 1.7;
-        color: #aeb6c6;
-      }
-      .pane__t .g {
-        color: var(--done);
-      }
-      .pane__t .b {
-        color: var(--accent-2);
-      }
-      .pane__t .m {
-        color: var(--faint);
-      }
-      .pane__t .cur {
-        display: inline-block;
-        width: 7px;
-        height: 13px;
-        vertical-align: -2px;
-        background: #aeb6c6;
-        animation: blink 2s step-end infinite;
-      }
-      @keyframes blink {
-        0%, 62% { opacity: 1; }
-        62.01%, 100% { opacity: 0.15; }
-      }
-      @media (max-width: 600px) {
-        .panes {
-          grid-template-columns: 1fr;
-        }
-        .pane:nth-child(n + 3) {
-          display: none;
-        }
-      }
-
       /* ---- shift band ---- */
       .shift {
         text-align: center;
@@ -694,9 +525,6 @@
           transform: none;
           transition: none;
         }
-        .pane__t .cur {
-          animation: none;
-        }
       }
     </style>
   </head>
@@ -740,52 +568,21 @@
           <b>More info → Run anyway</b> (Windows).
         </p>
 
-        <!-- product mockup (a faithful sketch of the real canvas) -->
+        <!-- product demo (real Vectro canvas, recorded) -->
         <div class="shot-wrap reveal">
-          <div class="shot" aria-hidden="true">
-            <div class="shot__bar">
-              <i></i><i></i><i></i>
-              <span class="shot__proj"><b>A</b><span class="pl">Project</span> agent-canvas</span>
-            </div>
-            <div class="shot__body">
-              <div class="dock">
-                <span class="logo"></span>
-                <span class="plus"></span>
-                <div class="seg"><b class="on"></b><b></b></div>
-              </div>
-              <div class="panes">
-                <div class="pane">
-                  <div class="pane__h"><span class="d" style="background:var(--working)"></span>auth-refactor<span class="br">canvas/auth</span></div>
-                  <div class="pane__t">
-                    <span class="m">$</span> claude<br />
-                    <span class="g">+</span> refactored <span class="b">session.ts</span><br />
-                    running tests…<span class="cur"></span>
-                  </div>
-                </div>
-                <div class="pane">
-                  <div class="pane__h"><span class="d" style="background:var(--attn)"></span>api-endpoints<span class="br">canvas/api</span></div>
-                  <div class="pane__t">
-                    <span class="m">$</span> codex<br />
-                    apply this patch? <span class="b">(y/n)</span><span class="cur"></span>
-                  </div>
-                </div>
-                <div class="pane">
-                  <div class="pane__h"><span class="d" style="background:var(--done)"></span>docs-pass<span class="br">canvas/docs</span></div>
-                  <div class="pane__t">
-                    <span class="m">$</span> gemini<br />
-                    <span class="g">✓</span> updated 6 files<br />
-                    <span class="m">ready to merge</span>
-                  </div>
-                </div>
-                <div class="pane">
-                  <div class="pane__h"><span class="d" style="background:var(--idle)"></span>perf-pass<span class="br">canvas/perf</span></div>
-                  <div class="pane__t">
-                    <span class="m">$</span> claude<br />
-                    <span class="m">idle — awaiting task</span><span class="cur"></span>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div class="shot">
+            <video
+              class="demo"
+              autoplay
+              loop
+              muted
+              playsinline
+              poster="demo.gif"
+              aria-label="Vectro running build, an opencode agent writing rate-limiting code, and a passing test suite in parallel"
+            >
+              <source src="demo.mp4" type="video/mp4" />
+              <img src="demo.gif" alt="Vectro running three coding agents in parallel — a build, an opencode agent writing rate-limiting code, and a passing test suite." class="demo" />
+            </video>
           </div>
         </div>
       </header>
@@ -990,6 +787,14 @@
             }
           })
           .catch(function () {});
+      })();
+
+      // ---- Respect reduced-motion: hold the demo on its first frame ----
+      (function () {
+        if (!window.matchMedia) return;
+        if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        var v = document.querySelector('video.demo');
+        if (v) { v.autoplay = false; v.removeAttribute('autoplay'); v.pause(); }
       })();
 
       // ---- Scroll reveal ----
