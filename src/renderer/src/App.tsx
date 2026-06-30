@@ -36,6 +36,11 @@ export default function App(): JSX.Element {
     void window.api.agents.list().then(setAgentClis)
   }, [setShells, setAgentClis])
 
+  // Tag the platform so CSS can adapt mac chrome (traffic lights, notch safe-area).
+  useEffect(() => {
+    document.body.classList.toggle('is-mac', window.api.platform === 'darwin')
+  }, [])
+
   // Reopen the last project on launch (if its folder still exists).
   useEffect(() => {
     void restoreLastProject()
@@ -195,7 +200,6 @@ export default function App(): JSX.Element {
       <div className="app__main">
         <Rail />
         <div className="app__canvas">{projectPath ? <Stage /> : <Home />}</div>
-        {/* Broadcast bar hidden for now (unused) — re-enable when needed. */}
       </div>
       <Suspense fallback={null}>
         {paletteOpen && <CommandPalette />}

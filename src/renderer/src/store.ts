@@ -108,6 +108,8 @@ interface AppState {
     agentId?: string
   } | null
   selectedIds: string[]
+  /** Agents mid close-animation — still rendered, removed for real once it ends. */
+  closingIds: string[]
   draggingId: string | null
   panX: number
   panY: number
@@ -179,6 +181,8 @@ export interface AppSettings {
   notifications: boolean
   /** Also notify when a long-running agent finishes a task (working → idle). */
   notifyOnDone: boolean
+  /** Soft chime when an agent needs you / finishes / errors. */
+  sounds: boolean
   /** Absolute path to a background image, or null for the default dark scene. */
   wallpaper: string | null
   /** Terminal background opacity 0.4–1 (lower reveals the wallpaper behind). */
@@ -206,6 +210,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   accent: '#ff453a',
   notifications: true,
   notifyOnDone: true,
+  sounds: false,
   wallpaper: null,
   terminalOpacity: 0.55
 }
@@ -239,7 +244,7 @@ function uuid(): string {
 const GAP = 12
 const RAIL_INSET = 84 // room for the floating dock on the left (max adaptive width)
 const PAD = 14
-const BOTTOM_INSET = 80 // room for the floating broadcast bar at the bottom (max adaptive height)
+const BOTTOM_INSET = 14 // bottom margin for the tiled panes (symmetric with the top PAD)
 
 /**
  * Tile every terminal into the viewport at **zoom 1** (font stays fixed). Array
@@ -344,7 +349,7 @@ export function toPersisted(agents: AgentInstance[]): PersistedAgent[] {
   }))
 }
 
-export const useStore = create<AppState>((set) => ({
+export const useStore = create<AppState>((set, get) => ({
   projectPath: null,
   projectName: null,
   isGit: false,
@@ -360,6 +365,7 @@ export const useStore = create<AppState>((set) => ({
   agentClisLoaded: false,
   lastClosed: null,
   selectedIds: [],
+  closingIds: [],
   draggingId: null,
   settings: loadSettings(),
   settingsOpen: false,
@@ -486,34 +492,44 @@ export const useStore = create<AppState>((set) => ({
       }
     }),
 
-  removeAgent: (id, opts) =>
-    set((s) => {
-      const agent = s.agents.find((a) => a.id === id)
-      // keepWorktree leaves the branch + worktree on disk (recoverable work).
-      if (!opts?.keepWorktree && agent?.isolation === 'worktree' && s.projectPath) {
-        void window.api.worktree.remove(s.projectPath, id)
-      }
-      const rest = s.agents.filter((a) => a.id !== id)
-      return {
-        agents: laidOut(rest, s.layoutMode, s.canvasW, s.canvasH),
-        selectedIds: s.selectedIds.filter((sid) => sid !== id),
-        focusedId: s.focusedId === id ? null : s.focusedId,
-        pendingCloseId: s.pendingCloseId === id ? null : s.pendingCloseId,
-        lastClosed: agent
-          ? {
-              label: agent.label,
-              shellId: agent.shellId,
-              isolation: agent.isolation,
-              startupCommand: agent.startupCommand,
-              agentLabel: agent.agentLabel,
-              agentId: agent.agentId
-            }
-          : s.lastClosed,
-        panX: 0,
-        panY: 0,
-        zoom: 1
-      }
-    }),
+  removeAgent: (id, opts) => {
+    // Two-phase: flag the pane so it plays its collapse animation, then do the
+    // real removal (and worktree cleanup) once that's had time to finish. Guard
+    // against double-calls so a second close can't double-remove the worktree.
+    const st = get()
+    if (st.closingIds.includes(id) || !st.agents.some((a) => a.id === id)) return
+    set({ closingIds: [...st.closingIds, id] })
+    setTimeout(() => {
+      set((s) => {
+        const agent = s.agents.find((a) => a.id === id)
+        const closingIds = s.closingIds.filter((c) => c !== id)
+        if (!agent) return { closingIds }
+        // keepWorktree leaves the branch + worktree on disk (recoverable work).
+        if (!opts?.keepWorktree && agent.isolation === 'worktree' && s.projectPath) {
+          void window.api.worktree.remove(s.projectPath, id)
+        }
+        const rest = s.agents.filter((a) => a.id !== id)
+        return {
+          agents: laidOut(rest, s.layoutMode, s.canvasW, s.canvasH),
+          selectedIds: s.selectedIds.filter((sid) => sid !== id),
+          closingIds,
+          focusedId: s.focusedId === id ? null : s.focusedId,
+          pendingCloseId: s.pendingCloseId === id ? null : s.pendingCloseId,
+          lastClosed: {
+            label: agent.label,
+            shellId: agent.shellId,
+            isolation: agent.isolation,
+            startupCommand: agent.startupCommand,
+            agentLabel: agent.agentLabel,
+            agentId: agent.agentId
+          },
+          panX: 0,
+          panY: 0,
+          zoom: 1
+        }
+      })
+    }, 180)
+  },
 
   reopenLast: () =>
     set((s) => {
