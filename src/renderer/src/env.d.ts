@@ -50,6 +50,8 @@ interface DiffResult {
   diff: string
   untracked: string[]
   hasChanges: boolean
+  /** Set when the diff couldn't be produced (e.g. too large to buffer). */
+  error?: string
 }
 
 interface MergeResult {
