@@ -262,6 +262,18 @@ export default function Settings(): JSX.Element {
                     onChange={(e) => setSetting('notifyOnDone', e.target.checked)}
                   />
                 </label>
+
+                <label className="settings__row settings__row--toggle">
+                  <span className="settings__label">
+                    Sound cues
+                    <span className="settings__hint">soft chime when an agent needs you, finishes or errors</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={settings.sounds}
+                    onChange={(e) => setSetting('sounds', e.target.checked)}
+                  />
+                </label>
               </>
             )}
           </div>

@@ -7,6 +7,7 @@ import { SearchAddon } from '@xterm/addon-search'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { useStore, displayBranch, type AgentInstance, type AgentStatus } from '../store'
 import { needsAttention, stripAnsi, clampTail } from '../attention'
+import { playCue, type Cue } from '../sound'
 import { IconClose } from './Icons'
 import AgentBadge from './AgentBadge'
 
@@ -47,6 +48,7 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     })
   )
   const selected = useStore((s) => s.selectedIds.includes(id))
+  const closing = useStore((s) => s.closingIds.includes(id))
   const removeAgent = useStore((s) => s.removeAgent)
   const fontSize = useStore((s) => s.settings.fontSize)
   const fontFamily = useStore((s) => s.settings.fontFamily)
@@ -186,6 +188,12 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       window.api.notify.agent({ id, title: labelOf(), body })
     }
 
+    // Audible cue — gated only by the setting (not by backgrounding), so you also
+    // hear it for the agent you're watching. Rate-limiting lives in playCue.
+    const maybeSound = (cue: Cue): void => {
+      if (useStore.getState().settings.sounds) playCue(cue)
+    }
+
     const evaluateIdle = (): void => {
       if (disposed) return
       const ranFor = workingSince ? Date.now() - workingSince : 0
@@ -193,9 +201,14 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       workingSince = 0
       const next: AgentStatus = needsAttention(tail) ? 'attention' : 'idle'
       setStatus(id, next)
-      if (next === 'attention') maybeNotify('attention')
-      // A real task wrapped up (worked a while, then went quiet without a prompt).
-      else if (ranFor >= DONE_AFTER_MS) maybeNotify('done')
+      if (next === 'attention') {
+        maybeNotify('attention')
+        maybeSound('attention')
+      } else if (ranFor >= DONE_AFTER_MS) {
+        // A real task wrapped up (worked a while, then went quiet without a prompt).
+        maybeNotify('done')
+        maybeSound('done')
+      }
     }
 
     // Coalesce a stream of output into a single "working" flip (avoids a store
@@ -216,6 +229,12 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       const wt = await window.api.worktree.create(projectPath ?? '', id, agent.isolation)
       if (disposed) return
       setAgentRuntime(id, { branch: wt.branch, cwd: wt.cwd, isolated: wt.isolated })
+      // Asked for an isolated worktree but git couldn't give us one — don't let it
+      // pass as a silent "shared" tag; say why so the user can fix it (e.g. make an
+      // initial commit) instead of unknowingly editing the shared project dir.
+      if (agent.isolation === 'worktree' && !wt.isolated && wt.reason) {
+        useStore.getState().pushToast(`“${labelOf()}” isn’t isolated — ${wt.reason}`, 'error')
+      }
 
       let pid: string
       try {
@@ -253,6 +272,7 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
           setStatus(id, errored ? 'error' : 'exited')
           term.write('\r\n\x1b[31m[process exited]\x1b[0m\r\n')
           maybeNotify(errored ? 'error' : 'exited')
+          maybeSound(errored ? 'error' : 'done')
         })
       )
       term.onData((d) => {
@@ -387,7 +407,13 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
 
   const dotColor = STATUS_COLOR[status]
   const ringClass =
-    status === 'attention' ? ' is-attention' : status === 'error' ? ' is-error' : ''
+    status === 'attention'
+      ? ' is-attention'
+      : status === 'error'
+        ? ' is-error'
+        : status === 'working'
+          ? ' is-working'
+          : ''
   const ended = (status === 'exited' || status === 'error') && !spawnError
 
   const style = {
@@ -416,7 +442,7 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
   return (
     <>
     <div
-      className={'vec-pane' + (selected ? ' is-selected' : '') + ringClass}
+      className={'vec-pane' + (selected ? ' is-selected' : '') + ringClass + (closing ? ' is-closing' : '')}
       data-id={id}
       style={style}
     >
