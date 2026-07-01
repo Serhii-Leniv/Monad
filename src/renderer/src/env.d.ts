@@ -89,6 +89,9 @@ interface Window {
       read: () => Promise<string>
       write: (text: string) => void
     }
+    menu: {
+      onEdit: (cb: (action: 'copy' | 'paste' | 'selectAll') => void) => () => void
+    }
     shells: {
       list: () => Promise<ShellInfo[]>
     }

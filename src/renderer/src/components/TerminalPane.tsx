@@ -6,6 +6,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { useStore, displayBranch, type AgentInstance, type AgentStatus } from '../store'
+import { terminals } from '../terminalRegistry'
 import { needsAttention, stripAnsi, clampTail } from '../attention'
 import { playCue, type Cue } from '../sound'
 import { IconClose } from './Icons'
@@ -103,6 +104,8 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       theme: { background: 'rgba(0,0,0,0)', foreground: '#cdd6e4', cursor: '#cdd6e4' }
     })
     termRef.current = term
+    // Expose to the macOS Edit-menu handler (routes ⌘C/⌘V/⌘A by focus).
+    terminals.set(id, term)
     const fit = new FitAddon()
     term.loadAddon(fit)
     const search = new SearchAddon()
@@ -343,6 +346,7 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       if (ptyId) window.api.pty.kill(ptyId)
       ptyRef.current = null
       searchRef.current = null
+      terminals.delete(id)
       term.dispose()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

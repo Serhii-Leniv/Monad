@@ -2,6 +2,7 @@ import { app, BrowserWindow, session, screen, nativeImage } from 'electron'
 import { join } from 'path'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { registerIpc } from './ipc'
+import { installMacMenu } from './menu'
 import type { PtyManager } from './pty-manager'
 
 const isDev = !!process.env['ELECTRON_RENDERER_URL']
@@ -151,6 +152,9 @@ function createWindow(): void {
 app.whenReady().then(() => {
   applyProductionCsp()
   ptyManager = registerIpc(() => win)
+  // macOS needs an explicit menu so ⌘C/⌘V/⌘A reach the terminal instead of being
+  // swallowed by the default Edit-menu key equivalents (see menu.ts).
+  installMacMenu(() => win)
 
   // macOS dock icon (the running dev app otherwise shows the Electron icon).
   if (process.platform === 'darwin' && app.dock && existsSync(iconPng)) {
