@@ -1,6 +1,6 @@
 {
   "name": "vectro",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Vectro — a cross-platform canvas for running terminals and AI agents in parallel",
   "main": "./out/main/index.js",
   "author": "Serhii Leniv",

@@ -51,6 +51,10 @@ const api = {
     onData: (id: string, cb: DataHandler): (() => void) => subscribe(dataListeners, id, cb),
     onExit: (id: string, cb: ExitHandler): (() => void) => subscribe(exitListeners, id, cb)
   },
+  clipboard: {
+    read: (): Promise<string> => ipcRenderer.invoke('clipboard:read'),
+    write: (text: string): void => ipcRenderer.send('clipboard:write', { text })
+  },
   shells: {
     list: (): Promise<unknown> => ipcRenderer.invoke('shells:list')
   },
