@@ -87,7 +87,8 @@
   --danger: #ff453a;
 
   /* --- Agent status palette --- */
-  --status-working: var(--accent);
+  /* Working is always green, independent of the picked accent colour. */
+  --status-working: #30d158;
   --status-idle: #3a4a60;
   --status-attention: #ff9f0a;
   --status-done: #30d158;
@@ -430,8 +431,10 @@ body.has-wallpaper .aurora {
   transform: scale(0.92);
 }
 
-/* A working agent's status dot gently pulses. */
+/* A working agent's status dot gently pulses — and glows green (the box-shadow
+   uses currentColor), so the "working" light stays green whatever the accent is. */
 .vec-pane__dot--working {
+  color: var(--status-working);
   animation: dot-pulse 1.5s ease-in-out infinite;
 }
 @keyframes dot-pulse {
