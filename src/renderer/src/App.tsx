@@ -14,6 +14,7 @@ const DiffPanel = lazy(() => import('./components/DiffPanel'))
 import { useStore, toPersisted } from './store'
 import { openProjectByPath, restoreLastProject, saveCanvas } from './openProject'
 import { applyAccent } from './accent'
+import { handleMenuEdit } from './terminalRegistry'
 
 export default function App(): JSX.Element {
   const projectPath = useStore((s) => s.projectPath)
@@ -56,6 +57,12 @@ export default function App(): JSX.Element {
     return window.api.notify.onClick((agentId) => {
       useStore.getState().focusTerminal(agentId)
     })
+  }, [])
+
+  // macOS Edit-menu (⌘C/⌘V/⌘A) → routed by focus (terminal vs. plain input).
+  // No-op on Windows/Linux, where the main process never sends these.
+  useEffect(() => {
+    return window.api.menu.onEdit((action) => void handleMenuEdit(action))
   }, [])
 
   // Load the chosen wallpaper (read in main → data URL so CSP stays strict).

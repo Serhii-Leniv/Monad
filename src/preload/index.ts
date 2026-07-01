@@ -55,6 +55,15 @@ const api = {
     read: (): Promise<string> => ipcRenderer.invoke('clipboard:read'),
     write: (text: string): void => ipcRenderer.send('clipboard:write', { text })
   },
+  // macOS Edit-menu commands (⌘C/⌘V/⌘A) forwarded from the main process so the
+  // renderer can route them by focus (terminal vs. plain input). See menu.ts.
+  menu: {
+    onEdit: (cb: (action: 'copy' | 'paste' | 'selectAll') => void): (() => void) => {
+      const handler = (_e: unknown, action: 'copy' | 'paste' | 'selectAll'): void => cb(action)
+      ipcRenderer.on('menu:edit', handler)
+      return () => ipcRenderer.removeListener('menu:edit', handler)
+    }
+  },
   shells: {
     list: (): Promise<unknown> => ipcRenderer.invoke('shells:list')
   },
