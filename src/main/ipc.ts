@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow, Notification, shell } from 'electron'
+import { ipcMain, dialog, BrowserWindow, Notification, shell, clipboard } from 'electron'
 import { join, basename } from 'path'
 import { promises as fs } from 'fs'
 import { PtyManager, type SpawnOptions } from './pty-manager'
@@ -42,6 +42,13 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
     ptyManager.resize(id, cols, rows)
   )
   ipcMain.on('pty:kill', (_e, { id }: { id: string }) => ptyManager.kill(id))
+
+  // Clipboard via the main process: the renderer's navigator.clipboard.* is
+  // gated on window focus and permissions and rejects intermittently ("Document
+  // is not focused"), which surfaced as paste silently failing. The main-process
+  // clipboard module is synchronous and has no such gating.
+  ipcMain.handle('clipboard:read', () => clipboard.readText())
+  ipcMain.on('clipboard:write', (_e, { text }: { text: string }) => clipboard.writeText(text))
 
   ipcMain.handle('shells:list', () => detectShells())
   ipcMain.handle('agents:list', () => detectAgents())

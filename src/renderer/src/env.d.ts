@@ -85,6 +85,10 @@ interface Window {
       onData: (id: string, cb: DataHandler) => () => void
       onExit: (id: string, cb: ExitHandler) => () => void
     }
+    clipboard: {
+      read: () => Promise<string>
+      write: (text: string) => void
+    }
     shells: {
       list: () => Promise<ShellInfo[]>
     }

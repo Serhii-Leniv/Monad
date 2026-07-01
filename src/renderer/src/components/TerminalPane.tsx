@@ -74,12 +74,19 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     null
   )
 
-  // Read the clipboard and type it into the live pty — shared by Ctrl/Cmd-V and
-  // the context-menu Paste.
-  const pasteFromClipboard = (): void => {
-    void navigator.clipboard.readText().then((t) => {
-      if (ptyRef.current) window.api.pty.write(ptyRef.current, t)
-    })
+  // Read the clipboard and hand it to xterm — shared by Ctrl/Cmd-V and the
+  // context-menu Paste. We read via the main process (window.api.clipboard),
+  // not navigator.clipboard.readText(), which rejects intermittently in Electron
+  // when the window isn't focused and made paste silently no-op. term.paste()
+  // (rather than a raw pty.write) applies bracketed-paste and \r\n cleanup so
+  // TUIs and agents receive the text correctly.
+  const pasteFromClipboard = async (): Promise<void> => {
+    try {
+      const t = await window.api.clipboard.read()
+      if (t) termRef.current?.paste(t)
+    } catch {
+      /* clipboard unavailable — nothing to paste */
+    }
   }
 
   useEffect(() => {
@@ -112,11 +119,11 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       const mod = e.ctrlKey || e.metaKey
       const k = e.key.toLowerCase()
       if (mod && k === 'c' && term.hasSelection()) {
-        void navigator.clipboard.writeText(term.getSelection())
+        window.api.clipboard.write(term.getSelection())
         return false
       }
       if (mod && k === 'v') {
-        pasteFromClipboard()
+        void pasteFromClipboard()
         return false
       }
       if (mod && k === 'f') {
@@ -397,11 +404,11 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
 
   const copySelection = (): void => {
     const sel = termRef.current?.getSelection()
-    if (sel) void navigator.clipboard.writeText(sel)
+    if (sel) window.api.clipboard.write(sel)
     setMenu(null)
   }
   const paste = (): void => {
-    pasteFromClipboard()
+    void pasteFromClipboard()
     setMenu(null)
   }
 
