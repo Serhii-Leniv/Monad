@@ -869,7 +869,8 @@ body.has-wallpaper .aurora {
     width var(--dur-resize) var(--ease-out),
     height var(--dur-resize) var(--ease-out),
     box-shadow var(--dur-select) var(--ease-out),
-    border-color var(--dur-select) var(--ease-out);
+    border-color var(--dur-select) var(--ease-out),
+    opacity var(--dur-select) var(--ease-out);
 }
 
 /* Grid-only drag: the card animates cell-to-cell (transition stays on), with a
@@ -885,6 +886,19 @@ body.has-wallpaper .aurora {
     0 0 0 1px var(--accent),
     0 36px 70px rgba(0, 0, 0, 0.68),
     inset 0 1px 0 var(--glass-highlight);
+}
+
+/* Focus (maximized) mode: the pane expands over the canvas; siblings recede.
+   Dimmed panes keep rendering (live output stays visible through the glass)
+   but ignore the pointer so a stray click can't type into a hidden terminal. */
+.vec-pane.is-focused {
+  z-index: 6;
+}
+.stage__panes:has(.vec-pane.is-focused) .vec-pane:not(.is-focused) {
+  /* Near-invisible: the focused terminal is itself translucent glass, so any
+     brighter and sibling output ghosts through its background. */
+  opacity: 0.1;
+  pointer-events: none;
 }
 
 /* Apple selection: crisp 1px accent ring, no glow. */
