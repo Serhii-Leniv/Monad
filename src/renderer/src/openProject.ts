@@ -56,23 +56,29 @@ function saveCurrent(): void {
   saveCanvas(st.projectPath, toPersisted(st.agents), st.layoutMode)
 }
 
+// Set while an open is in flight. Opening is async (canvas load + git info) and
+// the Home card/button stay clickable meanwhile, so a second click (or a stray
+// double-click) would spawn a duplicate canvas + a second set of shells.
+let opening = false
+
 /** Load a project's saved canvas + git info, prune stale worktrees, open it. */
 export async function openProjectByPath(ref: RecentProject): Promise<void> {
   const store = useStore.getState()
   // Switching to the already-open workspace is a no-op (don't respawn agents).
   if (store.projectPath === ref.path) return
-
-  // A recent card may point at a folder that's since been moved or deleted.
-  // Opening it would spawn a canvas full of dead terminals — refuse and prune.
-  const exists = await window.api.project.exists(ref.path)
-  if (!exists) {
-    store.setWorkspaces(removeRecent(ref.path))
-    store.pushToast(`“${ref.name}” no longer exists at that location`, 'error')
-    return
-  }
-
-  saveCurrent()
+  if (opening) return
+  opening = true
   try {
+    // A recent card may point at a folder that's since been moved or deleted.
+    // Opening it would spawn a canvas full of dead terminals — refuse and prune.
+    const exists = await window.api.project.exists(ref.path)
+    if (!exists) {
+      store.setWorkspaces(removeRecent(ref.path))
+      store.pushToast(`“${ref.name}” no longer exists at that location`, 'error')
+      return
+    }
+
+    saveCurrent()
     const [saved, git] = await Promise.all([
       window.api.project.load(ref.path),
       window.api.git.info(ref.path)
@@ -80,13 +86,31 @@ export async function openProjectByPath(ref: RecentProject): Promise<void> {
     void window.api.git.prune(ref.path)
     pushRecent(ref)
     useStore.getState().openProject(ref, saved, git)
+    // A non-git folder silently loses the headline feature (per-agent worktree
+    // isolation) — say so once instead of quietly downgrading to a shared dir.
+    if (!git.isGit) {
+      useStore
+        .getState()
+        .pushToast('Not a git repo — agents share this folder (no per-agent isolation).', 'info')
+    }
     // Always land on at least one terminal so a freshly-opened project isn't a
     // bare canvas.
     if (useStore.getState().agents.length === 0) useStore.getState().addAgent()
   } catch (e) {
     console.error('[vectro] open project failed:', e)
     useStore.getState().pushToast(`Couldn’t open “${ref.name}”`, 'error')
+  } finally {
+    opening = false
   }
+}
+
+/** Close the current project, flushing its canvas first. `closeProject` in the
+ *  store just clears state; the debounced autosave (App) would drop the last
+ *  <400ms of edits (a just-spawned/moved pane) when the panes unmount. Route the
+ *  "Close project" affordances through here so a switch and a close behave alike. */
+export function closeCurrentProject(): void {
+  saveCurrent()
+  useStore.getState().closeProject()
 }
 
 /** Pick a folder via the OS dialog, then open it. */

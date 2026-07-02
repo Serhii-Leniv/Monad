@@ -2604,7 +2604,10 @@ body.has-wallpaper .vec-pane__term {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* `safe center` so that when the hero + recents overflow a short window the
+     content grows downward and the TOP stays reachable — plain `center` in a
+     scroll container pushes the hero past the unscrollable start edge. */
+  justify-content: safe center;
   gap: 40px;
   padding: 48px 24px;
 }
@@ -2715,7 +2718,9 @@ body.has-wallpaper .vec-pane__term {
 .home__tag {
   margin: 0 0 22px;
   max-width: 460px;
-  color: var(--muted);
+  /* The one line that explains what the app is — keep it legible over a bright
+     wallpaper (was --muted at 45% white, which could drop below AA). */
+  color: var(--text-2);
   font-size: 15px;
   line-height: 1.5;
 }
@@ -2741,6 +2746,47 @@ body.has-wallpaper .vec-pane__term {
 }
 .home__open:active {
   transform: scale(0.97);
+}
+/* The single most important first-run action deserves the app's crisp accent
+   ring on keyboard focus, not Chromium's faint default outline on the gradient. */
+.home__open:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px rgba(var(--accent-rgb), 0.75),
+    0 0 22px rgba(var(--accent-rgb), 0.5),
+    0 8px 22px rgba(var(--accent-rgb), 0.3);
+}
+/* Windows High Contrast drops background-clip:text, leaving the gradient wordmark
+   invisible — restore a solid colour there. */
+@media (forced-colors: active) {
+  .home__title {
+    color: CanvasText;
+    -webkit-text-fill-color: CanvasText;
+  }
+}
+/* Explicit dismiss for sticky toasts (errors + actionful) that no longer close on
+   a stray body click. */
+.toast__close {
+  margin-left: 8px;
+  padding: 0 4px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text-2);
+  background: transparent;
+  border: none;
+  border-radius: var(--r-xs);
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity var(--dur-select) var(--ease-out);
+}
+.toast__close:hover {
+  opacity: 1;
+}
+.review__empty-sub {
+  display: block;
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--text-2);
 }
 .home__hint {
   margin: 22px auto 0;
