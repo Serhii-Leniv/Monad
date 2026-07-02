@@ -1,6 +1,7 @@
 import { ipcMain, dialog, BrowserWindow, Notification, shell, clipboard } from 'electron'
 import { join, basename, isAbsolute } from 'path'
 import { promises as fs } from 'fs'
+import { execFileSync } from 'child_process'
 import { PtyManager, type SpawnOptions } from './pty-manager'
 import {
   getGitInfo,
@@ -57,6 +58,72 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
   ipcMain.handle('clipboard:hasImage', () =>
     clipboard.availableFormats().some((f) => f.startsWith('image/'))
   )
+  // Files copied in Explorer/Finder: a normal terminal pastes their paths.
+  // Formats are per-platform; every read is defensive (formats lie, buffers
+  // vary) and failure just means "no files".
+  ipcMain.handle('clipboard:readFiles', (): string[] => {
+    if (process.platform === 'darwin') {
+      try {
+        // XML plist with every copied path.
+        const plist = clipboard.read('NSFilenamesPboardType')
+        const paths = [...plist.matchAll(/<string>([\s\S]*?)<\/string>/g)].map((m) =>
+          m[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+        )
+        if (paths.length) return paths
+      } catch {
+        /* fall through */
+      }
+      try {
+        const url = clipboard.read('public.file-url')
+        if (url) return [decodeURIComponent(url.replace(/^file:\/\/(localhost)?/, ''))]
+      } catch {
+        /* no files */
+      }
+      return []
+    }
+    if (process.platform === 'win32') {
+      // Electron can't read the predefined CF_HDROP format directly (only
+      // registered format names). FileNameW is the cheap presence probe (it
+      // yields just the FIRST file, in short 8.3 form); when it hits, ask the
+      // OS for the full long-path list via PowerShell. The spawn (~200ms) only
+      // happens when files are actually on the clipboard.
+      let first = ''
+      try {
+        first = clipboard.readBuffer('FileNameW').toString('ucs2').replace(/\0+$/, '')
+      } catch {
+        /* no files */
+      }
+      if (!first) return []
+      try {
+        // FileDropList yields FileInfo objects (a formatted table if printed
+        // raw) — emit one FullName per line.
+        const out = execFileSync(
+          'powershell.exe',
+          [
+            '-NoProfile',
+            '-Command',
+            'Get-Clipboard -Format FileDropList | ForEach-Object { if ($_.FullName) { $_.FullName } else { [string]$_ } }'
+          ],
+          { encoding: 'utf8', timeout: 3000, windowsHide: true }
+        )
+        const paths = out.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)
+        if (paths.length) return paths
+      } catch {
+        /* fall back to the single short-form path */
+      }
+      return [first]
+    }
+    try {
+      const uris = clipboard.read('text/uri-list')
+      return uris
+        .split('\n')
+        .map((s) => s.trim())
+        .filter((s) => s.startsWith('file://'))
+        .map((s) => decodeURIComponent(s.replace(/^file:\/\//, '')))
+    } catch {
+      return []
+    }
+  })
 
   ipcMain.handle('shells:list', () => detectShells())
   ipcMain.handle('agents:list', () => detectAgents())

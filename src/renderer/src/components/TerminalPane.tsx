@@ -7,7 +7,7 @@ import { SearchAddon } from '@xterm/addon-search'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { useStore, displayBranch, RAIL_INSET, PAD, type AgentInstance, type AgentStatus } from '../store'
-import { terminals } from '../terminalRegistry'
+import { terminals, quotePaths } from '../terminalRegistry'
 import { needsAttention, clampTail } from '../attention'
 import { playCue, type Cue } from '../sound'
 import { IconClose } from './Icons'
@@ -122,9 +122,15 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
         termRef.current?.paste(t)
         return
       }
-      // No text, but maybe a screenshot: a pty can't carry pixels, so forward
-      // the raw Ctrl+V byte — TUIs that read the OS clipboard themselves
-      // (Claude Code image paste) get their keystroke and pick the image up.
+      // No text. Copied files paste as quoted paths, like any terminal.
+      const files = await window.api.clipboard.readFiles()
+      if (files.length) {
+        termRef.current?.paste(quotePaths(files))
+        return
+      }
+      // A screenshot: a pty can't carry pixels, so forward the raw Ctrl+V
+      // byte — TUIs that read the OS clipboard themselves (Claude Code image
+      // paste) get their keystroke and pick the image up.
       if (await window.api.clipboard.hasImage()) termRef.current?.input('\x16', true)
     } catch {
       /* clipboard unavailable — nothing to paste */
@@ -750,6 +756,21 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
             onContextMenu={(e) => {
               e.preventDefault()
               setMenu({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY })
+            }}
+            // Dropping files inserts their quoted paths, like any terminal.
+            onDragOver={(e) => {
+              e.preventDefault()
+              e.dataTransfer.dropEffect = 'copy'
+            }}
+            onDrop={(e) => {
+              e.preventDefault()
+              const paths = Array.from(e.dataTransfer.files)
+                .map((f) => window.api.getPathForFile(f))
+                .filter(Boolean)
+              if (paths.length) {
+                termRef.current?.paste(quotePaths(paths))
+                termRef.current?.focus()
+              }
             }}
           />
 
