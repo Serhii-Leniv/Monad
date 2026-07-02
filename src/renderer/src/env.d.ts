@@ -59,6 +59,12 @@ interface MergeResult {
   error?: string
 }
 
+interface UpdateInfo {
+  current: string
+  latest: string
+  url: string
+}
+
 /** Shape of the per-project canvas file (.agent-canvas/canvas.json). */
 interface PersistedCanvas {
   layoutMode?: 'grid' | 'columns' | 'preview' | 'free'
@@ -99,6 +105,9 @@ interface Window {
       list: () => Promise<AgentCli[]>
     }
     openExternal: (url: string) => Promise<boolean>
+    update: {
+      check: () => Promise<UpdateInfo | null>
+    }
     wallpaper: {
       pick: () => Promise<string | null>
       read: (path: string) => Promise<string | null>

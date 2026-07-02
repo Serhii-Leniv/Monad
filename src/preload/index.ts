@@ -41,6 +41,12 @@ export interface ProjectRef {
   name: string
 }
 
+export interface UpdateInfo {
+  current: string
+  latest: string
+  url: string
+}
+
 const api = {
   pty: {
     spawn: (opts: PtySpawnOptions): Promise<string> => ipcRenderer.invoke('pty:spawn', opts),
@@ -71,6 +77,9 @@ const api = {
     list: (): Promise<unknown> => ipcRenderer.invoke('agents:list')
   },
   openExternal: (url: string): Promise<boolean> => ipcRenderer.invoke('open:external', url),
+  update: {
+    check: (): Promise<UpdateInfo | null> => ipcRenderer.invoke('update:check')
+  },
   wallpaper: {
     pick: (): Promise<string | null> => ipcRenderer.invoke('wallpaper:pick'),
     read: (path: string): Promise<string | null> => ipcRenderer.invoke('wallpaper:read', path)
