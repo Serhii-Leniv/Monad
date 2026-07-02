@@ -277,16 +277,18 @@ function laidOut(
   const perRow: number[] = []
   for (let r = 0; r < rows; r++) perRow.push(base + (r < extra ? 1 : 0))
 
-  const ch = (availH - GAP * (rows - 1)) / rows
+  // Integer pixel geometry: fractional tile coords put the terminal between
+  // device pixels and the compositor resamples it — text and borders go soft.
+  const ch = Math.round((availH - GAP * (rows - 1)) / rows)
   const out: AgentInstance[] = []
   let i = 0
   for (let r = 0; r < rows; r++) {
     const cols = perRow[r]
-    const cw = (availW - GAP * (cols - 1)) / cols
+    const cw = Math.round((availW - GAP * (cols - 1)) / cols)
     for (let c = 0; c < cols; c++) {
       const a = agents[i++]
-      const x = RAIL_INSET + c * (cw + GAP)
-      const y = PAD + r * (ch + GAP)
+      const x = Math.round(RAIL_INSET + c * (cw + GAP))
+      const y = Math.round(PAD + r * (ch + GAP))
       // The dragged card keeps its position constant so React never fights
       // Moveable for its transform — it follows the cursor; its slot stays an
       // empty gap that the other cards reflow around. We stash that slot in
