@@ -504,6 +504,22 @@ body.has-wallpaper .aurora {
 .toast--error {
   border-left-color: var(--danger);
 }
+.toast__action {
+  display: block;
+  margin-top: 8px;
+  padding: 5px 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--accent);
+  border: none;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.toast__action:hover {
+  filter: brightness(1.15);
+}
 @keyframes toast-in {
   from {
     opacity: 0;
