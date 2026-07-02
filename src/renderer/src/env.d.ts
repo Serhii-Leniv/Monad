@@ -95,7 +95,9 @@ interface Window {
       read: () => Promise<string>
       write: (text: string) => void
       hasImage: () => Promise<boolean>
+      readFiles: () => Promise<string[]>
     }
+    getPathForFile: (file: File) => string
     menu: {
       onEdit: (cb: (action: 'copy' | 'paste' | 'selectAll') => void) => () => void
     }

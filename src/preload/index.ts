@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, webFrame } from 'electron'
+import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 
 type DataHandler = (data: string) => void
 type ExitHandler = (code: number) => void
@@ -60,7 +60,17 @@ const api = {
   clipboard: {
     read: (): Promise<string> => ipcRenderer.invoke('clipboard:read'),
     write: (text: string): void => ipcRenderer.send('clipboard:write', { text }),
-    hasImage: (): Promise<boolean> => ipcRenderer.invoke('clipboard:hasImage')
+    hasImage: (): Promise<boolean> => ipcRenderer.invoke('clipboard:hasImage'),
+    readFiles: (): Promise<string[]> => ipcRenderer.invoke('clipboard:readFiles')
+  },
+  // Absolute path of a File dropped onto the window (drag & drop into a
+  // terminal). Must run in the preload — the renderer can't see file paths.
+  getPathForFile: (file: File): string => {
+    try {
+      return webUtils.getPathForFile(file)
+    } catch {
+      return ''
+    }
   },
   // macOS Edit-menu commands (⌘C/⌘V/⌘A) forwarded from the main process so the
   // renderer can route them by focus (terminal vs. plain input). See menu.ts.

@@ -8,6 +8,11 @@ import { useStore } from './store'
  */
 export const terminals = new Map<string, Terminal>()
 
+/** Paths → one shell-ready string: quoted when they contain tricky chars. */
+export function quotePaths(paths: string[]): string {
+  return paths.map((p) => (/[\s"'`$&;()[\]{}]/.test(p) ? `"${p}"` : p)).join(' ')
+}
+
 /**
  * Route a macOS Edit-menu command (⌘C/⌘V/⌘A) by focus.
  *
@@ -25,9 +30,14 @@ export async function handleMenuEdit(action: 'copy' | 'paste' | 'selectAll'): Pr
     } else if (action === 'paste') {
       const t = await window.api.clipboard.read()
       if (t) term.paste(t)
-      // Image-only clipboard (screenshots): forward the raw Ctrl+V byte so
-      // TUIs that read the OS clipboard themselves (Claude Code) handle it.
-      else if (await window.api.clipboard.hasImage()) term.input('\x16', true)
+      else {
+        // No text: copied files paste as quoted paths (like any terminal);
+        // an image-only clipboard forwards the raw Ctrl+V byte so TUIs that
+        // read the OS clipboard themselves (Claude Code) handle it.
+        const files = await window.api.clipboard.readFiles()
+        if (files.length) term.paste(quotePaths(files))
+        else if (await window.api.clipboard.hasImage()) term.input('\x16', true)
+      }
       term.focus()
     } else {
       term.selectAll()
