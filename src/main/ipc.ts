@@ -1,7 +1,16 @@
 import { ipcMain, dialog, BrowserWindow, Notification, shell, clipboard } from 'electron'
 import { join, basename, isAbsolute } from 'path'
 import { promises as fs } from 'fs'
-import { execFileSync } from 'child_process'
+import { execFile } from 'child_process'
+import { promisify } from 'util'
+
+const pexecFile = promisify(execFile)
+
+// Terminal output is untrusted: a printed path renders as a clickable "file link",
+// so opening one must never one-click-execute a binary/script. These extensions
+// get revealed in the file manager instead of run.
+const UNSAFE_OPEN =
+  /\.(exe|bat|cmd|com|scr|ps1|psm1|vbs|vbe|js|jse|jar|msi|msix|lnk|app|command|sh|bash|zsh|desktop|reg|hta|wsf|pif|gadget)$/i
 import { PtyManager, type SpawnOptions } from './pty-manager'
 import {
   getGitInfo,
@@ -61,7 +70,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
   // Files copied in Explorer/Finder: a normal terminal pastes their paths.
   // Formats are per-platform; every read is defensive (formats lie, buffers
   // vary) and failure just means "no files".
-  ipcMain.handle('clipboard:readFiles', (): string[] => {
+  ipcMain.handle('clipboard:readFiles', async (): Promise<string[]> => {
     if (process.platform === 'darwin') {
       try {
         // XML plist with every copied path.
@@ -96,8 +105,9 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
       if (!first) return []
       try {
         // FileDropList yields FileInfo objects (a formatted table if printed
-        // raw) — emit one FullName per line.
-        const out = execFileSync(
+        // raw) — emit one FullName per line. Async so the ~200ms PowerShell spawn
+        // never blocks the main process (all IPC + pty forwarding) on a paste.
+        const { stdout } = await pexecFile(
           'powershell.exe',
           [
             '-NoProfile',
@@ -106,7 +116,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
           ],
           { encoding: 'utf8', timeout: 3000, windowsHide: true }
         )
-        const paths = out.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)
+        const paths = stdout.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)
         if (paths.length) return paths
       } catch {
         /* fall back to the single short-form path */
@@ -145,6 +155,10 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
 
   ipcMain.handle('wallpaper:read', async (_e, p: string) => {
     try {
+      const st = await fs.stat(p)
+      // Cap so a huge or non-image file can't OOM the main process — the whole
+      // file is buffered and base64-inflated (~1.33×) into a data URL.
+      if (!st.isFile() || st.size > 40 * 1024 * 1024) return null
       const ext = p.split('.').pop()?.toLowerCase()
       const mime =
         ext === 'jpg' || ext === 'jpeg'
@@ -193,6 +207,12 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
   ipcMain.handle('path:open', async (_e, { base, raw }: { base: string; raw: string }) => {
     const abs = await resolveFileTarget(base, raw)
     if (!abs) return false
+    // A clickable path from untrusted agent output must not launch an executable
+    // or script — reveal it in the file manager instead of running it.
+    if (UNSAFE_OPEN.test(abs)) {
+      shell.showItemInFolder(abs)
+      return true
+    }
     void shell.openPath(abs)
     return true
   })

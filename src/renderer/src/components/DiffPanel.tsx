@@ -100,14 +100,23 @@ export default function DiffPanel(): JSX.Element {
   const close = (): void => setDiffAgentId(null)
 
   const load = (): void => {
-    if (!projectPath) return
+    if (!projectPath) {
+      // Nothing to diff against — don't leave the body stuck on "Loading changes…".
+      setLoading(false)
+      setError('No project is open.')
+      return
+    }
     setLoading(true)
     setError(null)
-    void window.api.git.diff(projectPath, id).then((d) => {
-      setDiff(d)
-      setLoading(false)
-      setMessage(`Merge ${displayBranch(d.branch) || label}`)
-    })
+    window.api.git
+      .diff(projectPath, id)
+      .then((d) => {
+        setDiff(d)
+        setMessage(`Merge ${displayBranch(d.branch) || label}`)
+      })
+      // A rejected diff (git missing, worktree gone) must clear the spinner too.
+      .catch((e) => setError(e instanceof Error ? e.message : 'Couldn’t load changes'))
+      .finally(() => setLoading(false))
   }
 
   useEffect(load, [id, projectPath])
@@ -130,7 +139,9 @@ export default function DiffPanel(): JSX.Element {
     if (r.ok) {
       setMerged(true)
       celebrate()
-      pushToast(`Merged “${label}” into ${baseBranch || 'base'}`, 'success')
+      // Show the branch actually merged into — it may differ from the base at open
+      // if the user switched branches in the main repo since.
+      pushToast(`Merged “${label}” into ${r.mergedInto || baseBranch || 'base'}`, 'success')
     } else setError(r.error || 'Merge failed')
   }
 
@@ -188,10 +199,15 @@ export default function DiffPanel(): JSX.Element {
           ) : merged ? (
             <div className="review__empty review__empty--ok">
               ✓ Merged into {baseBranch || 'the base branch'}.
+              <br />
+              <span className="review__empty-sub">
+                The terminal’s worktree is still on disk — remove it to clean up, or keep it to
+                keep working on the branch.
+              </span>
             </div>
           ) : !hasChanges ? (
             <div className="review__empty">
-              {diff?.error ? diff.error : 'No changes on this branch yet.'}
+              {error ?? diff?.error ?? 'No changes on this branch yet.'}
             </div>
           ) : (
             <>
@@ -243,13 +259,17 @@ export default function DiffPanel(): JSX.Element {
           )}
         </div>
 
-        {error && <div className="review__error">{error}</div>}
+        {error && hasChanges && <div className="review__error">{error}</div>}
 
         <div className="review__foot">
           {merged ? (
             <>
-              <button className="review__btn" onClick={close}>
-                Done
+              <button
+                className="review__btn"
+                onClick={close}
+                title="Keep the terminal and its worktree — you can keep working on this branch"
+              >
+                Keep terminal
               </button>
               <button
                 className="review__btn review__btn--merge"
@@ -257,9 +277,9 @@ export default function DiffPanel(): JSX.Element {
                   removeAgent(id)
                   close()
                 }}
-                title="Merged — remove the terminal and clean up its worktree"
+                title="Remove the terminal and delete its now-merged worktree + branch"
               >
-                Remove terminal
+                Remove &amp; clean up
               </button>
             </>
           ) : (
@@ -277,7 +297,9 @@ export default function DiffPanel(): JSX.Element {
                 onClick={doDiscard}
                 disabled={busy}
               >
-                {confirmDiscard ? 'Really discard?' : 'Discard'}
+                {confirmDiscard
+                  ? `Really discard ${totals.files} file${totals.files === 1 ? '' : 's'}?`
+                  : 'Discard'}
               </button>
               <button
                 className="review__btn review__btn--merge"

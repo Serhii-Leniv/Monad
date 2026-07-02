@@ -57,6 +57,9 @@ interface DiffResult {
 interface MergeResult {
   ok: boolean
   error?: string
+  /** The branch actually merged into (the main worktree's HEAD at merge time),
+   *  which may differ from the base captured at project open. */
+  mergedInto?: string
 }
 
 interface UpdateInfo {
