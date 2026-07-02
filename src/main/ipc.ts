@@ -1,5 +1,5 @@
 import { ipcMain, dialog, BrowserWindow, Notification, shell, clipboard } from 'electron'
-import { join, basename } from 'path'
+import { join, basename, isAbsolute } from 'path'
 import { promises as fs } from 'fs'
 import { PtyManager, type SpawnOptions } from './pty-manager'
 import {
@@ -93,6 +93,33 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
   ipcMain.handle('open:external', (_e, url: string) => {
     if (!/^https?:\/\//i.test(url)) return false
     void shell.openExternal(url)
+    return true
+  })
+
+  // --- File links in terminal output ---
+  // Agents constantly print paths ("edited src/foo.ts:42"). The renderer's link
+  // provider asks here whether a path-looking token resolves to a real file
+  // (relative to the pane's cwd) and opens it in the default editor on click.
+  const resolveFileTarget = async (base: string, raw: string): Promise<string | null> => {
+    try {
+      const cleaned = raw
+        .replace(/(?::\d+){1,2}$/, '') // trailing :line(:col)
+        .replace(/^['"(<[]+|['")>\],.;]+$/g, '')
+      if (!cleaned) return null
+      const abs = isAbsolute(cleaned) ? cleaned : join(base, cleaned)
+      const st = await fs.stat(abs)
+      return st.isFile() ? abs : null
+    } catch {
+      return null
+    }
+  }
+  ipcMain.handle('path:exists', async (_e, { base, raw }: { base: string; raw: string }) => {
+    return (await resolveFileTarget(base, raw)) !== null
+  })
+  ipcMain.handle('path:open', async (_e, { base, raw }: { base: string; raw: string }) => {
+    const abs = await resolveFileTarget(base, raw)
+    if (!abs) return false
+    void shell.openPath(abs)
     return true
   })
 

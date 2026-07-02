@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore, displayBranch } from '../store'
+import { celebrate } from '../celebrate'
 import { IconClose } from './Icons'
 
 type FileStatus = 'added' | 'deleted' | 'renamed' | 'modified'
@@ -128,19 +129,27 @@ export default function DiffPanel(): JSX.Element {
     setBusy(false)
     if (r.ok) {
       setMerged(true)
+      celebrate()
       pushToast(`Merged “${label}” into ${baseBranch || 'base'}`, 'success')
     } else setError(r.error || 'Merge failed')
   }
 
+  // Two-step destructive confirm, in place of a native window.confirm: the
+  // first click arms the button ("Really discard?"), a second within 3s acts.
+  const [confirmDiscard, setConfirmDiscard] = useState(false)
+  const discardTimer = useRef<number>()
+  useEffect(() => () => window.clearTimeout(discardTimer.current), [])
   const doDiscard = (): void => {
-    const ok = window.confirm(
-      `Discard “${label}”? Its branch and worktree will be deleted — committed and uncommitted work on it is lost.`
-    )
-    if (ok) {
-      removeAgent(id)
-      pushToast(`Discarded “${label}”`, 'info')
-      close()
+    if (!confirmDiscard) {
+      setConfirmDiscard(true)
+      window.clearTimeout(discardTimer.current)
+      discardTimer.current = window.setTimeout(() => setConfirmDiscard(false), 3000)
+      return
     }
+    window.clearTimeout(discardTimer.current)
+    removeAgent(id)
+    pushToast(`Discarded “${label}”`, 'info')
+    close()
   }
 
   return (
@@ -262,8 +271,13 @@ export default function DiffPanel(): JSX.Element {
                 onChange={(e) => setMessage(e.target.value)}
                 disabled={busy || !hasChanges}
               />
-              <button className="review__btn review__btn--discard" onClick={doDiscard} disabled={busy}>
-                Discard
+              <button
+                className={'review__btn review__btn--discard' + (confirmDiscard ? ' is-armed' : '')}
+                title="Deletes this branch and worktree — committed and uncommitted work on it is lost"
+                onClick={doDiscard}
+                disabled={busy}
+              >
+                {confirmDiscard ? 'Really discard?' : 'Discard'}
               </button>
               <button
                 className="review__btn review__btn--merge"

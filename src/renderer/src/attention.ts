@@ -5,9 +5,12 @@
  * prompt. Adapters can extend ATTENTION_PATTERNS later as we learn each CLI.
  */
 
-/** Strip ANSI escape / control sequences so patterns match the visible text. */
+/** Strip ANSI escape / control sequences so patterns match the visible text.
+ *  OSC accepts both terminators (BEL and ST `ESC \`) and an unterminated OSC at
+ *  the end of the buffer — the tail is a raw stream clamp, so a sequence can be
+ *  cut mid-way. */
 // eslint-disable-next-line no-control-regex
-const ANSI = /\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07|[\x00-\x08\x0b\x0c\x0e-\x1f]/g
+const ANSI = /\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\|$)|[\x00-\x08\x0b\x0c\x0e-\x1f]/g
 
 export function stripAnsi(s: string): string {
   return s.replace(ANSI, '')

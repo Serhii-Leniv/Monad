@@ -14,7 +14,7 @@ const DiffPanel = lazy(() => import('./components/DiffPanel'))
 import { useStore, toPersisted } from './store'
 import { openProjectByPath, restoreLastProject, saveCanvas } from './openProject'
 import { applyAccent } from './accent'
-import { handleMenuEdit } from './terminalRegistry'
+import { handleMenuEdit, terminals } from './terminalRegistry'
 
 export default function App(): JSX.Element {
   const projectPath = useStore((s) => s.projectPath)
@@ -121,7 +121,15 @@ export default function App(): JSX.Element {
         if (st.diffAgentId) st.setDiffAgentId(null)
         else if (st.paletteOpen) st.setPaletteOpen(false)
         else if (st.settingsOpen) st.setSettingsOpen(false)
-        else if (st.focusedId) st.clearFocus()
+        else if (st.focusedId) {
+          // Never steal Esc from a focused terminal — vim and Claude Code use
+          // it constantly. Exit focus with ⌘/Ctrl⇧Enter, double-click, or Esc
+          // when the terminal doesn't have keyboard focus.
+          const inTerm = (document.activeElement as HTMLElement | null)?.closest?.(
+            '.vec-pane__term'
+          )
+          if (!inTerm) st.clearFocus()
+        }
         return
       }
       // Switch workspace — ⌘⌥1…9 (Ctrl+Alt on Win/Linux). Saves the current
@@ -177,6 +185,27 @@ export default function App(): JSX.Element {
           // Guarded close (worktree dirty-check + confirm) — never force-delete.
           st.requestClose(sel)
         }
+      } else if (e.code === 'Enter' && e.shiftKey) {
+        // ⌘⇧Enter (Ctrl+Shift+Enter): toggle maximize on the current terminal.
+        e.preventDefault()
+        if (st.focusedId) st.clearFocus()
+        else {
+          const target = st.selectedIds[0] ?? st.agents[0]?.id
+          if (target) st.focusTerminal(target)
+        }
+      } else if ((e.code === 'BracketRight' || e.code === 'BracketLeft') && e.shiftKey) {
+        // ⌘⇧]/[ (Ctrl+Shift+]/[): cycle terminals — follows maximize if active.
+        e.preventDefault()
+        const list = st.agents
+        if (!list.length) return
+        const dir = e.code === 'BracketRight' ? 1 : -1
+        const curId = st.focusedId ?? st.selectedIds[0]
+        const cur = list.findIndex((a) => a.id === curId)
+        const base = cur === -1 ? (dir === 1 ? -1 : 0) : cur
+        const next = list[(base + dir + list.length) % list.length]
+        if (st.focusedId) st.focusTerminal(next.id)
+        else st.setSelected([next.id])
+        terminals.get(next.id)?.focus()
       }
     }
     window.addEventListener('keydown', onKey)
