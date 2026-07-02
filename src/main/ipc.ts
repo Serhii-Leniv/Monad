@@ -50,6 +50,13 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
   // clipboard module is synchronous and has no such gating.
   ipcMain.handle('clipboard:read', () => clipboard.readText())
   ipcMain.on('clipboard:write', (_e, { text }: { text: string }) => clipboard.writeText(text))
+  // Whether the clipboard holds an image (e.g. a screenshot). Paste can't
+  // transmit pixels through a pty — instead the renderer forwards the raw
+  // Ctrl+V byte so TUIs that read the OS clipboard themselves (Claude Code
+  // image paste) still get their keystroke.
+  ipcMain.handle('clipboard:hasImage', () =>
+    clipboard.availableFormats().some((f) => f.startsWith('image/'))
+  )
 
   ipcMain.handle('shells:list', () => detectShells())
   ipcMain.handle('agents:list', () => detectAgents())

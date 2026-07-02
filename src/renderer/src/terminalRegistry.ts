@@ -25,6 +25,9 @@ export async function handleMenuEdit(action: 'copy' | 'paste' | 'selectAll'): Pr
     } else if (action === 'paste') {
       const t = await window.api.clipboard.read()
       if (t) term.paste(t)
+      // Image-only clipboard (screenshots): forward the raw Ctrl+V byte so
+      // TUIs that read the OS clipboard themselves (Claude Code) handle it.
+      else if (await window.api.clipboard.hasImage()) term.input('\x16', true)
       term.focus()
     } else {
       term.selectAll()

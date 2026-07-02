@@ -94,6 +94,7 @@ interface Window {
     clipboard: {
       read: () => Promise<string>
       write: (text: string) => void
+      hasImage: () => Promise<boolean>
     }
     menu: {
       onEdit: (cb: (action: 'copy' | 'paste' | 'selectAll') => void) => () => void
