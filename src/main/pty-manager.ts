@@ -33,12 +33,19 @@ export class PtyManager {
 
     let proc: pty.IPty
     try {
+      // xterm.js renders truecolor; advertise it. "xterm-color" claimed a
+      // 16-colour terminal from the 90s and made agent CLIs (Claude Code,
+      // aider…) silently degrade their palettes and TUI rendering.
       proc = pty.spawn(shell, opts.args ?? [], {
-        name: 'xterm-color',
+        name: 'xterm-256color',
         cols: opts.cols ?? 80,
         rows: opts.rows ?? 24,
         cwd: opts.cwd || os.homedir(),
-        env: { ...process.env, ...(opts.env ?? {}) } as Record<string, string>
+        env: {
+          ...process.env,
+          COLORTERM: 'truecolor',
+          ...(opts.env ?? {})
+        } as Record<string, string>
       })
     } catch (e) {
       // Surface to the renderer (the invoke promise rejects) so the card can
