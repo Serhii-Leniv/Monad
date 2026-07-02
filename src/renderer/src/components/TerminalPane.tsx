@@ -282,12 +282,23 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     let working = false
     let workingSince = 0
     let bellRang = false
+    // Set once output has streamed with NO ≥800ms gap for longer than the ceiling
+    // below — i.e. a live/steady process (dev server, log tail, htop, a spinner
+    // left running), not a task that will settle. Cleared the moment a real gap
+    // occurs (evaluateIdle), so a later burst is tracked from scratch.
+    let steady = false
     let idleTimer: ReturnType<typeof setTimeout> | undefined
     let lastNotify = 0
     const unsubs: Array<() => void> = []
     // A working burst shorter than this reads as routine shell echo (ls, cd…),
     // not a task — don't notify on those settling back to idle.
     const DONE_AFTER_MS = 8000
+    // Continuous-output ceiling. An agent's work is bursty — tool calls, API waits
+    // and message boundaries punctuate it with ≥800ms gaps that reset the burst —
+    // so a burst that runs THIS long with no gap at all isn't an agent thinking,
+    // it's a process that just keeps printing. Kept high so a genuinely long agent
+    // stream is never mistaken for idle; only truly unbroken streams cross it.
+    const MAX_WORK_MS = 180000
 
     const labelOf = (): string =>
       useStore.getState().agents.find((a) => a.id === id)?.label ?? 'Terminal'
@@ -335,6 +346,9 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       const ranFor = workingSince ? Date.now() - workingSince : 0
       working = false
       workingSince = 0
+      // A real gap happened → the next output is a fresh burst, not a continuation
+      // of the steady stream. Re-arm burst tracking.
+      steady = false
       // A bell "sticks" until the next settle: programs usually ring it and
       // then keep drawing the prompt, which would otherwise flip the status
       // back to working → idle and lose the attention.
@@ -357,10 +371,23 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     // leaked halves of escape sequences split across chunk boundaries.
     const onActivity = (d: string): void => {
       tail = clampTail(tail + d, 1200)
-      if (!working) {
-        working = true
-        workingSince = Date.now()
-        setAgentRuntime(id, { status: 'working', workingSince })
+      // Once classified steady, stop flipping to "working" on each chunk — just
+      // keep the tail current (for attention detection) and let the idle timer
+      // re-check whenever the stream finally pauses.
+      if (!steady) {
+        if (!working) {
+          working = true
+          workingSince = Date.now()
+          setAgentRuntime(id, { status: 'working', workingSince })
+        } else if (Date.now() - workingSince > MAX_WORK_MS) {
+          // Unbroken output past the ceiling → a live/steady process, not a task.
+          // Stop the ever-climbing "working" timer and settle it now; a genuine
+          // pause (evaluateIdle) clears `steady` so a real later burst is tracked.
+          steady = true
+          working = false
+          workingSince = 0
+          setStatus(id, needsAttention(tail) ? 'attention' : 'idle')
+        }
       }
       clearTimeout(idleTimer)
       idleTimer = setTimeout(evaluateIdle, 800)
@@ -373,6 +400,7 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       clearTimeout(idleTimer)
       working = false
       workingSince = 0
+      steady = false
       setStatus(id, 'attention')
       maybeNotify('attention')
       maybeSound('attention')
