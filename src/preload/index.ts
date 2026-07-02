@@ -77,6 +77,12 @@ const api = {
     list: (): Promise<unknown> => ipcRenderer.invoke('agents:list')
   },
   openExternal: (url: string): Promise<boolean> => ipcRenderer.invoke('open:external', url),
+  file: {
+    exists: (base: string, raw: string): Promise<boolean> =>
+      ipcRenderer.invoke('path:exists', { base, raw }),
+    open: (base: string, raw: string): Promise<boolean> =>
+      ipcRenderer.invoke('path:open', { base, raw })
+  },
   update: {
     check: (): Promise<UpdateInfo | null> => ipcRenderer.invoke('update:check')
   },

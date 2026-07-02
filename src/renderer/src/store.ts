@@ -57,6 +57,8 @@ export interface AgentInstance {
   branch?: string | null
   cwd?: string
   status?: AgentStatus
+  /** When the current working burst started — drives the header's elapsed timer. */
+  workingSince?: number
   /** False when an isolated terminal silently fell back to the shared dir. */
   isolated?: boolean
   /** While this card is the one being dragged: the slot it will drop into. */
