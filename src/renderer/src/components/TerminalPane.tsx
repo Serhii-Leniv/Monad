@@ -7,7 +7,7 @@ import { SearchAddon } from '@xterm/addon-search'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { useStore, displayBranch, RAIL_INSET, PAD, type AgentInstance, type AgentStatus } from '../store'
-import { terminals, quotePaths } from '../terminalRegistry'
+import { terminals, quotePaths, pasteIntoTerminal } from '../terminalRegistry'
 import { needsAttention, clampTail } from '../attention'
 import { playCue, type Cue } from '../sound'
 import { IconClose } from './Icons'
@@ -109,32 +109,10 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     shared?: boolean
   } | null>(null)
 
-  // Read the clipboard and hand it to xterm — shared by Ctrl/Cmd-V and the
-  // context-menu Paste. We read via the main process (window.api.clipboard),
-  // not navigator.clipboard.readText(), which rejects intermittently in Electron
-  // when the window isn't focused and made paste silently no-op. term.paste()
-  // (rather than a raw pty.write) applies bracketed-paste and \r\n cleanup so
-  // TUIs and agents receive the text correctly.
+  // Ctrl/⌘-V and the context-menu Paste both route through the shared paste
+  // routine (see terminalRegistry.pasteIntoTerminal).
   const pasteFromClipboard = async (): Promise<void> => {
-    try {
-      const t = await window.api.clipboard.read()
-      if (t) {
-        termRef.current?.paste(t)
-        return
-      }
-      // No text. Copied files paste as quoted paths, like any terminal.
-      const files = await window.api.clipboard.readFiles()
-      if (files.length) {
-        termRef.current?.paste(quotePaths(files))
-        return
-      }
-      // A screenshot: a pty can't carry pixels, so forward the raw Ctrl+V
-      // byte — TUIs that read the OS clipboard themselves (Claude Code image
-      // paste) get their keystroke and pick the image up.
-      if (await window.api.clipboard.hasImage()) termRef.current?.input('\x16', true)
-    } catch {
-      /* clipboard unavailable — nothing to paste */
-    }
+    if (termRef.current) await pasteIntoTerminal(termRef.current)
   }
 
   useEffect(() => {
