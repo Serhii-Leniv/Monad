@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useStore, MAX_AGENTS } from '../store'
-import { openProjectInteractive, openProjectByPath } from '../openProject'
+import { openProjectInteractive, openProjectByPath, closeCurrentProject } from '../openProject'
+import { modLabel } from '../shortcuts'
 
 interface Cmd {
   id: string
@@ -18,7 +19,6 @@ export default function CommandPalette(): JSX.Element {
   const requestClose = useStore((s) => s.requestClose)
   const reopenLast = useStore((s) => s.reopenLast)
   const lastClosed = useStore((s) => s.lastClosed)
-  const closeProject = useStore((s) => s.closeProject)
   const focusTerminal = useStore((s) => s.focusTerminal)
   const shells = useStore((s) => s.shells)
   const agentClis = useStore((s) => s.agentClis)
@@ -41,7 +41,7 @@ export default function CommandPalette(): JSX.Element {
     const full = agents.length >= MAX_AGENTS
     if (projectPath) {
       if (!full) {
-        list.push({ id: 'new', title: 'New terminal', hint: '⌘T', run: () => addAgent() })
+        list.push({ id: 'new', title: 'New terminal', hint: modLabel('T'), run: () => addAgent() })
         agentClis.forEach((a) =>
           list.push({ id: 'agent-' + a.id, title: `Start ${a.label}`, run: () => addAgent({ command: a.command, agentLabel: a.label, agentId: a.id }) })
         )
@@ -52,16 +52,16 @@ export default function CommandPalette(): JSX.Element {
           list.push({ id: 'reopen', title: `Reopen closed terminal · ${lastClosed.label}`, run: reopenLast })
         }
       }
-      list.push({ id: 'grid', title: 'Layout: Grid', hint: '⌘1', run: () => setLayoutMode('grid') })
-      list.push({ id: 'cols', title: 'Layout: Columns', hint: '⌘2', run: () => setLayoutMode('columns') })
+      list.push({ id: 'grid', title: 'Layout: Grid', hint: modLabel('1'), run: () => setLayoutMode('grid') })
+      list.push({ id: 'cols', title: 'Layout: Columns', hint: modLabel('2'), run: () => setLayoutMode('columns') })
       const sel = selectedIds[0]
       if (sel) {
         const selAgent = agents.find((a) => a.id === sel)
         if (selAgent?.isolation === 'worktree') {
           list.push({ id: 'review', title: 'Review changes & merge…', run: () => setDiffAgentId(sel) })
         }
-        list.push({ id: 'focus', title: 'Focus selected terminal', run: () => focusTerminal(sel) })
-        list.push({ id: 'close', title: 'Close selected terminal', hint: '⌘W', run: () => requestClose(sel) })
+        list.push({ id: 'focus', title: 'Maximize terminal', run: () => focusTerminal(sel) })
+        list.push({ id: 'close', title: 'Close selected terminal', hint: modLabel('W'), run: () => requestClose(sel) })
       }
     }
     list.push({ id: 'open', title: 'Open project…', run: openProjectInteractive })
@@ -71,11 +71,11 @@ export default function CommandPalette(): JSX.Element {
         list.push({ id: 'switch-' + w.path, title: `Switch to ${w.name}`, run: () => void openProjectByPath(w) })
       )
     if (projectPath) {
-      list.push({ id: 'close-project', title: 'Close project', run: closeProject })
+      list.push({ id: 'close-project', title: 'Close project', run: closeCurrentProject })
     }
     list.push({ id: 'settings', title: 'Settings', run: () => setSettingsOpen(true) })
     return list
-  }, [projectPath, shells, agentClis, workspaces, selectedIds, agents, lastClosed, addAgent, setLayoutMode, focusTerminal, requestClose, reopenLast, closeProject, setSettingsOpen, setDiffAgentId])
+  }, [projectPath, shells, agentClis, workspaces, selectedIds, agents, lastClosed, addAgent, setLayoutMode, focusTerminal, requestClose, reopenLast, setSettingsOpen, setDiffAgentId])
 
   const q = query.trim().toLowerCase()
   const items = useMemo<Cmd[]>(() => {

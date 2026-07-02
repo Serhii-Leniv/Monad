@@ -8,9 +8,50 @@ import { useStore } from './store'
  */
 export const terminals = new Map<string, Terminal>()
 
+/**
+ * Hand keyboard focus back to the active terminal (the maximized one, else the
+ * sole selected one). Called after an overlay closes or a click lands off a pane,
+ * so typing never dead-ends on `<body>` when no selection *transition* occurred
+ * to trigger TerminalPane's own focus effect.
+ */
+export function focusActiveTerminal(): void {
+  const st = useStore.getState()
+  const id = st.focusedId ?? st.selectedIds[0]
+  if (id) terminals.get(id)?.focus()
+}
+
 /** Paths → one shell-ready string: quoted when they contain tricky chars. */
 export function quotePaths(paths: string[]): string {
   return paths.map((p) => (/[\s"'`$&;()[\]{}]/.test(p) ? `"${p}"` : p)).join(' ')
+}
+
+/**
+ * Paste the OS clipboard into a terminal — the single source of truth for every
+ * paste path (xterm Ctrl/⌘+V, context menu, mac Edit menu, the app-level Windows
+ * fallback). Reads via the main process (window.api.clipboard) because
+ * navigator.clipboard.readText() rejects intermittently in Electron when the
+ * window isn't focused, which made paste silently no-op. term.paste() applies
+ * bracketed-paste + \r\n cleanup so TUIs/agents receive the text correctly.
+ */
+export async function pasteIntoTerminal(term: Terminal): Promise<void> {
+  try {
+    const t = await window.api.clipboard.read()
+    if (t) {
+      term.paste(t)
+      return
+    }
+    // No text — copied files paste as quoted paths, like any terminal.
+    const files = await window.api.clipboard.readFiles()
+    if (files.length) {
+      term.paste(quotePaths(files))
+      return
+    }
+    // A screenshot: a pty can't carry pixels, so forward the raw Ctrl+V byte so
+    // TUIs that read the OS clipboard themselves (Claude Code image paste) get it.
+    if (await window.api.clipboard.hasImage()) term.input('\x16', true)
+  } catch {
+    /* clipboard unavailable — nothing to paste */
+  }
 }
 
 /**
@@ -28,16 +69,7 @@ export async function handleMenuEdit(action: 'copy' | 'paste' | 'selectAll'): Pr
     if (action === 'copy') {
       if (term.hasSelection()) window.api.clipboard.write(term.getSelection())
     } else if (action === 'paste') {
-      const t = await window.api.clipboard.read()
-      if (t) term.paste(t)
-      else {
-        // No text: copied files paste as quoted paths (like any terminal);
-        // an image-only clipboard forwards the raw Ctrl+V byte so TUIs that
-        // read the OS clipboard themselves (Claude Code) handle it.
-        const files = await window.api.clipboard.readFiles()
-        if (files.length) term.paste(quotePaths(files))
-        else if (await window.api.clipboard.hasImage()) term.input('\x16', true)
-      }
+      await pasteIntoTerminal(term)
       term.focus()
     } else {
       term.selectAll()
