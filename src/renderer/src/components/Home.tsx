@@ -53,10 +53,11 @@ export default function Home(): JSX.Element {
         <div className="home__recents">
           <div className="home__recents-head">Recent projects</div>
           <div className="home__grid">
-            {workspaces.map((w) => (
+            {workspaces.map((w, i) => (
               <button
                 key={w.path}
                 className="home__card"
+                style={{ animationDelay: `${120 + i * 55}ms` }}
                 onClick={() => void openProjectByPath(w)}
                 title={w.path}
               >

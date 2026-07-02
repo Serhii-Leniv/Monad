@@ -14,6 +14,9 @@ export interface Toast {
   id: string
   text: string
   kind: 'info' | 'success' | 'error'
+  /** Optional action button (e.g. "Download"); a toast with one never auto-dismisses. */
+  actionLabel?: string
+  onAction?: () => void
 }
 
 /** Hard cap — more than this on one canvas is unreadable. */
@@ -54,6 +57,8 @@ export interface AgentInstance {
   branch?: string | null
   cwd?: string
   status?: AgentStatus
+  /** When the current working burst started — drives the header's elapsed timer. */
+  workingSince?: number
   /** False when an isolated terminal silently fell back to the shared dir. */
   isolated?: boolean
   /** While this card is the one being dragged: the slot it will drop into. */
@@ -108,6 +113,8 @@ interface AppState {
     agentId?: string
   } | null
   selectedIds: string[]
+  /** Agents mid close-animation — still rendered, removed for real once it ends. */
+  closingIds: string[]
   draggingId: string | null
   panX: number
   panY: number
@@ -121,7 +128,6 @@ interface AppState {
    *  matching TerminalPane picks this up and runs its guarded close flow. */
   pendingCloseId: string | null
   focusedId: string | null
-  prevView: { panX: number; panY: number; zoom: number } | null
   toasts: Toast[]
 
   openProject: (ref: ProjectRef, saved: PersistedCanvas | null, git: GitInfo) => void
@@ -137,7 +143,6 @@ interface AppState {
   setDiffAgentId: (id: string | null) => void
   requestClose: (id: string) => void
   clearPendingClose: () => void
-  setView: (panX: number, panY: number, zoom: number) => void
   addAgent: (opts?: {
     command?: string
     shellId?: string
@@ -155,7 +160,7 @@ interface AppState {
   clearFocus: () => void
   setAgentRuntime: (id: string, rt: Partial<AgentInstance>) => void
   setStatus: (id: string, status: AgentStatus) => void
-  pushToast: (text: string, kind?: Toast['kind']) => void
+  pushToast: (text: string, kind?: Toast['kind'], action?: Pick<Toast, 'actionLabel' | 'onAction'>) => void
   dismissToast: (id: string) => void
 }
 
@@ -171,6 +176,8 @@ export interface AppSettings {
   fontSize: number
   fontFamily: string
   scrollback: number
+  /** Selecting text with the mouse copies it immediately (iTerm-style). */
+  copyOnSelect: boolean
   confirmClose: boolean
   zoomFactor: number
   /** Accent colour (hex) — drives the whole UI palette. */
@@ -179,6 +186,8 @@ export interface AppSettings {
   notifications: boolean
   /** Also notify when a long-running agent finishes a task (working → idle). */
   notifyOnDone: boolean
+  /** Soft chime when an agent needs you / finishes / errors. */
+  sounds: boolean
   /** Absolute path to a background image, or null for the default dark scene. */
   wallpaper: string | null
   /** Terminal background opacity 0.4–1 (lower reveals the wallpaper behind). */
@@ -201,11 +210,13 @@ const DEFAULT_SETTINGS: AppSettings = {
   fontSize: 14,
   fontFamily: 'Cascadia Code, Consolas, monospace',
   scrollback: 2000,
+  copyOnSelect: true,
   confirmClose: true,
   zoomFactor: 1.1,
   accent: '#ff453a',
   notifications: true,
   notifyOnDone: true,
+  sounds: false,
   wallpaper: null,
   terminalOpacity: 0.55
 }
@@ -237,9 +248,9 @@ function uuid(): string {
 }
 
 const GAP = 12
-const RAIL_INSET = 84 // room for the floating dock on the left (max adaptive width)
-const PAD = 14
-const BOTTOM_INSET = 80 // room for the floating broadcast bar at the bottom (max adaptive height)
+export const RAIL_INSET = 84 // room for the floating dock on the left (max adaptive width)
+export const PAD = 14
+const BOTTOM_INSET = 14 // bottom margin for the tiled panes (symmetric with the top PAD)
 
 /**
  * Tile every terminal into the viewport at **zoom 1** (font stays fixed). Array
@@ -266,16 +277,18 @@ function laidOut(
   const perRow: number[] = []
   for (let r = 0; r < rows; r++) perRow.push(base + (r < extra ? 1 : 0))
 
-  const ch = (availH - GAP * (rows - 1)) / rows
+  // Integer pixel geometry: fractional tile coords put the terminal between
+  // device pixels and the compositor resamples it — text and borders go soft.
+  const ch = Math.round((availH - GAP * (rows - 1)) / rows)
   const out: AgentInstance[] = []
   let i = 0
   for (let r = 0; r < rows; r++) {
     const cols = perRow[r]
-    const cw = (availW - GAP * (cols - 1)) / cols
+    const cw = Math.round((availW - GAP * (cols - 1)) / cols)
     for (let c = 0; c < cols; c++) {
       const a = agents[i++]
-      const x = RAIL_INSET + c * (cw + GAP)
-      const y = PAD + r * (ch + GAP)
+      const x = Math.round(RAIL_INSET + c * (cw + GAP))
+      const y = Math.round(PAD + r * (ch + GAP))
       // The dragged card keeps its position constant so React never fights
       // Moveable for its transform — it follows the cursor; its slot stays an
       // empty gap that the other cards reflow around. We stash that slot in
@@ -344,7 +357,7 @@ export function toPersisted(agents: AgentInstance[]): PersistedAgent[] {
   }))
 }
 
-export const useStore = create<AppState>((set) => ({
+export const useStore = create<AppState>((set, get) => ({
   projectPath: null,
   projectName: null,
   isGit: false,
@@ -360,6 +373,7 @@ export const useStore = create<AppState>((set) => ({
   agentClisLoaded: false,
   lastClosed: null,
   selectedIds: [],
+  closingIds: [],
   draggingId: null,
   settings: loadSettings(),
   settingsOpen: false,
@@ -367,7 +381,6 @@ export const useStore = create<AppState>((set) => ({
   diffAgentId: null,
   pendingCloseId: null,
   focusedId: null,
-  prevView: null,
   toasts: [],
   panX: 0,
   panY: 0,
@@ -388,9 +401,9 @@ export const useStore = create<AppState>((set) => ({
         projectName: ref.name,
         isGit: git.isGit,
         baseBranch: git.branch,
-        selectedIds: [],
+        // Start with the first terminal active so you can type immediately.
+        selectedIds: loaded[0] ? [loaded[0].id] : [],
         focusedId: null,
-        prevView: null,
         layoutMode: mode,
         agents: laidOut(loaded, mode, s.canvasW, s.canvasH),
         panX: 0,
@@ -435,7 +448,17 @@ export const useStore = create<AppState>((set) => ({
 
   setAgentClis: (agentClis) => set({ agentClis, agentClisLoaded: true }),
 
-  setSelected: (ids) => set({ selectedIds: ids }),
+  setSelected: (ids) =>
+    set((s) => {
+      // Invariant: while any terminal exists, one is always selected (and so
+      // keyboard-focused). Clicking empty canvas / rubber-banding nothing must
+      // never leave the canvas with no active terminal to type into — keep the
+      // current selection, or fall back to the first terminal.
+      if (ids.length === 0 && s.agents.length > 0) {
+        return s.selectedIds.length > 0 ? {} : { selectedIds: [s.agents[0].id] }
+      }
+      return { selectedIds: ids }
+    }),
 
   setSetting: (key, value) =>
     set((s) => {
@@ -455,7 +478,6 @@ export const useStore = create<AppState>((set) => ({
   requestClose: (id) => set({ pendingCloseId: id }),
   clearPendingClose: () => set({ pendingCloseId: null }),
 
-  setView: (panX, panY, zoom) => set({ panX, panY, zoom }),
 
   addAgent: (opts) =>
     set((s) => {
@@ -486,34 +508,51 @@ export const useStore = create<AppState>((set) => ({
       }
     }),
 
-  removeAgent: (id, opts) =>
-    set((s) => {
-      const agent = s.agents.find((a) => a.id === id)
-      // keepWorktree leaves the branch + worktree on disk (recoverable work).
-      if (!opts?.keepWorktree && agent?.isolation === 'worktree' && s.projectPath) {
-        void window.api.worktree.remove(s.projectPath, id)
-      }
-      const rest = s.agents.filter((a) => a.id !== id)
-      return {
-        agents: laidOut(rest, s.layoutMode, s.canvasW, s.canvasH),
-        selectedIds: s.selectedIds.filter((sid) => sid !== id),
-        focusedId: s.focusedId === id ? null : s.focusedId,
-        pendingCloseId: s.pendingCloseId === id ? null : s.pendingCloseId,
-        lastClosed: agent
-          ? {
-              label: agent.label,
-              shellId: agent.shellId,
-              isolation: agent.isolation,
-              startupCommand: agent.startupCommand,
-              agentLabel: agent.agentLabel,
-              agentId: agent.agentId
-            }
-          : s.lastClosed,
-        panX: 0,
-        panY: 0,
-        zoom: 1
-      }
-    }),
+  removeAgent: (id, opts) => {
+    // Two-phase: flag the pane so it plays its collapse animation, then do the
+    // real removal (and worktree cleanup) once that's had time to finish. Guard
+    // against double-calls so a second close can't double-remove the worktree.
+    const st = get()
+    if (st.closingIds.includes(id) || !st.agents.some((a) => a.id === id)) return
+    set({ closingIds: [...st.closingIds, id] })
+    setTimeout(() => {
+      set((s) => {
+        const agent = s.agents.find((a) => a.id === id)
+        const closingIds = s.closingIds.filter((c) => c !== id)
+        if (!agent) return { closingIds }
+        // keepWorktree leaves the branch + worktree on disk (recoverable work).
+        if (!opts?.keepWorktree && agent.isolation === 'worktree' && s.projectPath) {
+          void window.api.worktree.remove(s.projectPath, id)
+        }
+        const rest = s.agents.filter((a) => a.id !== id)
+        let selectedIds = s.selectedIds.filter((sid) => sid !== id)
+        // Closing the active terminal shouldn't leave the canvas inert — hand
+        // selection (and thus keyboard focus) to the nearest surviving neighbour.
+        if (selectedIds.length === 0 && rest.length > 0) {
+          const idx = s.agents.findIndex((a) => a.id === id)
+          selectedIds = [rest[Math.min(idx, rest.length - 1)].id]
+        }
+        return {
+          agents: laidOut(rest, s.layoutMode, s.canvasW, s.canvasH),
+          selectedIds,
+          closingIds,
+          focusedId: s.focusedId === id ? null : s.focusedId,
+          pendingCloseId: s.pendingCloseId === id ? null : s.pendingCloseId,
+          lastClosed: {
+            label: agent.label,
+            shellId: agent.shellId,
+            isolation: agent.isolation,
+            startupCommand: agent.startupCommand,
+            agentLabel: agent.agentLabel,
+            agentId: agent.agentId
+          },
+          panX: 0,
+          panY: 0,
+          zoom: 1
+        }
+      })
+    }, 180)
+  },
 
   reopenLast: () =>
     set((s) => {
@@ -554,7 +593,6 @@ export const useStore = create<AppState>((set) => ({
     set((s) => ({
       layoutMode: mode,
       focusedId: null,
-      prevView: null,
       agents: laidOut(s.agents, mode, s.canvasW, s.canvasH),
       panX: 0,
       panY: 0,
@@ -589,30 +627,15 @@ export const useStore = create<AppState>((set) => ({
       zoom: 1
     })),
 
-  // Camera focus: frame a single terminal to fill the viewport; restore on exit.
+  // Focus: the pane expands to fill the viewport (tmux-style zoom) rather than
+  // scaling the camera. A CSS scale() breaks xterm's mouse math — its cell
+  // hit-testing doesn't compensate for transforms, so selection landed on the
+  // wrong characters — and scaled glyphs blur. Maximizing refits the terminal
+  // instead: crisp text, MORE rows/cols, and pixel-perfect selection.
   focusTerminal: (id) =>
-    set((s) => {
-      const a = s.agents.find((x) => x.id === id)
-      if (!a) return s
-      const availW = s.canvasW - RAIL_INSET - PAD
-      const availH = s.canvasH - PAD * 2
-      const zoom = Math.min(availW / a.w, availH / a.h, 1.6)
-      return {
-        focusedId: id,
-        prevView: { panX: s.panX, panY: s.panY, zoom: s.zoom },
-        selectedIds: [id],
-        zoom,
-        panX: RAIL_INSET + (availW - a.w * zoom) / 2 - a.x * zoom,
-        panY: PAD + (availH - a.h * zoom) / 2 - a.y * zoom
-      }
-    }),
+    set((s) => (s.agents.some((x) => x.id === id) ? { focusedId: id, selectedIds: [id] } : s)),
 
-  clearFocus: () =>
-    set((s) =>
-      s.prevView
-        ? { focusedId: null, prevView: null, ...s.prevView }
-        : { focusedId: null, prevView: null }
-    ),
+  clearFocus: () => set({ focusedId: null }),
 
   setAgentRuntime: (id, rt) =>
     set((s) => ({ agents: s.agents.map((a) => (a.id === id ? { ...a, ...rt } : a)) })),
@@ -620,8 +643,8 @@ export const useStore = create<AppState>((set) => ({
   setStatus: (id, status) =>
     set((s) => ({ agents: s.agents.map((a) => (a.id === id ? { ...a, status } : a)) })),
 
-  pushToast: (text, kind = 'info') =>
-    set((s) => ({ toasts: [...s.toasts, { id: uuid(), text, kind }] })),
+  pushToast: (text, kind = 'info', action) =>
+    set((s) => ({ toasts: [...s.toasts, { id: uuid(), text, kind, ...action }] })),
 
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }))
 }))

@@ -1,11 +1,13 @@
-# Agent Canvas
+# Vectro
 
-An infinite canvas for running and steering multiple AI coding agents in parallel.
-Each agent is a draggable live-terminal card, isolated in its own git worktree + branch,
-with in-app diff/merge. Bring-your-own CLIs (Claude Code, Codex, Gemini, Cursor) — the app
-just spawns the agents you already have installed, so there's no inference cost.
+A canvas for running and steering multiple AI coding agents in parallel.
+Each agent is a live-terminal card on an auto-tiling stage, isolated in its own
+git worktree + branch, with in-app diff/merge. Bring-your-own CLIs (Claude Code,
+Codex, Gemini, Cursor) — the app just spawns the agents you already have
+installed, so there's no inference cost.
 
 > Original product. Built from scratch; not affiliated with or derived from any other app.
+> Download: https://serhii-leniv.github.io/vectro-site
 
 ## Requirements
 
@@ -37,12 +39,14 @@ its work.
 src/
   main/        Electron main process
     index.ts       window + production CSP
-    ipc.ts         all IPC handlers (pty / project / git / worktree / diff-merge)
+    ipc.ts         all IPC handlers (pty / project / git / worktree / diff-merge / update)
     pty-manager.ts node-pty session manager
     git.ts         git + worktree + diff/merge (shells out to `git`)
-  preload/     contextBridge API (window.api.{pty,project,git,worktree,platform})
-  renderer/    React + @xyflow/react canvas
-    components/  Stage (canvas), TerminalPane, Rail, CommandPalette, DiffPanel, Settings
+    update.ts      newer-release check against the vectro-site release feed
+  preload/     contextBridge API (window.api.{pty,project,git,worktree,update,platform})
+  renderer/    React + zustand; xterm.js terminals on an auto-tiling stage
+               (react-moveable drag-to-reorder + react-selecto marquee selection)
+    components/  Stage, TerminalPane, Rail, CommandPalette, DiffPanel, Settings
     store.ts     Zustand state
 ```
 
@@ -51,19 +55,30 @@ src/
   `.agent-canvas-worktrees/` folder. Agents are cwd-pinned via `Set-Location` after spawn so a
   shell profile can't move them out of their worktree.
 - **Persistence:** one canvas per project in `<project>/.agent-canvas/canvas.json`.
+- **Updates:** on launch the main process checks the
+  [vectro-site](https://github.com/Serhii-Leniv/vectro-site) release feed and, on a newer
+  version, shows an in-app toast linking to the download site. No auto-download, no
+  background service, no telemetry.
 
 ## Tests
 
-Integration smoke tests drive the real built bundles + IPC under Electron:
+Integration smoke tests drive the real built bundles + IPC under Electron
+(run in CI on every push — see `.github/workflows/ci.yml`):
 
 ```bash
+npm run typecheck
 npm run smoke:pty   # PTY loads under Electron ABI + shell echo
 npm run smoke:p1    # preload bridge, project save/load, renderer PTY
 npm run smoke:p2    # git detect, worktree isolation, pty fan-out, teardown
 npm run smoke:p3    # diff sees changes, merge lands work on base branch
 ```
 
-## Deferred (Phase 4)
+## Releasing
 
-Productization — original branding/name, Stripe subscription + license validation,
-auto-update, and signed cross-platform packaging.
+See [`RELEASING.md`](RELEASING.md) — tag `v*` builds installers and publishes them
+as a GitHub Release on the public `vectro-site` repo.
+
+## Deferred
+
+Signed packaging (paid certs), full in-place auto-update (`electron-updater`),
+Stripe subscription + license validation.

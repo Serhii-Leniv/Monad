@@ -1,23 +1,83 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore, displayBranch } from '../store'
+import { celebrate } from '../celebrate'
 import { IconClose } from './Icons'
 
+type FileStatus = 'added' | 'deleted' | 'renamed' | 'modified'
+
+interface FileGroup {
+  path: string
+  status: FileStatus
+  adds: number
+  dels: number
+  /** Hunk + content lines only — git's index/mode/+++/--- plumbing is stripped. */
+  lines: string[]
+}
+
 function lineClass(l: string): string {
-  if (
-    l.startsWith('diff --git') ||
-    l.startsWith('index ') ||
-    l.startsWith('--- ') ||
-    l.startsWith('+++ ') ||
-    l.startsWith('new file') ||
-    l.startsWith('deleted file') ||
-    l.startsWith('rename ') ||
-    l.startsWith('similarity ')
-  )
-    return 'diff__line diff__line--meta'
   if (l.startsWith('@@')) return 'diff__line diff__line--hunk'
   if (l.startsWith('+')) return 'diff__line diff__line--add'
   if (l.startsWith('-')) return 'diff__line diff__line--del'
   return 'diff__line'
+}
+
+/** One-letter status badge → its tone. */
+const STATUS_META: Record<FileStatus, { glyph: string; cls: string; title: string }> = {
+  added: { glyph: 'A', cls: 'review__fstat--add', title: 'Added' },
+  deleted: { glyph: 'D', cls: 'review__fstat--del', title: 'Deleted' },
+  renamed: { glyph: 'R', cls: 'review__fstat--ren', title: 'Renamed' },
+  modified: { glyph: 'M', cls: 'review__fstat--mod', title: 'Modified' }
+}
+
+/**
+ * Split a unified diff into per-file groups with +/- tallies, dropping git's
+ * plumbing lines (index/mode/---/+++) so the body reads like a clean review
+ * instead of a raw patch dump.
+ */
+function parseDiff(text: string): FileGroup[] {
+  const groups: FileGroup[] = []
+  let cur: FileGroup | null = null
+  for (const raw of text.split('\n')) {
+    if (raw.startsWith('diff --git')) {
+      if (cur) groups.push(cur)
+      const m = raw.match(/ b\/(.+)$/)
+      cur = {
+        path: m ? m[1] : raw.replace(/^diff --git /, ''),
+        status: 'modified',
+        adds: 0,
+        dels: 0,
+        lines: []
+      }
+      continue
+    }
+    if (!cur) continue
+    if (raw.startsWith('new file')) {
+      cur.status = 'added'
+      continue
+    }
+    if (raw.startsWith('deleted file')) {
+      cur.status = 'deleted'
+      continue
+    }
+    if (raw.startsWith('rename ')) cur.status = 'renamed'
+    // Drop git's plumbing — the file header already conveys all of it.
+    if (
+      raw.startsWith('index ') ||
+      raw.startsWith('--- ') ||
+      raw.startsWith('+++ ') ||
+      raw.startsWith('old mode') ||
+      raw.startsWith('new mode') ||
+      raw.startsWith('similarity ') ||
+      raw.startsWith('rename ') ||
+      raw.startsWith('\\ No newline')
+    )
+      continue
+    if (raw.startsWith('+')) cur.adds++
+    else if (raw.startsWith('-')) cur.dels++
+    cur.lines.push(raw)
+  }
+  if (cur) groups.push(cur)
+  return groups
 }
 
 /** Review one agent's worktree changes, then merge into the base branch or discard. */
@@ -52,7 +112,13 @@ export default function DiffPanel(): JSX.Element {
 
   useEffect(load, [id, projectPath])
 
-  const lines = useMemo(() => (diff?.diff ? diff.diff.split('\n') : []), [diff])
+  const groups = useMemo(() => (diff?.diff ? parseDiff(diff.diff) : []), [diff])
+  const totals = useMemo(() => {
+    const adds = groups.reduce((n, g) => n + g.adds, 0)
+    const dels = groups.reduce((n, g) => n + g.dels, 0)
+    const files = groups.length + (diff?.untracked.length ?? 0)
+    return { adds, dels, files }
+  }, [groups, diff])
   const hasChanges = !!diff && (diff.hasChanges || diff.untracked.length > 0)
 
   const doMerge = async (): Promise<void> => {
@@ -63,19 +129,27 @@ export default function DiffPanel(): JSX.Element {
     setBusy(false)
     if (r.ok) {
       setMerged(true)
+      celebrate()
       pushToast(`Merged “${label}” into ${baseBranch || 'base'}`, 'success')
     } else setError(r.error || 'Merge failed')
   }
 
+  // Two-step destructive confirm, in place of a native window.confirm: the
+  // first click arms the button ("Really discard?"), a second within 3s acts.
+  const [confirmDiscard, setConfirmDiscard] = useState(false)
+  const discardTimer = useRef<number>()
+  useEffect(() => () => window.clearTimeout(discardTimer.current), [])
   const doDiscard = (): void => {
-    const ok = window.confirm(
-      `Discard “${label}”? Its branch and worktree will be deleted — committed and uncommitted work on it is lost.`
-    )
-    if (ok) {
-      removeAgent(id)
-      pushToast(`Discarded “${label}”`, 'info')
-      close()
+    if (!confirmDiscard) {
+      setConfirmDiscard(true)
+      window.clearTimeout(discardTimer.current)
+      discardTimer.current = window.setTimeout(() => setConfirmDiscard(false), 3000)
+      return
     }
+    window.clearTimeout(discardTimer.current)
+    removeAgent(id)
+    pushToast(`Discarded “${label}”`, 'info')
+    close()
   }
 
   return (
@@ -94,6 +168,15 @@ export default function DiffPanel(): JSX.Element {
               </span>
             )}
           </div>
+          {!loading && !merged && hasChanges && (
+            <div className="review__summary" title={`${totals.files} file${totals.files === 1 ? '' : 's'} changed`}>
+              <span className="review__sum-files">
+                {totals.files} {totals.files === 1 ? 'file' : 'files'}
+              </span>
+              {totals.adds > 0 && <span className="review__sum-add">+{totals.adds}</span>}
+              {totals.dels > 0 && <span className="review__sum-del">−{totals.dels}</span>}
+            </div>
+          )}
           <button className="settings__close" onClick={close} title="Close">
             <IconClose size={16} />
           </button>
@@ -107,21 +190,53 @@ export default function DiffPanel(): JSX.Element {
               ✓ Merged into {baseBranch || 'the base branch'}.
             </div>
           ) : !hasChanges ? (
-            <div className="review__empty">No changes on this branch yet.</div>
+            <div className="review__empty">
+              {diff?.error ? diff.error : 'No changes on this branch yet.'}
+            </div>
           ) : (
             <>
+              {diff!.error && <div className="review__note">{diff!.error}</div>}
+              {diff!.untracked.length > 0 && (
+                <div className="review__file review__file--untracked">
+                  <span className="review__fstat review__fstat--add" title="New file">
+                    A
+                  </span>
+                  <span className="review__fname">
+                    {diff!.untracked.length} new {diff!.untracked.length === 1 ? 'file' : 'files'}
+                  </span>
+                </div>
+              )}
               {diff!.untracked.length > 0 && (
                 <div className="review__untracked">
                   {diff!.untracked.map((f) => (
                     <div key={f} className="diff__line diff__line--new">
-                      + {f} <span className="diff__tag">(new file)</span>
+                      + {f}
                     </div>
                   ))}
                 </div>
               )}
-              {lines.map((l, i) => (
-                <div key={i} className={lineClass(l)}>
-                  {l || ' '}
+              {groups.map((g, gi) => (
+                <div key={g.path + gi} className="review__group">
+                  <div className="review__file">
+                    <span
+                      className={'review__fstat ' + STATUS_META[g.status].cls}
+                      title={STATUS_META[g.status].title}
+                    >
+                      {STATUS_META[g.status].glyph}
+                    </span>
+                    <span className="review__fname" title={g.path}>
+                      {g.path}
+                    </span>
+                    <span className="review__fcount">
+                      {g.adds > 0 && <span className="review__sum-add">+{g.adds}</span>}
+                      {g.dels > 0 && <span className="review__sum-del">−{g.dels}</span>}
+                    </span>
+                  </div>
+                  {g.lines.map((l, i) => (
+                    <div key={i} className={lineClass(l)}>
+                      {l || ' '}
+                    </div>
+                  ))}
                 </div>
               ))}
             </>
@@ -156,8 +271,13 @@ export default function DiffPanel(): JSX.Element {
                 onChange={(e) => setMessage(e.target.value)}
                 disabled={busy || !hasChanges}
               />
-              <button className="review__btn review__btn--discard" onClick={doDiscard} disabled={busy}>
-                Discard
+              <button
+                className={'review__btn review__btn--discard' + (confirmDiscard ? ' is-armed' : '')}
+                title="Deletes this branch and worktree — committed and uncommitted work on it is lost"
+                onClick={doDiscard}
+                disabled={busy}
+              >
+                {confirmDiscard ? 'Really discard?' : 'Discard'}
               </button>
               <button
                 className="review__btn review__btn--merge"

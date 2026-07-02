@@ -3,6 +3,7 @@ import Moveable from 'react-moveable'
 import Selecto from 'react-selecto'
 import TerminalPane from './TerminalPane'
 import { useStore } from '../store'
+import { terminals } from '../terminalRegistry'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -18,6 +19,7 @@ export default function Stage(): JSX.Element {
   const panX = useStore((s) => s.panX)
   const panY = useStore((s) => s.panY)
   const zoom = useStore((s) => s.zoom)
+  const focusedId = useStore((s) => s.focusedId)
 
   const stageRef = useRef<HTMLDivElement>(null)
   const moveableRef = useRef<Moveable>(null)
@@ -84,8 +86,10 @@ export default function Stage(): JSX.Element {
     return best
   }
 
+  // No drag while a pane is maximized — Moveable's inline transform would fight
+  // the focus geometry, and reordering makes no sense with one pane on screen.
   const dragTarget =
-    targets.length === 1
+    targets.length === 1 && !focusedId
       ? (targets[0].querySelector('.vec-pane__header') as HTMLElement) ?? undefined
       : undefined
 
@@ -189,7 +193,15 @@ export default function Stage(): JSX.Element {
           setSelected((e.selected as HTMLElement[]).map((el) => el.dataset.id!).filter(Boolean))
         }
         onSelectEnd={(e: any) => {
-          setSelected((e.selected as HTMLElement[]).map((el) => el.dataset.id!).filter(Boolean))
+          const ids = (e.selected as HTMLElement[]).map((el) => el.dataset.id!).filter(Boolean)
+          setSelected(ids)
+          // Clicked/rubber-banded empty canvas (nothing hit): the store keeps the
+          // current selection — hand keyboard focus back to that active terminal
+          // so typing never dead-ends after a stray click on the background.
+          if (ids.length === 0) {
+            const cur = useStore.getState().selectedIds[0]
+            if (cur) terminals.get(cur)?.focus()
+          }
           if (e.isDragStart) {
             e.inputEvent.preventDefault()
             moveableRef.current?.waitToChangeTarget().then(() => {
