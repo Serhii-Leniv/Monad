@@ -1,0 +1,36 @@
+name: CI
+
+# Validation on every push/PR: typecheck + the Electron integration smoke tests.
+# (build.yml only packages installers on tags — it runs no checks at all.)
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  validate:
+    name: Typecheck + smoke tests
+    # windows-latest: a platform we actually ship, real Electron windows work
+    # without xvfb, and the smoke scripts' win32 paths (powershell.exe) match.
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # phase2/3 smokes commit in throwaway repos; git needs an identity.
+      - name: Configure git identity
+        run: |
+          git config --global user.name "vectro-ci"
+          git config --global user.email "ci@vectro.invalid"
+      # .npmrc pins runtime=electron target=29.4.6 so the right prebuilt
+      # node-pty binary is fetched for this runner's OS/arch.
+      - run: npm ci
+      - run: npm run typecheck
+      # The phase smokes drive the REAL built bundles (out/) + IPC.
+      - run: npm run build
+      - run: npm run smoke:pty
+      - run: npm run smoke:p1
+      - run: npm run smoke:p2
+      - run: npm run smoke:p3
