@@ -37,98 +37,100 @@ export default function Rail(): JSX.Element {
   }
 
   return (
-    <div className="rail">
-      <div className="rail__logo" title="Vectro">
-        <Logo size={34} />
-      </div>
+    <div className="rail-dock">
+      <div className="rail">
+        <div className="rail__logo" title="Vectro">
+          <Logo size={34} />
+        </div>
 
-      {projectPath && (
-        <>
-          <div className="rail__new">
-            <button
-              className="rail-btn rail-btn--primary"
-              onClick={() => (agentClis.length ? setNewOpen((v) => !v) : addAgent())}
-              disabled={full}
-              title={full ? `Maximum ${MAX_AGENTS} terminals` : 'New terminal  (⌘T)'}
-            >
-              <IconTerminal />
-            </button>
-            {newOpen && (
-              <>
-                <div className="rail__backdrop" onClick={() => setNewOpen(false)} />
-                <div className="rail__menu rail__newmenu">
-                  <button
-                    className="rail__menu-item"
-                    onClick={() => {
-                      setNewOpen(false)
-                      addAgent()
-                    }}
-                  >
-                    New terminal
-                  </button>
-                  <div className="rail__menu-sep" />
-                  {agentClis.map((a) => (
+        {projectPath && (
+          <>
+            <div className="rail__new">
+              <button
+                className="rail-btn rail-btn--primary"
+                onClick={() => (agentClis.length ? setNewOpen((v) => !v) : addAgent())}
+                disabled={full}
+                title={full ? `Maximum ${MAX_AGENTS} terminals` : 'New terminal  (⌘T)'}
+              >
+                <IconTerminal />
+              </button>
+              {newOpen && (
+                <>
+                  <div className="rail__backdrop" onClick={() => setNewOpen(false)} />
+                  <div className="rail__menu rail__newmenu">
                     <button
-                      key={a.id}
                       className="rail__menu-item"
                       onClick={() => {
                         setNewOpen(false)
-                        addAgent({ command: a.command, agentLabel: a.label, agentId: a.id })
+                        addAgent()
                       }}
                     >
-                      Start {a.label}
+                      New terminal
                     </button>
-                  ))}
+                    <div className="rail__menu-sep" />
+                    {agentClis.map((a) => (
+                      <button
+                        key={a.id}
+                        className="rail__menu-item"
+                        onClick={() => {
+                          setNewOpen(false)
+                          addAgent({ command: a.command, agentLabel: a.label, agentId: a.id })
+                        }}
+                      >
+                        Start {a.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Grid vs columns only diverge once there are enough panes to tile;
+               with 1–2 terminals both look the same, so the toggle just adds noise.
+               Show it only at 3+. */}
+            {agents.length >= LAYOUT_TOGGLE_MIN && (
+              <>
+                <div className="rail__divider" />
+
+                {/* Layout is one choice → one segmented control, not two buttons. */}
+                <div className="rail__seg" role="group" aria-label="Layout" data-mode={layoutMode}>
+                  <button
+                    className={'rail__seg-btn' + (layoutMode === 'grid' ? ' is-active' : '')}
+                    onClick={() => setLayoutMode('grid')}
+                    title="Grid  (⌘1)"
+                  >
+                    <IconGrid />
+                  </button>
+                  <button
+                    className={'rail__seg-btn' + (layoutMode === 'columns' ? ' is-active' : '')}
+                    onClick={() => setLayoutMode('columns')}
+                    title="Columns  (⌘2)"
+                  >
+                    <IconColumns />
+                  </button>
                 </div>
               </>
             )}
-          </div>
+          </>
+        )}
 
-          {/* Grid vs columns only diverge once there are enough panes to tile;
-             with 1–2 terminals both look the same, so the toggle just adds noise.
-             Show it only at 3+. */}
-          {agents.length >= LAYOUT_TOGGLE_MIN && (
-            <>
-              <div className="rail__divider" />
+        <div className="rail__spacer" />
 
-              {/* Layout is one choice → one segmented control, not two buttons. */}
-              <div className="rail__seg" role="group" aria-label="Layout" data-mode={layoutMode}>
-                <button
-                  className={'rail__seg-btn' + (layoutMode === 'grid' ? ' is-active' : '')}
-                  onClick={() => setLayoutMode('grid')}
-                  title="Grid  (⌘1)"
-                >
-                  <IconGrid />
-                </button>
-                <button
-                  className={'rail__seg-btn' + (layoutMode === 'columns' ? ' is-active' : '')}
-                  onClick={() => setLayoutMode('columns')}
-                  title="Columns  (⌘2)"
-                >
-                  <IconColumns />
-                </button>
-              </div>
-            </>
-          )}
-        </>
-      )}
+        {attentionIds.length > 0 && (
+          <button
+            className="rail-btn rail-btn--attention"
+            onClick={focusNextAttention}
+            title={`${attentionIds.length} terminal${attentionIds.length > 1 ? 's' : ''} need attention`}
+          >
+            <IconBell />
+            <span className="rail-btn__badge">{attentionIds.length}</span>
+          </button>
+        )}
 
-      <div className="rail__spacer" />
-
-      {attentionIds.length > 0 && (
-        <button
-          className="rail-btn rail-btn--attention"
-          onClick={focusNextAttention}
-          title={`${attentionIds.length} terminal${attentionIds.length > 1 ? 's' : ''} need attention`}
-        >
-          <IconBell />
-          <span className="rail-btn__badge">{attentionIds.length}</span>
+        <button className="rail-btn" onClick={() => setSettingsOpen(true)} title="Settings">
+          <IconSettings />
         </button>
-      )}
-
-      <button className="rail-btn" onClick={() => setSettingsOpen(true)} title="Settings">
-        <IconSettings />
-      </button>
+      </div>
     </div>
   )
 }

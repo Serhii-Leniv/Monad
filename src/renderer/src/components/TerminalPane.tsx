@@ -5,8 +5,11 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { WebLinksAddon } from '@xterm/addon-web-links'
-import { useStore, displayBranch, type AgentInstance, type AgentStatus } from '../store'
-import { needsAttention, stripAnsi, clampTail } from '../attention'
+import { Unicode11Addon } from '@xterm/addon-unicode11'
+import { useStore, displayBranch, RAIL_INSET, PAD, type AgentInstance, type AgentStatus } from '../store'
+import { terminals, quotePaths } from '../terminalRegistry'
+import { needsAttention, clampTail } from '../attention'
+import { playCue, type Cue } from '../sound'
 import { IconClose } from './Icons'
 import AgentBadge from './AgentBadge'
 
@@ -14,6 +17,30 @@ import AgentBadge from './AgentBadge'
 // blinking cursor. Strip it so our own calm CSS blink is the single source.
 // eslint-disable-next-line no-control-regex
 const CURSOR_STYLE_SEQ = /\x1b\[[0-9]* q/g
+
+/** Floor for the maximized pane before the canvas has reported its size. */
+const MIN_FOCUS_SIZE = 200
+
+// Path-looking tokens in terminal output ("src/foo.ts:42", "..\lib\a.py") —
+// candidates are verified against the pane's cwd in the main process, so only
+// real files light up as links.
+const FILE_RE = /(?:[A-Za-z]:[\\/]|~[\\/]|\.{1,2}[\\/])?[\w][\w.-]*(?:[\\/][\w.-]+)+(?::\d+(?::\d+)?)?/g
+
+/** m:ss elapsed while an agent works; hidden for bursts under 3s (shell echo). */
+function WorkTimer({ since }: { since: number }): JSX.Element | null {
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 1000)
+    return () => clearInterval(t)
+  }, [])
+  const s = Math.max(0, Math.floor((Date.now() - since) / 1000))
+  if (s < 3) return null
+  return (
+    <span className="vec-pane__timer">
+      {Math.floor(s / 60)}:{String(s % 60).padStart(2, '0')}
+    </span>
+  )
+}
 
 /** Status → status-dot colour (CSS custom properties from the palette). */
 const STATUS_COLOR: Record<AgentStatus, string> = {
@@ -36,17 +63,19 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
   const termHostRef = useRef<HTMLDivElement>(null)
   // One array traversal for the three per-agent fields we read; useShallow keeps
   // the re-render gated to actual changes in branch / isolated / status.
-  const { branch, isolated, status } = useStore(
+  const { branch, isolated, status, workingSince } = useStore(
     useShallow((s) => {
       const a = s.agents.find((x) => x.id === id)
       return {
         branch: a?.branch,
         isolated: a?.isolated,
-        status: a?.status ?? ('starting' as AgentStatus)
+        status: a?.status ?? ('starting' as AgentStatus),
+        workingSince: a?.workingSince
       }
     })
   )
   const selected = useStore((s) => s.selectedIds.includes(id))
+  const closing = useStore((s) => s.closingIds.includes(id))
   const removeAgent = useStore((s) => s.removeAgent)
   const fontSize = useStore((s) => s.settings.fontSize)
   const fontFamily = useStore((s) => s.settings.fontFamily)
@@ -54,6 +83,10 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
   const confirmClose = useStore((s) => s.settings.confirmClose)
   const renameAgent = useStore((s) => s.renameAgent)
   const focusTerminal = useStore((s) => s.focusTerminal)
+  const clearFocus = useStore((s) => s.clearFocus)
+  const focused = useStore((s) => s.focusedId === id)
+  const canvasW = useStore((s) => s.canvasW)
+  const canvasH = useStore((s) => s.canvasH)
   const setDiffAgentId = useStore((s) => s.setDiffAgentId)
   const pendingClose = useStore((s) => s.pendingCloseId === id)
   const clearPendingClose = useStore((s) => s.clearPendingClose)
@@ -68,16 +101,40 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
-  const [closePrompt, setClosePrompt] = useState<{ checking: boolean; dirty: boolean; count: number } | null>(
-    null
-  )
+  const [closePrompt, setClosePrompt] = useState<{
+    checking: boolean
+    dirty: boolean
+    count: number
+    /** Shared-dir terminal: closing deletes nothing on disk. */
+    shared?: boolean
+  } | null>(null)
 
-  // Read the clipboard and type it into the live pty — shared by Ctrl/Cmd-V and
-  // the context-menu Paste.
-  const pasteFromClipboard = (): void => {
-    void navigator.clipboard.readText().then((t) => {
-      if (ptyRef.current) window.api.pty.write(ptyRef.current, t)
-    })
+  // Read the clipboard and hand it to xterm — shared by Ctrl/Cmd-V and the
+  // context-menu Paste. We read via the main process (window.api.clipboard),
+  // not navigator.clipboard.readText(), which rejects intermittently in Electron
+  // when the window isn't focused and made paste silently no-op. term.paste()
+  // (rather than a raw pty.write) applies bracketed-paste and \r\n cleanup so
+  // TUIs and agents receive the text correctly.
+  const pasteFromClipboard = async (): Promise<void> => {
+    try {
+      const t = await window.api.clipboard.read()
+      if (t) {
+        termRef.current?.paste(t)
+        return
+      }
+      // No text. Copied files paste as quoted paths, like any terminal.
+      const files = await window.api.clipboard.readFiles()
+      if (files.length) {
+        termRef.current?.paste(quotePaths(files))
+        return
+      }
+      // A screenshot: a pty can't carry pixels, so forward the raw Ctrl+V
+      // byte — TUIs that read the OS clipboard themselves (Claude Code image
+      // paste) get their keystroke and pick the image up.
+      if (await window.api.clipboard.hasImage()) termRef.current?.input('\x16', true)
+    } catch {
+      /* clipboard unavailable — nothing to paste */
+    }
   }
 
   useEffect(() => {
@@ -91,9 +148,25 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       scrollback,
       cursorBlink: false, // steady cursor — the blink read as a fast jitter
       allowTransparency: true, // so the pane bg / wallpaper can show through
-      theme: { background: 'rgba(0,0,0,0)', foreground: '#cdd6e4', cursor: '#cdd6e4' }
+      allowProposedApi: true, // Unicode11Addon + registerLinkProvider need it
+      smoothScrollDuration: 120, // wheel scrolling glides instead of jumping
+      // We own the context menu; xterm's mac default of selecting the word
+      // under a right-click silently replaced the user's selection before the
+      // menu's Copy could read it.
+      rightClickSelectsWord: false,
+      theme: {
+        background: 'rgba(0,0,0,0)',
+        foreground: '#cdd6e4',
+        cursor: '#cdd6e4',
+        // Explicit selection colours: on the translucent glass background,
+        // xterm's default selection was nearly invisible.
+        selectionBackground: 'rgba(138, 170, 255, 0.36)',
+        selectionInactiveBackground: 'rgba(138, 170, 255, 0.18)'
+      }
     })
     termRef.current = term
+    // Expose to the macOS Edit-menu handler (routes ⌘C/⌘V/⌘A by focus).
+    terminals.set(id, term)
     const fit = new FitAddon()
     term.loadAddon(fit)
     const search = new SearchAddon()
@@ -101,27 +174,97 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     searchRef.current = search
     // Clickable URLs open in the user's real browser.
     term.loadAddon(new WebLinksAddon((_e, uri) => void window.api.openExternal(uri)))
+    // Correct emoji / CJK cell widths — agent TUIs (Claude Code) are full of
+    // them, and the default Unicode 6 tables misalign their box-drawing.
+    term.loadAddon(new Unicode11Addon())
+    term.unicode.activeVersion = '11'
     term.open(host)
+    // Deliberately NO WebGL renderer: it draws glyphs into a bitmap canvas,
+    // and with the interface zoom (default 1.1) + fractional tile coordinates
+    // that bitmap lands between device pixels — the compositor resamples it
+    // and EVERY glyph goes soft. The DOM renderer rasterizes text at final
+    // resolution and stays crisp at any zoom; its perf is fine at ≤9 panes.
 
-    // Copy on Ctrl/Cmd-C when there's a selection (else let Ctrl-C be SIGINT);
-    // paste on Ctrl/Cmd-V; open find on Ctrl/Cmd-F.
+    // File paths in output become links (verified against the pane's cwd in
+    // the main process; only real files activate). Click opens the default app.
+    const fileLinks = term.registerLinkProvider({
+      provideLinks(y, cb) {
+        const text = term.buffer.active.getLine(y - 1)?.translateToString(true) ?? ''
+        const st = useStore.getState()
+        const cwd = st.agents.find((a) => a.id === id)?.cwd ?? st.projectPath ?? ''
+        const cands: { x: number; t: string }[] = []
+        FILE_RE.lastIndex = 0
+        for (let m = FILE_RE.exec(text); m; m = FILE_RE.exec(text)) {
+          cands.push({ x: m.index, t: m[0] })
+        }
+        if (!cands.length || !cwd) return cb(undefined)
+        void Promise.all(cands.map((c) => window.api.file.exists(cwd, c.t))).then((oks) => {
+          const links = cands
+            .filter((_, i) => oks[i])
+            .map((c) => ({
+              range: { start: { x: c.x + 1, y }, end: { x: c.x + c.t.length, y } },
+              text: c.t,
+              activate: () => void window.api.file.open(cwd, c.t)
+            }))
+          cb(links.length ? links : undefined)
+        })
+      }
+    })
+
+    // Copy on mod+C when there's a selection (else let Ctrl-C be SIGINT);
+    // paste on mod+V; open find on mod+F. The modifier is PLATFORM-SPECIFIC:
+    // Ctrl on Windows/Linux, ⌘ on macOS — treating ctrl===meta everywhere let a
+    // mac Ctrl+C-with-selection copy instead of interrupting the process, and
+    // Ctrl+F opened find instead of readline forward-char. (On mac ⌘C/⌘V are
+    // consumed by the menu before reaching here; ⌘F still lands here.)
+    // preventDefault() is load-bearing on the intercepted combos: returning
+    // false only stops xterm's own processing, NOT the browser default. Without
+    // it, Ctrl+V ALSO fired the native `paste` event on xterm's hidden textarea
+    // (xterm pastes it too) — every paste landed TWICE. Dictation tools that
+    // simulate Ctrl+V (Wispr Flow) hit the same double-paste.
+    const isMac = window.api.platform === 'darwin'
     term.attachCustomKeyEventHandler((e): boolean => {
       if (e.type !== 'keydown') return true
-      const mod = e.ctrlKey || e.metaKey
+      const mod = isMac ? e.metaKey : e.ctrlKey
+      // App-level chords (maximize toggle, pane cycling) — keep them out of the
+      // pty; the window keydown handler picks them up as the event bubbles.
+      if (
+        mod &&
+        e.shiftKey &&
+        (e.code === 'Enter' || e.code === 'BracketRight' || e.code === 'BracketLeft')
+      ) {
+        return false
+      }
       const k = e.key.toLowerCase()
       if (mod && k === 'c' && term.hasSelection()) {
-        void navigator.clipboard.writeText(term.getSelection())
+        e.preventDefault()
+        window.api.clipboard.write(term.getSelection())
         return false
       }
       if (mod && k === 'v') {
-        pasteFromClipboard()
+        e.preventDefault()
+        void pasteFromClipboard()
         return false
       }
       if (mod && k === 'f') {
+        e.preventDefault()
         setSearchOpen(true)
         return false
       }
       return true
+    })
+
+    // Copy-on-select (iTerm-style): a settled mouse selection lands on the
+    // clipboard. Debounced — writing on every onSelectionChange tick during a
+    // drag flooded the OS clipboard history (Win+V) with partial selections.
+    let selTimer: ReturnType<typeof setTimeout> | undefined
+    term.onSelectionChange(() => {
+      clearTimeout(selTimer)
+      selTimer = setTimeout(() => {
+        if (!useStore.getState().settings.copyOnSelect) return
+        const sel = term.getSelection()
+        if (sel) window.api.clipboard.write(sel)
+      }, 250)
     })
 
     let raf = 0
@@ -147,6 +290,7 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     let tail = ''
     let working = false
     let workingSince = 0
+    let bellRang = false
     let idleTimer: ReturnType<typeof setTimeout> | undefined
     let lastNotify = 0
     const unsubs: Array<() => void> = []
@@ -186,36 +330,71 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       window.api.notify.agent({ id, title: labelOf(), body })
     }
 
+    // Audible cue — gated only by the setting (not by backgrounding), so you also
+    // hear it for the agent you're watching. Rate-limiting lives in playCue.
+    const maybeSound = (cue: Cue): void => {
+      if (useStore.getState().settings.sounds) playCue(cue)
+    }
+
     const evaluateIdle = (): void => {
       if (disposed) return
       const ranFor = workingSince ? Date.now() - workingSince : 0
       working = false
       workingSince = 0
-      const next: AgentStatus = needsAttention(tail) ? 'attention' : 'idle'
+      // A bell "sticks" until the next settle: programs usually ring it and
+      // then keep drawing the prompt, which would otherwise flip the status
+      // back to working → idle and lose the attention.
+      const next: AgentStatus = bellRang || needsAttention(tail) ? 'attention' : 'idle'
+      bellRang = false
       setStatus(id, next)
-      if (next === 'attention') maybeNotify('attention')
-      // A real task wrapped up (worked a while, then went quiet without a prompt).
-      else if (ranFor >= DONE_AFTER_MS) maybeNotify('done')
+      if (next === 'attention') {
+        maybeNotify('attention')
+        maybeSound('attention')
+      } else if (ranFor >= DONE_AFTER_MS) {
+        // A real task wrapped up (worked a while, then went quiet without a prompt).
+        maybeNotify('done')
+        maybeSound('done')
+      }
     }
 
     // Coalesce a stream of output into a single "working" flip (avoids a store
     // write per chunk); settle to idle/attention 800ms after output stops.
+    // The tail stays RAW (needsAttention strips it whole) — stripping per chunk
+    // leaked halves of escape sequences split across chunk boundaries.
     const onActivity = (d: string): void => {
-      tail = clampTail(tail + stripAnsi(d))
+      tail = clampTail(tail + d, 1200)
       if (!working) {
         working = true
         workingSince = Date.now()
-        setStatus(id, 'working')
+        setAgentRuntime(id, { status: 'working', workingSince })
       }
       clearTimeout(idleTimer)
       idleTimer = setTimeout(evaluateIdle, 800)
     }
+
+    // BEL from the program itself is the one non-heuristic "I need you" signal
+    // (Claude Code rings it on permission prompts). Treat it as attention.
+    term.onBell(() => {
+      bellRang = true
+      clearTimeout(idleTimer)
+      working = false
+      workingSince = 0
+      setStatus(id, 'attention')
+      maybeNotify('attention')
+      maybeSound('attention')
+    })
 
     const start = async (): Promise<void> => {
       setStatus(id, 'starting')
       const wt = await window.api.worktree.create(projectPath ?? '', id, agent.isolation)
       if (disposed) return
       setAgentRuntime(id, { branch: wt.branch, cwd: wt.cwd, isolated: wt.isolated })
+      // Asked for an isolated worktree but git couldn't give us one — don't let it
+      // pass as a silent "shared" tag; say why so the user can fix it (e.g. make an
+      // initial commit) instead of unknowingly editing the shared project dir.
+      if (agent.isolation === 'worktree' && !wt.isolated && wt.reason) {
+        useStore.getState().pushToast(`“${labelOf()}” isn’t isolated — ${wt.reason}`, 'error')
+      }
 
       let pid: string
       try {
@@ -241,8 +420,19 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       setAgentRuntime(id, { ptyId: pid })
       setStatus(id, 'idle')
 
+      // The DECSCUSR strip is chunk-boundary safe: a sequence split across two
+      // PTY chunks is held back (carry) and stripped once complete — otherwise
+      // the leaked half re-enabled the fast-blink cursor it exists to suppress.
+      let seqCarry = ''
       unsubs.push(window.api.pty.onData(pid, (d) => {
-        term.write(d.replace(CURSOR_STYLE_SEQ, ''))
+        let s = seqCarry ? seqCarry + d : d
+        seqCarry = ''
+        const partial = s.match(/\x1b(?:\[[0-9]* ?)?$/)
+        if (partial) {
+          seqCarry = partial[0]
+          s = s.slice(0, s.length - partial[0].length)
+        }
+        if (s) term.write(s.replace(CURSOR_STYLE_SEQ, ''))
         onActivity(d)
       }))
       unsubs.push(
@@ -253,6 +443,7 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
           setStatus(id, errored ? 'error' : 'exited')
           term.write('\r\n\x1b[31m[process exited]\x1b[0m\r\n')
           maybeNotify(errored ? 'error' : 'exited')
+          maybeSound(errored ? 'error' : 'done')
         })
       )
       term.onData((d) => {
@@ -310,16 +501,34 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     return () => {
       disposed = true
       clearTimeout(idleTimer)
+      clearTimeout(selTimer)
       cancelAnimationFrame(raf)
       ro.disconnect()
       unsubs.forEach((u) => u())
+      fileLinks.dispose()
       if (ptyId) window.api.pty.kill(ptyId)
       ptyRef.current = null
       searchRef.current = null
+      terminals.delete(id)
       term.dispose()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [retryNonce])
+
+  // Entering focus (maximize) also hands over KEYBOARD focus — same for a
+  // notification click — so you can type immediately without clicking in.
+  useEffect(() => {
+    if (focused) termRef.current?.focus()
+  }, [focused])
+
+  // The single selected terminal always owns keyboard focus, so you can type the
+  // instant it becomes active — clicking its header, cycling to it, spawning it,
+  // or having selection fall back to it when a neighbour closes. (Clicking empty
+  // canvas keeps the current selection; Stage re-focuses it there.)
+  const soleSelected = useStore((s) => s.selectedIds.length === 1 && s.selectedIds[0] === id)
+  useEffect(() => {
+    if (soleSelected) termRef.current?.focus()
+  }, [soleSelected])
 
   // Live terminal options from settings (no respawn needed).
   useEffect(() => {
@@ -332,10 +541,11 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
   }, [fontSize, fontFamily, scrollback])
 
   const beginClose = async (): Promise<void> => {
-    // Shared dir (or downgraded): nothing is deleted on disk.
+    // Shared dir (or downgraded): nothing is deleted on disk. Confirmed via
+    // the same in-app modal as worktree closes (no native window.confirm).
     if (agent.isolation !== 'worktree' || isolated === false) {
-      if (confirmClose && !window.confirm('Remove this terminal?')) return
-      removeAgent(id)
+      if (confirmClose) setClosePrompt({ checking: false, dirty: false, count: 0, shared: true })
+      else removeAgent(id)
       return
     }
     // Isolated worktree: never delete a branch with uncommitted work silently.
@@ -375,29 +585,50 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     setRetryNonce((n) => n + 1)
   }
 
+  // Context-menu actions hand focus back to the terminal, so you can keep
+  // typing right after Copy/Paste without clicking into the pane again.
   const copySelection = (): void => {
     const sel = termRef.current?.getSelection()
-    if (sel) void navigator.clipboard.writeText(sel)
+    if (sel) window.api.clipboard.write(sel)
     setMenu(null)
+    termRef.current?.focus()
   }
   const paste = (): void => {
-    pasteFromClipboard()
+    void pasteFromClipboard()
     setMenu(null)
+    termRef.current?.focus()
   }
 
   const dotColor = STATUS_COLOR[status]
   const ringClass =
-    status === 'attention' ? ' is-attention' : status === 'error' ? ' is-error' : ''
+    status === 'attention'
+      ? ' is-attention'
+      : status === 'error'
+        ? ' is-error'
+        : status === 'working'
+          ? ' is-working'
+          : ''
   const ended = (status === 'exited' || status === 'error') && !spawnError
 
-  const style = {
-    position: 'absolute' as const,
-    top: 0,
-    left: 0,
-    transform: `translate(${agent.x}px, ${agent.y}px)`,
-    width: agent.w,
-    height: agent.h
-  }
+  // Focused = maximized to the viewport (real refit → more rows/cols, crisp
+  // text, correct mouse selection). Otherwise the pane sits in its tiled slot.
+  const style = focused
+    ? {
+        position: 'absolute' as const,
+        top: 0,
+        left: 0,
+        transform: `translate(${RAIL_INSET}px, ${PAD}px)`,
+        width: Math.max(MIN_FOCUS_SIZE, canvasW - RAIL_INSET - PAD),
+        height: Math.max(MIN_FOCUS_SIZE, canvasH - PAD * 2)
+      }
+    : {
+        position: 'absolute' as const,
+        top: 0,
+        left: 0,
+        transform: `translate(${agent.x}px, ${agent.y}px)`,
+        width: agent.w,
+        height: agent.h
+      }
 
   const commitRename = (): void => {
     renameAgent(id, draft.trim())
@@ -410,17 +641,33 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     else searchRef.current?.findPrevious(q)
   }
 
+  // Closing find hands focus back to the terminal — no extra click to resume.
+  const closeSearch = (): void => {
+    setSearchOpen(false)
+    termRef.current?.focus()
+  }
+
   // Show "shared" when an isolated terminal silently fell back to the project dir.
   const downgraded = agent.isolation === 'worktree' && isolated === false
 
   return (
     <>
     <div
-      className={'vec-pane' + (selected ? ' is-selected' : '') + ringClass}
+      className={
+        'vec-pane' +
+        (selected ? ' is-selected' : '') +
+        (focused ? ' is-focused' : '') +
+        ringClass +
+        (closing ? ' is-closing' : '')
+      }
       data-id={id}
       style={style}
     >
-      <div className="vec-pane__header" onDoubleClick={() => focusTerminal(id)}>
+      <div
+        className="vec-pane__header"
+        title={focused ? 'Double-click to restore' : 'Double-click to focus'}
+        onDoubleClick={() => (focused ? clearFocus() : focusTerminal(id))}
+      >
         <span
           className={
             'vec-pane__dot' +
@@ -459,6 +706,7 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
             {agent.label}
           </span>
         )}
+        {status === 'working' && workingSince ? <WorkTimer since={workingSince} /> : null}
         {downgraded ? (
           <span
             className="vec-pane__branch vec-pane__branch--shared"
@@ -518,6 +766,21 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
               e.preventDefault()
               setMenu({ x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY })
             }}
+            // Dropping files inserts their quoted paths, like any terminal.
+            onDragOver={(e) => {
+              e.preventDefault()
+              e.dataTransfer.dropEffect = 'copy'
+            }}
+            onDrop={(e) => {
+              e.preventDefault()
+              const paths = Array.from(e.dataTransfer.files)
+                .map((f) => window.api.getPathForFile(f))
+                .filter(Boolean)
+              if (paths.length) {
+                termRef.current?.paste(quotePaths(paths))
+                termRef.current?.focus()
+              }
+            }}
           />
 
           {searchOpen && (
@@ -535,7 +798,7 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
                   if (e.key === 'Enter') runSearch(e.shiftKey ? 'prev' : 'next')
                   else if (e.key === 'Escape') {
                     e.stopPropagation()
-                    setSearchOpen(false)
+                    closeSearch()
                   }
                 }}
               />
@@ -545,7 +808,7 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
               <button className="vec-pane__search-btn" title="Next (Enter)" onClick={() => runSearch('next')}>
                 ›
               </button>
-              <button className="vec-pane__search-btn" title="Close (Esc)" onClick={() => setSearchOpen(false)}>
+              <button className="vec-pane__search-btn" title="Close (Esc)" onClick={closeSearch}>
                 ✕
               </button>
             </div>
@@ -618,6 +881,27 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
           <div className="confirm" onPointerDown={(e) => e.stopPropagation()}>
             {closePrompt.checking ? (
               <div className="confirm__body">Checking for uncommitted changes…</div>
+            ) : closePrompt.shared ? (
+              <>
+                <div className="confirm__title">Close “{agent.label}”?</div>
+                <div className="confirm__body">
+                  This ends the terminal’s process. Nothing on disk is deleted.
+                </div>
+                <div className="confirm__actions">
+                  <button className="confirm__btn" onClick={() => setClosePrompt(null)}>
+                    Cancel
+                  </button>
+                  <button
+                    className="confirm__btn confirm__btn--danger"
+                    onClick={() => {
+                      removeAgent(id)
+                      setClosePrompt(null)
+                    }}
+                  >
+                    Close terminal
+                  </button>
+                </div>
+              </>
             ) : (
               <>
                 <div className="confirm__title">Close “{agent.label}”?</div>

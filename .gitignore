@@ -5,6 +5,10 @@ dist/
 *.log
 *.tsbuildinfo
 
+# Debug shell-redirect leftovers (e.g. cmd 1>b.out 2>b.err)
+*.err
+b.out
+
 # Per-project runtime data (terminal layout) + agent worktrees
 .agent-canvas/
 .agent-canvas-worktrees/
