@@ -401,7 +401,8 @@ export const useStore = create<AppState>((set, get) => ({
         projectName: ref.name,
         isGit: git.isGit,
         baseBranch: git.branch,
-        selectedIds: [],
+        // Start with the first terminal active so you can type immediately.
+        selectedIds: loaded[0] ? [loaded[0].id] : [],
         focusedId: null,
         layoutMode: mode,
         agents: laidOut(loaded, mode, s.canvasW, s.canvasH),
@@ -447,7 +448,17 @@ export const useStore = create<AppState>((set, get) => ({
 
   setAgentClis: (agentClis) => set({ agentClis, agentClisLoaded: true }),
 
-  setSelected: (ids) => set({ selectedIds: ids }),
+  setSelected: (ids) =>
+    set((s) => {
+      // Invariant: while any terminal exists, one is always selected (and so
+      // keyboard-focused). Clicking empty canvas / rubber-banding nothing must
+      // never leave the canvas with no active terminal to type into — keep the
+      // current selection, or fall back to the first terminal.
+      if (ids.length === 0 && s.agents.length > 0) {
+        return s.selectedIds.length > 0 ? {} : { selectedIds: [s.agents[0].id] }
+      }
+      return { selectedIds: ids }
+    }),
 
   setSetting: (key, value) =>
     set((s) => {
@@ -514,9 +525,16 @@ export const useStore = create<AppState>((set, get) => ({
           void window.api.worktree.remove(s.projectPath, id)
         }
         const rest = s.agents.filter((a) => a.id !== id)
+        let selectedIds = s.selectedIds.filter((sid) => sid !== id)
+        // Closing the active terminal shouldn't leave the canvas inert — hand
+        // selection (and thus keyboard focus) to the nearest surviving neighbour.
+        if (selectedIds.length === 0 && rest.length > 0) {
+          const idx = s.agents.findIndex((a) => a.id === id)
+          selectedIds = [rest[Math.min(idx, rest.length - 1)].id]
+        }
         return {
           agents: laidOut(rest, s.layoutMode, s.canvasW, s.canvasH),
-          selectedIds: s.selectedIds.filter((sid) => sid !== id),
+          selectedIds,
           closingIds,
           focusedId: s.focusedId === id ? null : s.focusedId,
           pendingCloseId: s.pendingCloseId === id ? null : s.pendingCloseId,

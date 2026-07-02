@@ -3,6 +3,7 @@ import Moveable from 'react-moveable'
 import Selecto from 'react-selecto'
 import TerminalPane from './TerminalPane'
 import { useStore } from '../store'
+import { terminals } from '../terminalRegistry'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -192,7 +193,15 @@ export default function Stage(): JSX.Element {
           setSelected((e.selected as HTMLElement[]).map((el) => el.dataset.id!).filter(Boolean))
         }
         onSelectEnd={(e: any) => {
-          setSelected((e.selected as HTMLElement[]).map((el) => el.dataset.id!).filter(Boolean))
+          const ids = (e.selected as HTMLElement[]).map((el) => el.dataset.id!).filter(Boolean)
+          setSelected(ids)
+          // Clicked/rubber-banded empty canvas (nothing hit): the store keeps the
+          // current selection — hand keyboard focus back to that active terminal
+          // so typing never dead-ends after a stray click on the background.
+          if (ids.length === 0) {
+            const cur = useStore.getState().selectedIds[0]
+            if (cur) terminals.get(cur)?.focus()
+          }
           if (e.isDragStart) {
             e.inputEvent.preventDefault()
             moveableRef.current?.waitToChangeTarget().then(() => {

@@ -521,6 +521,15 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     if (focused) termRef.current?.focus()
   }, [focused])
 
+  // The single selected terminal always owns keyboard focus, so you can type the
+  // instant it becomes active — clicking its header, cycling to it, spawning it,
+  // or having selection fall back to it when a neighbour closes. (Clicking empty
+  // canvas keeps the current selection; Stage re-focuses it there.)
+  const soleSelected = useStore((s) => s.selectedIds.length === 1 && s.selectedIds[0] === id)
+  useEffect(() => {
+    if (soleSelected) termRef.current?.focus()
+  }, [soleSelected])
+
   // Live terminal options from settings (no respawn needed).
   useEffect(() => {
     const t = termRef.current
