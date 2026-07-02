@@ -2641,6 +2641,16 @@ body.has-wallpaper .vec-pane__term {
 .home__hero > img {
   filter: drop-shadow(0 0 34px rgba(var(--accent-rgb), 0.5));
   animation: home-float 6s ease-in-out infinite;
+  /* Composited layer: the float moves ~0.04px per frame — without layer
+     promotion the browser repaints the PNG+shadow each frame and snaps to
+     whole pixels, which reads as jitter instead of a drift. */
+  will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+  .home__hero > svg,
+  .home__hero > img {
+    animation: none;
+  }
 }
 @keyframes home-float {
   0%,
