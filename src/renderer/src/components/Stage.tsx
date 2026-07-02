@@ -73,10 +73,16 @@ export default function Stage(): JSX.Element {
   // Where does this drop land? The slot whose centre is nearest the dragged
   // card's centre — that index becomes the card's new place in the order.
   const nearestIndex = (cx: number, cy: number): number => {
-    const list = useStore.getState().agents
+    const st = useStore.getState()
+    const list = st.agents
+    const dragId = st.draggingId
     let best = 0
     let bestD = Infinity
     list.forEach((g, i) => {
+      // Skip the dragged card: its x/y stay pinned at its pre-drag slot (laidOut
+      // only stashes drop*), so leaving it in would let its own stale slot compete
+      // with the cursor and make the card resist swapping — a sticky, jittery drag.
+      if (g.id === dragId) return
       const d = (g.x + g.w / 2 - cx) ** 2 + (g.y + g.h / 2 - cy) ** 2
       if (d < bestD) {
         bestD = d
@@ -195,11 +201,13 @@ export default function Stage(): JSX.Element {
         onSelectEnd={(e: any) => {
           const ids = (e.selected as HTMLElement[]).map((el) => el.dataset.id!).filter(Boolean)
           setSelected(ids)
-          // Clicked/rubber-banded empty canvas (nothing hit): the store keeps the
-          // current selection — hand keyboard focus back to that active terminal
-          // so typing never dead-ends after a stray click on the background.
-          if (ids.length === 0) {
-            const cur = useStore.getState().selectedIds[0]
+          // Hand keyboard focus to the active terminal so typing never dead-ends —
+          // whether the click hit a pane (including RE-clicking the already-selected
+          // one, which is a no-op selection change so the pane's own focus effect
+          // won't re-fire) or landed on empty canvas (selection preserved by the
+          // store). Skip when this gesture is starting a drag-to-move.
+          if (!e.isDragStart) {
+            const cur = ids[0] ?? useStore.getState().selectedIds[0]
             if (cur) terminals.get(cur)?.focus()
           }
           if (e.isDragStart) {
