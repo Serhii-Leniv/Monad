@@ -14,7 +14,7 @@ const DiffPanel = lazy(() => import('./components/DiffPanel'))
 import { useStore, toPersisted } from './store'
 import { openProjectByPath, restoreLastProject, saveCanvas } from './openProject'
 import { applyAccent } from './accent'
-import { handleMenuEdit, terminals, focusActiveTerminal } from './terminalRegistry'
+import { handleMenuEdit, terminals, focusActiveTerminal, pasteIntoTerminal } from './terminalRegistry'
 
 export default function App(): JSX.Element {
   const projectPath = useStore((s) => s.projectPath)
@@ -79,6 +79,32 @@ export default function App(): JSX.Element {
   // No-op on Windows/Linux, where the main process never sends these.
   useEffect(() => {
     return window.api.menu.onEdit((action) => void handleMenuEdit(action))
+  }, [])
+
+  // Windows/Linux paste fallback. xterm only handles Ctrl+V while its textarea is
+  // the focused element; if focus has drifted onto a pane header / the canvas /
+  // nothing, Ctrl+V would dead-end (and paste tools like Wispr Flow warn "click a
+  // text box first"). Route it to the active terminal instead. macOS is already
+  // covered by the Edit-menu path above (handleMenuEdit), so skip it there to
+  // avoid a double paste. When xterm's own textarea or a plain input is focused,
+  // let their native handlers own it.
+  useEffect(() => {
+    if (window.api.platform === 'darwin') return
+    const onKey = (e: KeyboardEvent): void => {
+      if (!e.ctrlKey || e.altKey || e.shiftKey || e.key.toLowerCase() !== 'v') return
+      const el = document.activeElement as HTMLElement | null
+      if (el?.closest?.('.vec-pane__term')) return // xterm handles it itself
+      if (el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA') return // native input
+      const st = useStore.getState()
+      const id = st.focusedId ?? (st.selectedIds.length === 1 ? st.selectedIds[0] : null)
+      const term = id ? terminals.get(id) : null
+      if (!term) return
+      e.preventDefault()
+      term.focus()
+      void pasteIntoTerminal(term)
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
   }, [])
 
   // When every overlay closes (palette / settings / diff), hand keyboard focus
