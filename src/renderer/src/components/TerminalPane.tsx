@@ -118,7 +118,14 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
   const pasteFromClipboard = async (): Promise<void> => {
     try {
       const t = await window.api.clipboard.read()
-      if (t) termRef.current?.paste(t)
+      if (t) {
+        termRef.current?.paste(t)
+        return
+      }
+      // No text, but maybe a screenshot: a pty can't carry pixels, so forward
+      // the raw Ctrl+V byte — TUIs that read the OS clipboard themselves
+      // (Claude Code image paste) get their keystroke and pick the image up.
+      if (await window.api.clipboard.hasImage()) termRef.current?.input('\x16', true)
     } catch {
       /* clipboard unavailable — nothing to paste */
     }

@@ -59,7 +59,8 @@ const api = {
   },
   clipboard: {
     read: (): Promise<string> => ipcRenderer.invoke('clipboard:read'),
-    write: (text: string): void => ipcRenderer.send('clipboard:write', { text })
+    write: (text: string): void => ipcRenderer.send('clipboard:write', { text }),
+    hasImage: (): Promise<boolean> => ipcRenderer.invoke('clipboard:hasImage')
   },
   // macOS Edit-menu commands (⌘C/⌘V/⌘A) forwarded from the main process so the
   // renderer can route them by focus (terminal vs. plain input). See menu.ts.
