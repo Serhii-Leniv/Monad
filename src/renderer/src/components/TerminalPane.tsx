@@ -5,7 +5,6 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { WebLinksAddon } from '@xterm/addon-web-links'
-import { WebglAddon } from '@xterm/addon-webgl'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { useStore, displayBranch, RAIL_INSET, PAD, type AgentInstance, type AgentStatus } from '../store'
 import { terminals } from '../terminalRegistry'
@@ -167,15 +166,11 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     term.loadAddon(new Unicode11Addon())
     term.unicode.activeVersion = '11'
     term.open(host)
-    // GPU renderer: smoother scrolling and far less CPU with 9 live terminals.
-    // Falls back to the DOM renderer wherever WebGL isn't available.
-    try {
-      const webgl = new WebglAddon()
-      webgl.onContextLoss(() => webgl.dispose())
-      term.loadAddon(webgl)
-    } catch {
-      /* no GPU / context limit — DOM renderer is fine */
-    }
+    // Deliberately NO WebGL renderer: it draws glyphs into a bitmap canvas,
+    // and with the interface zoom (default 1.1) + fractional tile coordinates
+    // that bitmap lands between device pixels — the compositor resamples it
+    // and EVERY glyph goes soft. The DOM renderer rasterizes text at final
+    // resolution and stays crisp at any zoom; its perf is fine at ≤9 panes.
 
     // File paths in output become links (verified against the pane's cwd in
     // the main process; only real files activate). Click opens the default app.
