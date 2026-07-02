@@ -144,7 +144,21 @@ export async function getAgentDiff(
   let untracked: string[] = []
   try {
     const args = ['--no-pager', 'diff']
-    if (baseBranch) args.push(baseBranch)
+    if (baseBranch) {
+      // Diff from where this branch FORKED (merge-base), not the moving base tip.
+      // Plain `git diff <base>` (two-dot) turns any commits the user later adds to
+      // base into spurious reverse-deletions — inflating the close/merge change
+      // count and making the review unreadable. merge-base..worktree shows only
+      // this branch's own work (committed AND uncommitted).
+      let from = baseBranch
+      try {
+        const mb = (await git(path, ['merge-base', baseBranch, 'HEAD'])).trim()
+        if (mb) from = mb
+      } catch {
+        /* no common ancestor (fresh/unborn branch) — fall back to the base ref */
+      }
+      args.push(from)
+    }
     // 64MB — a generous ceiling so normal feature-sized diffs always render;
     // beyond it we surface a clear message rather than a false "No changes".
     diff = await git(path, args, { maxBuffer: 64 * 1024 * 1024 })
@@ -179,6 +193,8 @@ export async function getAgentDiff(
 export interface MergeResult {
   ok: boolean
   error?: string
+  /** The branch actually merged into — the main worktree's HEAD at merge time. */
+  mergedInto?: string
 }
 
 /** Commit any pending work in the agent's worktree, then merge its branch into
@@ -200,7 +216,16 @@ export async function mergeAgent(
   }
   try {
     await git(repoRoot, ['merge', '--no-ff', branch, '-m', `Merge ${branch}`])
-    return { ok: true }
+    // Report the branch we actually merged into. `git merge` targets whatever is
+    // checked out in the main worktree NOW, which may differ from the base the UI
+    // captured at project open (the user could have switched branches since).
+    let mergedInto: string | undefined
+    try {
+      mergedInto = (await git(repoRoot, ['rev-parse', '--abbrev-ref', 'HEAD'])).trim() || undefined
+    } catch {
+      /* detached HEAD / unusual state — leave undefined */
+    }
+    return { ok: true, mergedInto }
   } catch (e) {
     try {
       await git(repoRoot, ['merge', '--abort'])

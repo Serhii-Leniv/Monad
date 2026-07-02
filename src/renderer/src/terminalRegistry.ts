@@ -8,6 +8,18 @@ import { useStore } from './store'
  */
 export const terminals = new Map<string, Terminal>()
 
+/**
+ * Hand keyboard focus back to the active terminal (the maximized one, else the
+ * sole selected one). Called after an overlay closes or a click lands off a pane,
+ * so typing never dead-ends on `<body>` when no selection *transition* occurred
+ * to trigger TerminalPane's own focus effect.
+ */
+export function focusActiveTerminal(): void {
+  const st = useStore.getState()
+  const id = st.focusedId ?? st.selectedIds[0]
+  if (id) terminals.get(id)?.focus()
+}
+
 /** Paths → one shell-ready string: quoted when they contain tricky chars. */
 export function quotePaths(paths: string[]): string {
   return paths.map((p) => (/[\s"'`$&;()[\]{}]/.test(p) ? `"${p}"` : p)).join(' ')

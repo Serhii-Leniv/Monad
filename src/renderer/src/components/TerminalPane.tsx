@@ -239,6 +239,13 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       if (mod && k === 'c' && term.hasSelection()) {
         e.preventDefault()
         window.api.clipboard.write(term.getSelection())
+        // On Windows/Linux `mod` IS Ctrl, so a lingering selection would make
+        // every Ctrl+C copy instead of sending SIGINT — you couldn't interrupt a
+        // runaway process without first clicking to clear the selection. Clear it
+        // so the next Ctrl+C falls through to the interrupt. (On macOS copy is ⌘C,
+        // separate from Ctrl+C, so there's no collision — but clearing after copy
+        // is still the conventional behaviour.)
+        if (!isMac) term.clearSelection()
         return false
       }
       if (mod && k === 'v') {
@@ -282,6 +289,12 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     fitRef.current = doFit
     doFit()
 
+    // Take keyboard focus if we're the active pane. Covers first mount AND, crucially,
+    // Relaunch: bumping retryNonce re-creates the Terminal without any selection
+    // transition, so the soleSelected effect wouldn't re-fire and typing would
+    // dead-end on the fresh shell until the user clicked in.
+    if (useStore.getState().selectedIds[0] === id) term.focus()
+
     const state = useStore.getState()
     const { projectPath, setAgentRuntime, setStatus } = state
     const shell = state.shells.find((sh) => sh.id === agent.shellId)
@@ -306,7 +319,10 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     const maybeNotify = (kind: 'attention' | 'done' | 'exited' | 'error'): void => {
       const st = useStore.getState()
       if (!st.settings.notifications) return
-      if (kind === 'done' && !st.settings.notifyOnDone) return
+      // A clean finish — whether it settled quietly ('done') or the process exited
+      // 0 ('exited') — is the same "your agent is done" signal, so both honour the
+      // "notify when finished" toggle. Only error exits notify unconditionally.
+      if ((kind === 'done' || kind === 'exited') && !st.settings.notifyOnDone) return
       const a = st.agents.find((x) => x.id === id)
       if (!a) return
       const wz = a.w * st.zoom
@@ -448,26 +464,34 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       )
       term.onData((d) => {
         window.api.pty.write(pid, d)
+        // Typing into a pane means you're engaged — clear a latched bell so a
+        // one-off \a (build-done, a beep) doesn't keep the pane stuck showing
+        // "attention" (and re-nagging) when nothing is actually waiting on you.
+        if (bellRang) {
+          bellRang = false
+          if (!working) setStatus(id, 'idle')
+        }
         // When the user runs a command, tag the terminal if it's a known agent —
         // so the badge appears even when an agent is started by hand.
         if (d.includes('\r')) {
           const buf = term.buffer.active
           const line = buf.getLine(buf.baseY + buf.cursorY)?.translateToString(true) ?? ''
-          // Take the command after the last shell-prompt character.
-          const cmd = (line.match(/.*[>$#%]\s*(\S.*)$/)?.[1] ?? '').trim().split(/\s+/)[0]
-          const base = (cmd.split(/[\\/]/).pop() ?? '').toLowerCase()
+          // The full command after the last shell-prompt character, plus its bare
+          // program name for agent matching.
+          const after = (line.match(/.*[>$#%]\s*(\S.*)$/)?.[1] ?? '').trim()
+          const base = ((after.split(/\s+/)[0] ?? '').split(/[\\/]/).pop() ?? '').toLowerCase()
           if (base) {
             const st = useStore.getState()
             const hit = st.agentClis.find((c) => c.command.toLowerCase() === base || c.id === base)
             if (hit) {
-              // Remember the launch command too (unless one's already set from the
+              // Remember the FULL typed line (unless one's already set from the
               // "Start <agent>" menu) so a hand-started agent relaunches on reopen
-              // instead of coming back as a bare shell.
+              // with its flags intact — not as a bare `claude`.
               const had = st.agents.find((a) => a.id === id)?.startupCommand
               setAgentRuntime(id, {
                 agentId: hit.id,
                 agentLabel: hit.label,
-                ...(had ? {} : { startupCommand: hit.command })
+                ...(had ? {} : { startupCommand: after })
               })
             }
           }
@@ -482,7 +506,14 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
           cd = `Set-Location -LiteralPath '${wt.cwd.replace(/'/g, "''")}'`
         } else if (sid === 'cmd') {
           cd = `cd /d "${wt.cwd}"`
-        } else if (!win && sid !== 'gitbash') {
+        } else if (sid === 'gitbash') {
+          // MSYS bash: forward-slash drive path in POSIX single quotes. Previously
+          // NO branch matched git-bash on Windows, so an "isolated" git-bash relied
+          // solely on the spawn cwd — a profile that cd's on login dropped the agent
+          // out of its worktree with nothing re-asserting it.
+          const posix = wt.cwd.replace(/\\/g, '/')
+          cd = `cd '${posix.replace(/'/g, "'\\''")}'`
+        } else if (!win) {
           cd = `cd '${wt.cwd.replace(/'/g, "'\\''")}'`
         }
         if (cd) window.api.pty.write(pid, cd + '\r')
@@ -527,8 +558,28 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
   // canvas keeps the current selection; Stage re-focuses it there.)
   const soleSelected = useStore((s) => s.selectedIds.length === 1 && s.selectedIds[0] === id)
   useEffect(() => {
-    if (soleSelected) termRef.current?.focus()
-  }, [soleSelected])
+    // Don't focus when the shell failed to spawn — the term's textarea is detached
+    // from the DOM (the error view replaced the body), so focusing it would send
+    // keystrokes nowhere. The Retry button autoFocuses instead.
+    if (soleSelected && !spawnError) termRef.current?.focus()
+  }, [soleSelected, spawnError])
+
+  // Escape closes the in-pane overlays the global handler can't see: the close
+  // confirm (most dangerous dialog in the app) and the right-click menu. Capture
+  // phase + stopImmediatePropagation so App's window keydown doesn't ALSO act on
+  // the same Esc (e.g. un-maximizing the pane behind the dialog).
+  useEffect(() => {
+    if (!menu && !closePrompt) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      setMenu(null)
+      setClosePrompt(null)
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [menu, closePrompt])
 
   // Live terminal options from settings (no respawn needed).
   useEffect(() => {
@@ -666,6 +717,17 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       <div
         className="vec-pane__header"
         title={focused ? 'Double-click to restore' : 'Double-click to focus'}
+        // Clicking the header (title/dot/empty chrome) hands keyboard focus back to
+        // the terminal, so re-clicking the active pane after focus left it (a modal,
+        // the rail…) resumes typing. On *click*, not pointerdown: mousedown on the
+        // non-focusable header blurs the textarea, so focusing earlier gets undone —
+        // click fires after that blur and sticks. Capture phase so Moveable (which
+        // owns the header as its drag target) can't swallow it. Skip inputs/buttons
+        // so the rename field and branch/close/restore keep their focus.
+        onClickCapture={(e) => {
+          if ((e.target as HTMLElement).closest('input, button')) return
+          if (!spawnError) termRef.current?.focus()
+        }}
         onDoubleClick={() => (focused ? clearFocus() : focusTerminal(id))}
       >
         <span
@@ -730,6 +792,19 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
             </button>
           )
         )}
+        {focused && (
+          <button
+            className="vec-pane__branch vec-pane__branch--btn"
+            title="Restore to the grid"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              clearFocus()
+            }}
+          >
+            Restore
+          </button>
+        )}
         <button
           className="vec-pane__close"
           title="Remove terminal"
@@ -746,7 +821,7 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
         <div className="vec-pane__error">
           <div className="vec-pane__error-title">Couldn’t start the shell</div>
           <div className="vec-pane__error-msg">{spawnError}</div>
-          <button className="vec-pane__retry" onPointerDown={(e) => e.stopPropagation()} onClick={relaunch}>
+          <button className="vec-pane__retry" autoFocus onPointerDown={(e) => e.stopPropagation()} onClick={relaunch}>
             Retry
           </button>
         </div>
@@ -913,7 +988,8 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
                         {closePrompt.count > 0 ? closePrompt.count : 'uncommitted'}{' '}
                         {closePrompt.count === 1 ? 'change' : 'changes'}
                       </b>{' '}
-                      that aren’t committed. Deleting the worktree will permanently lose them.
+                      that aren’t merged yet. Deleting the worktree permanently loses them —
+                      committed and uncommitted alike.
                     </>
                   ) : (
                     'This will delete the terminal’s worktree and branch. No uncommitted changes were found.'

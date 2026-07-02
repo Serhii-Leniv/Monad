@@ -221,10 +221,25 @@ const DEFAULT_SETTINGS: AppSettings = {
   terminalOpacity: 0.55
 }
 
+function clampNum(n: unknown, lo: number, hi: number, dflt: number): number {
+  const v = typeof n === 'number' && Number.isFinite(n) ? n : dflt
+  return Math.min(hi, Math.max(lo, v))
+}
+
 function loadSettings(): AppSettings {
   try {
     const raw = localStorage.getItem('vectro.settings')
-    return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : DEFAULT_SETTINGS
+    const merged = raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : DEFAULT_SETTINGS
+    // A corrupt / hand-edited store must not be able to brick the app (zoom 8×,
+    // fontSize 999, a half-gig scrollback ring buffer). Clamp numerics to the same
+    // ranges the Settings sliders enforce for new input.
+    return {
+      ...merged,
+      fontSize: clampNum(merged.fontSize, 9, 22, DEFAULT_SETTINGS.fontSize),
+      scrollback: clampNum(merged.scrollback, 500, 20000, DEFAULT_SETTINGS.scrollback),
+      zoomFactor: clampNum(merged.zoomFactor, 0.7, 1.8, DEFAULT_SETTINGS.zoomFactor),
+      terminalOpacity: clampNum(merged.terminalOpacity, 0.4, 1, DEFAULT_SETTINGS.terminalOpacity)
+    }
   } catch {
     return DEFAULT_SETTINGS
   }
@@ -404,6 +419,13 @@ export const useStore = create<AppState>((set, get) => ({
         // Start with the first terminal active so you can type immediately.
         selectedIds: loaded[0] ? [loaded[0].id] : [],
         focusedId: null,
+        // Clear transient lifecycle state so nothing leaks across projects (a stale
+        // diff target, a "reopen" from the old project, a half-closed pane).
+        closingIds: [],
+        draggingId: null,
+        pendingCloseId: null,
+        diffAgentId: null,
+        lastClosed: null,
         layoutMode: mode,
         agents: laidOut(loaded, mode, s.canvasW, s.canvasH),
         panX: 0,
@@ -419,7 +441,14 @@ export const useStore = create<AppState>((set, get) => ({
       isGit: false,
       baseBranch: null,
       agents: [],
-      selectedIds: []
+      selectedIds: [],
+      // Drop transient lifecycle state so it can't leak into the next project.
+      closingIds: [],
+      draggingId: null,
+      pendingCloseId: null,
+      diffAgentId: null,
+      lastClosed: null,
+      focusedId: null
     }),
 
   setWorkspaces: (workspaces) => set({ workspaces }),
@@ -479,9 +508,15 @@ export const useStore = create<AppState>((set, get) => ({
   clearPendingClose: () => set({ pendingCloseId: null }),
 
 
-  addAgent: (opts) =>
+  addAgent: (opts) => {
+    // Tell the user why nothing happened at the cap — the ⌘T / reopen keyboard
+    // paths otherwise no-op silently (the Rail button + palette already hide/disable
+    // themselves, but a keystroke gave no feedback and read as a broken shortcut).
+    if (get().agents.length >= MAX_AGENTS) {
+      get().pushToast(`Maximum ${MAX_AGENTS} terminals on one canvas`, 'info')
+      return
+    }
     set((s) => {
-      if (s.agents.length >= MAX_AGENTS) return {} // capped — ignore
       const isolation: Isolation =
         s.isGit && s.settings.defaultIsolation === 'worktree' ? 'worktree' : 'shared'
       const shellId = opts?.shellId ?? s.settings.defaultShellId ?? undefined
@@ -506,7 +541,8 @@ export const useStore = create<AppState>((set, get) => ({
         panY: 0,
         zoom: 1
       }
-    }),
+    })
+  },
 
   removeAgent: (id, opts) => {
     // Two-phase: flag the pane so it plays its collapse animation, then do the
@@ -554,10 +590,14 @@ export const useStore = create<AppState>((set, get) => ({
     }, 180)
   },
 
-  reopenLast: () =>
+  reopenLast: () => {
+    if (get().agents.length >= MAX_AGENTS) {
+      get().pushToast(`Maximum ${MAX_AGENTS} terminals on one canvas`, 'info')
+      return
+    }
     set((s) => {
       const lc = s.lastClosed
-      if (!lc || s.agents.length >= MAX_AGENTS) return {}
+      if (!lc) return {}
       const taken = new Set(s.agents.map((a) => a.label.toLowerCase()))
       const agent: AgentInstance = {
         id: uuid(),
@@ -581,7 +621,8 @@ export const useStore = create<AppState>((set, get) => ({
         panY: 0,
         zoom: 1
       }
-    }),
+    })
+  },
 
   renameAgent: (id, label) =>
     set((s) => ({

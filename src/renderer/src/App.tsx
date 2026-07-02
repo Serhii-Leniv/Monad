@@ -14,7 +14,7 @@ const DiffPanel = lazy(() => import('./components/DiffPanel'))
 import { useStore, toPersisted } from './store'
 import { openProjectByPath, restoreLastProject, saveCanvas } from './openProject'
 import { applyAccent } from './accent'
-import { handleMenuEdit, terminals } from './terminalRegistry'
+import { handleMenuEdit, terminals, focusActiveTerminal } from './terminalRegistry'
 
 export default function App(): JSX.Element {
   const projectPath = useStore((s) => s.projectPath)
@@ -81,6 +81,18 @@ export default function App(): JSX.Element {
     return window.api.menu.onEdit((action) => void handleMenuEdit(action))
   }, [])
 
+  // When every overlay closes (palette / settings / diff), hand keyboard focus
+  // back to the active terminal. Dismissing an overlay unmounts its input and
+  // React drops focus to <body>; since selectedIds doesn't change, TerminalPane's
+  // selection-driven focus effect never re-fires, so typing would dead-end until
+  // the user clicks a pane. rAF lets the overlay finish unmounting first.
+  const overlayOpen = settingsOpen || paletteOpen || !!diffAgentId
+  const prevOverlayOpen = useRef(false)
+  useEffect(() => {
+    if (prevOverlayOpen.current && !overlayOpen) requestAnimationFrame(focusActiveTerminal)
+    prevOverlayOpen.current = overlayOpen
+  }, [overlayOpen])
+
   // Load the chosen wallpaper (read in main → data URL so CSP stays strict).
   useEffect(() => {
     if (!wallpaper) {
@@ -133,11 +145,21 @@ export default function App(): JSX.Element {
         return
       }
       // Switch workspace — ⌘⌥1…9 (Ctrl+Alt on Win/Linux). Saves the current
-      // canvas first; no-op if that slot is already open or empty.
-      if ((e.metaKey || e.ctrlKey) && e.altKey && /^[1-9]$/.test(e.key)) {
-        e.preventDefault()
+      // canvas first; no-op if that slot is already open or empty. Exclude AltGr
+      // (which reports as Ctrl+Alt): on EU layouts it types digits/brackets, and
+      // swallowing those would stop the user entering them into the terminal. Only
+      // preventDefault when we actually switch, so an unhandled combo falls through.
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        e.altKey &&
+        !e.getModifierState('AltGraph') &&
+        /^[1-9]$/.test(e.key)
+      ) {
         const ws = st.workspaces[Number(e.key) - 1]
-        if (ws) void openProjectByPath(ws)
+        if (ws && ws.path !== st.projectPath) {
+          e.preventDefault()
+          void openProjectByPath(ws)
+        }
         return
       }
       // Interface zoom — plain ⌘/Ctrl with +/−/0 (like browsers / VS Code).
@@ -168,6 +190,10 @@ export default function App(): JSX.Element {
         st.setPaletteOpen(!st.paletteOpen)
         return
       }
+      // With an overlay up, the canvas is hidden — don't let ⌘T/⌘1/⌘2/⌘W/cycle
+      // fire actions the user can't see (spawning panes behind Settings, silently
+      // swapping layout, stealing selection). Only Escape / ⌘K operate above.
+      if (st.settingsOpen || st.paletteOpen || st.diffAgentId) return
       if (!st.projectPath) return
       if (k === 't') {
         e.preventDefault()
@@ -220,7 +246,14 @@ export default function App(): JSX.Element {
   const persistedKey = useMemo(
     () =>
       persisted
-        .map((p) => `${p.id}:${p.x},${p.y},${p.w},${p.h}:${p.isolation}:${p.shellId ?? ''}:${p.label}`)
+        .map(
+          (p) =>
+            // Include the agent tags: detecting an agent from a typed command
+            // (startupCommand/agentId/agentLabel) changes none of the geometry
+            // fields, so without them here the autosave never fires and the agent
+            // comes back as a bare shell on reopen.
+            `${p.id}:${p.x},${p.y},${p.w},${p.h}:${p.isolation}:${p.shellId ?? ''}:${p.label}:${p.startupCommand ?? ''}:${p.agentId ?? ''}:${p.agentLabel ?? ''}`
+        )
         .join('|'),
     [persisted]
   )
