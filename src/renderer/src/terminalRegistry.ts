@@ -1,4 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
+import { useStore } from './store'
 
 /**
  * Live xterm instances keyed by agent id. TerminalPane (un)registers on
@@ -18,25 +19,38 @@ export const terminals = new Map<string, Terminal>()
 export async function handleMenuEdit(action: 'copy' | 'paste' | 'selectAll'): Promise<void> {
   const el = document.activeElement as HTMLElement | null
 
-  const termHost = el?.closest?.('.vec-pane__term') as HTMLElement | null
-  if (termHost) {
-    const paneId = (termHost.closest('.vec-pane') as HTMLElement | null)?.dataset.id
-    const term = paneId ? terminals.get(paneId) : undefined
-    if (!term) return
+  const applyToTerm = async (term: Terminal): Promise<void> => {
     if (action === 'copy') {
       if (term.hasSelection()) window.api.clipboard.write(term.getSelection())
     } else if (action === 'paste') {
       const t = await window.api.clipboard.read()
       if (t) term.paste(t)
+      term.focus()
     } else {
       term.selectAll()
     }
+  }
+
+  const termHost = el?.closest?.('.vec-pane__term') as HTMLElement | null
+  if (termHost) {
+    const paneId = (termHost.closest('.vec-pane') as HTMLElement | null)?.dataset.id
+    const term = paneId ? terminals.get(paneId) : undefined
+    if (term) await applyToTerm(term)
     return
   }
 
   // Plain input / textarea (rename field, search box).
   const input = el as HTMLInputElement | HTMLTextAreaElement | null
-  if (!input || typeof input.value !== 'string') return
+  if (!input || typeof input.value !== 'string') {
+    // Nothing has DOM focus (e.g. the user clicked a pane header, then hit ⌘V).
+    // Route to the terminal they mean: the focused pane, or the single selected
+    // one — so paste "just works" instead of silently going nowhere.
+    const st = useStore.getState()
+    const targetId = st.focusedId ?? (st.selectedIds.length === 1 ? st.selectedIds[0] : null)
+    const term = targetId ? terminals.get(targetId) : undefined
+    if (term) await applyToTerm(term)
+    return
+  }
   if (action === 'selectAll') {
     input.select?.()
     return
