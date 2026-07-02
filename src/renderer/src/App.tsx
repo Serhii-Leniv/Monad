@@ -47,6 +47,22 @@ export default function App(): JSX.Element {
     void restoreLastProject()
   }, [])
 
+  // One-shot update check (main process reads the vectro-site release feed).
+  // Delayed so it never competes with startup; on a newer release a sticky
+  // toast offers the download page. Silent on failure and when up to date.
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      void window.api.update.check().then((u) => {
+        if (!u) return
+        useStore.getState().pushToast(`Vectro ${u.latest} is available`, 'info', {
+          actionLabel: 'Download',
+          onAction: () => void window.api.openExternal(u.url)
+        })
+      })
+    }, 5000)
+    return () => window.clearTimeout(t)
+  }, [])
+
   // Apply the interface zoom (scales the whole app for high-DPI displays).
   useEffect(() => {
     window.api.zoom.set(zoomFactor)

@@ -14,6 +14,9 @@ export interface Toast {
   id: string
   text: string
   kind: 'info' | 'success' | 'error'
+  /** Optional action button (e.g. "Download"); a toast with one never auto-dismisses. */
+  actionLabel?: string
+  onAction?: () => void
 }
 
 /** Hard cap — more than this on one canvas is unreadable. */
@@ -157,7 +160,7 @@ interface AppState {
   clearFocus: () => void
   setAgentRuntime: (id: string, rt: Partial<AgentInstance>) => void
   setStatus: (id: string, status: AgentStatus) => void
-  pushToast: (text: string, kind?: Toast['kind']) => void
+  pushToast: (text: string, kind?: Toast['kind'], action?: Pick<Toast, 'actionLabel' | 'onAction'>) => void
   dismissToast: (id: string) => void
 }
 
@@ -636,8 +639,8 @@ export const useStore = create<AppState>((set, get) => ({
   setStatus: (id, status) =>
     set((s) => ({ agents: s.agents.map((a) => (a.id === id ? { ...a, status } : a)) })),
 
-  pushToast: (text, kind = 'info') =>
-    set((s) => ({ toasts: [...s.toasts, { id: uuid(), text, kind }] })),
+  pushToast: (text, kind = 'info', action) =>
+    set((s) => ({ toasts: [...s.toasts, { id: uuid(), text, kind, ...action }] })),
 
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }))
 }))

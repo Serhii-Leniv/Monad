@@ -13,6 +13,7 @@ import {
   friendlyGitError
 } from './git'
 import { detectShells, detectAgents } from './shells'
+import { checkForUpdate } from './update'
 
 /**
  * Registers every main-process IPC handler against a window accessor.
@@ -52,6 +53,10 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
 
   ipcMain.handle('shells:list', () => detectShells())
   ipcMain.handle('agents:list', () => detectAgents())
+
+  // Newer-release check against the vectro-site release feed (null = up to date
+  // or the check failed; the renderer surfaces a toast only on a real update).
+  ipcMain.handle('update:check', () => checkForUpdate())
 
   // --- Wallpaper: pick an image, and read it as a data URL (CSP-safe) ---
   ipcMain.handle('wallpaper:pick', async () => {
