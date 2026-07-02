@@ -1,4 +1,4 @@
-import { app, BrowserWindow, session, screen, nativeImage } from 'electron'
+import { app, BrowserWindow, session, screen, nativeImage, shell } from 'electron'
 import { join } from 'path'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { registerIpc } from './ipc'
@@ -106,8 +106,27 @@ function createWindow(): void {
       sandbox: false,
       contextIsolation: true,
       nodeIntegration: false,
-      webviewTag: true
+      // Nothing uses <webview>; leaving it on is needless attack surface (a guest
+      // could ship its own nodeIntegration/preload).
+      webviewTag: false
     }
+  })
+
+  // The renderer only ever shows this app's own local content. Block any attempt
+  // to navigate the top frame off-origin or open a new window — otherwise a stray
+  // link, dropped file, or injected navigation would load a page that inherits the
+  // full preload `api` (pty.spawn, file read) = remote code execution. External
+  // http(s) links still open in the real browser via shell.openExternal.
+  win.webContents.on('will-navigate', (e, url) => {
+    try {
+      if (new URL(url).origin !== new URL(win!.webContents.getURL()).origin) e.preventDefault()
+    } catch {
+      e.preventDefault()
+    }
+  })
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
+    return { action: 'deny' }
   })
 
   const loadRenderer = (): void => {
@@ -130,6 +149,10 @@ function createWindow(): void {
     if (recoveries >= 3 || !win || win.isDestroyed()) return
     recoveries++
     console.error(`[vectro] renderer ${why} — reloading (attempt ${recoveries})`)
+    // The reloaded renderer respawns its terminals from canvas.json, so the old
+    // ptys are orphaned — a hard reload/crash never runs React's unmount cleanup.
+    // Kill them here or each crash-recovery leaks a whole set of live shells.
+    ptyManager?.killAll()
     setTimeout(loadRenderer, 400)
   }
   win.webContents.on('did-fail-load', (_e, code, desc) => {
@@ -149,7 +172,20 @@ function createWindow(): void {
   win.on('close', () => win && saveWinState(win))
 }
 
-app.whenReady().then(() => {
+// Single-instance: a second launch focuses the existing window instead of running
+// a rival main that races on window-state and the same repo's worktrees.
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (win) {
+      if (win.isMinimized()) win.restore()
+      win.show()
+      win.focus()
+    }
+  })
+
+  app.whenReady().then(() => {
   applyProductionCsp()
   ptyManager = registerIpc(() => win)
   // macOS needs an explicit menu so ⌘C/⌘V/⌘A reach the terminal instead of being
@@ -166,12 +202,13 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
-}).catch((e) => {
-  console.error('[vectro] failed to start:', e)
-  app.quit()
-})
+  }).catch((e) => {
+    console.error('[vectro] failed to start:', e)
+    app.quit()
+  })
 
-app.on('window-all-closed', () => {
-  ptyManager?.killAll()
-  if (process.platform !== 'darwin') app.quit()
-})
+  app.on('window-all-closed', () => {
+    ptyManager?.killAll()
+    if (process.platform !== 'darwin') app.quit()
+  })
+}

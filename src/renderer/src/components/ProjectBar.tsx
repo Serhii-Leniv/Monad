@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore } from '../store'
-import { openProjectInteractive, openProjectByPath } from '../openProject'
+import { openProjectInteractive, openProjectByPath, closeCurrentProject } from '../openProject'
 import { emblemStyle } from '../projectColor'
+import { altModLabel } from '../shortcuts'
 
 function initial(name: string): string {
   const m = name.match(/[a-z0-9]/i)
@@ -21,15 +22,30 @@ export default function ProjectBar(): JSX.Element {
   const projectPath = useStore((s) => s.projectPath)
   const projectName = useStore((s) => s.projectName)
   const workspaces = useStore((s) => s.workspaces)
-  const closeProject = useStore((s) => s.closeProject)
   const [open, setOpen] = useState(false)
   const closeMenu = (): void => setOpen(false)
+
+  // Esc closes the switcher — parity with every other overlay, and the only
+  // keyboard dismiss (the backdrop is mouse-only).
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        setOpen(false)
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [open])
 
   return (
     <div className="projbar">
       <button
         className={'projbar__btn' + (open ? ' is-open' : '')}
         onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
         title={projectPath ? `${projectName} — switch project` : 'Open a project'}
       >
         {projectPath ? (
@@ -69,16 +85,17 @@ export default function ProjectBar(): JSX.Element {
       {open && (
         <>
           <div className="projbar__backdrop" onClick={closeMenu} />
-          <div className="projbar__menu">
+          <div className="projbar__menu" role="menu">
             <div className="rail__menu-head">Projects</div>
             {workspaces.length === 0 && <div className="rail__menu-empty">No recent projects</div>}
-            {workspaces.map((w) => {
+            {workspaces.map((w, i) => {
               const active = w.path === projectPath
               return (
                 <button
                   key={w.path}
+                  role="menuitem"
                   className={'rail__proj' + (active ? ' is-active' : '')}
-                  title={w.path}
+                  title={i < 9 ? `${w.path}  ·  ${altModLabel(i + 1)}` : w.path}
                   onClick={() => {
                     closeMenu()
                     if (!active) void openProjectByPath(w)
@@ -110,7 +127,7 @@ export default function ProjectBar(): JSX.Element {
                 className="rail__menu-item rail__menu-item--danger"
                 onClick={() => {
                   closeMenu()
-                  closeProject()
+                  closeCurrentProject()
                 }}
               >
                 Close project

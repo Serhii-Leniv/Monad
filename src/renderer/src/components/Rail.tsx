@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import Logo from './Logo'
 import { IconTerminal, IconGrid, IconColumns, IconSettings, IconBell } from './Icons'
 import { useStore, NEEDS_ATTENTION, MAX_AGENTS } from '../store'
+import { modLabel } from '../shortcuts'
 
 /** Below this many terminals, grid and columns produce the same layout, so the
  *  layout toggle is hidden to keep the dock uncluttered. */
@@ -50,7 +51,7 @@ export default function Rail(): JSX.Element {
                 className="rail-btn rail-btn--primary"
                 onClick={() => (agentClis.length ? setNewOpen((v) => !v) : addAgent())}
                 disabled={full}
-                title={full ? `Maximum ${MAX_AGENTS} terminals` : 'New terminal  (⌘T)'}
+                title={full ? `Maximum ${MAX_AGENTS} terminals` : `New terminal  (${modLabel('T')})`}
               >
                 <IconTerminal />
               </button>
@@ -97,14 +98,14 @@ export default function Rail(): JSX.Element {
                   <button
                     className={'rail__seg-btn' + (layoutMode === 'grid' ? ' is-active' : '')}
                     onClick={() => setLayoutMode('grid')}
-                    title="Grid  (⌘1)"
+                    title={`Grid  (${modLabel('1')})`}
                   >
                     <IconGrid />
                   </button>
                   <button
                     className={'rail__seg-btn' + (layoutMode === 'columns' ? ' is-active' : '')}
                     onClick={() => setLayoutMode('columns')}
-                    title="Columns  (⌘2)"
+                    title={`Columns  (${modLabel('2')})`}
                   >
                     <IconColumns />
                   </button>
