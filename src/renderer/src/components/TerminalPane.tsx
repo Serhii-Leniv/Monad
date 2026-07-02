@@ -5,7 +5,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { WebLinksAddon } from '@xterm/addon-web-links'
-import { useStore, displayBranch, type AgentInstance, type AgentStatus } from '../store'
+import { useStore, displayBranch, RAIL_INSET, PAD, type AgentInstance, type AgentStatus } from '../store'
 import { terminals } from '../terminalRegistry'
 import { needsAttention, stripAnsi, clampTail } from '../attention'
 import { playCue, type Cue } from '../sound'
@@ -16,6 +16,9 @@ import AgentBadge from './AgentBadge'
 // blinking cursor. Strip it so our own calm CSS blink is the single source.
 // eslint-disable-next-line no-control-regex
 const CURSOR_STYLE_SEQ = /\x1b\[[0-9]* q/g
+
+/** Floor for the maximized pane before the canvas has reported its size. */
+const MIN_FOCUS_SIZE = 200
 
 /** Status → status-dot colour (CSS custom properties from the palette). */
 const STATUS_COLOR: Record<AgentStatus, string> = {
@@ -57,6 +60,10 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
   const confirmClose = useStore((s) => s.settings.confirmClose)
   const renameAgent = useStore((s) => s.renameAgent)
   const focusTerminal = useStore((s) => s.focusTerminal)
+  const clearFocus = useStore((s) => s.clearFocus)
+  const focused = useStore((s) => s.focusedId === id)
+  const canvasW = useStore((s) => s.canvasW)
+  const canvasH = useStore((s) => s.canvasH)
   const setDiffAgentId = useStore((s) => s.setDiffAgentId)
   const pendingClose = useStore((s) => s.pendingCloseId === id)
   const clearPendingClose = useStore((s) => s.clearPendingClose)
@@ -101,7 +108,15 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       scrollback,
       cursorBlink: false, // steady cursor — the blink read as a fast jitter
       allowTransparency: true, // so the pane bg / wallpaper can show through
-      theme: { background: 'rgba(0,0,0,0)', foreground: '#cdd6e4', cursor: '#cdd6e4' }
+      theme: {
+        background: 'rgba(0,0,0,0)',
+        foreground: '#cdd6e4',
+        cursor: '#cdd6e4',
+        // Explicit selection colours: on the translucent glass background,
+        // xterm's default selection was nearly invisible.
+        selectionBackground: 'rgba(138, 170, 255, 0.36)',
+        selectionInactiveBackground: 'rgba(138, 170, 255, 0.18)'
+      }
     })
     termRef.current = term
     // Expose to the macOS Edit-menu handler (routes ⌘C/⌘V/⌘A by focus).
@@ -117,23 +132,39 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
 
     // Copy on Ctrl/Cmd-C when there's a selection (else let Ctrl-C be SIGINT);
     // paste on Ctrl/Cmd-V; open find on Ctrl/Cmd-F.
+    // preventDefault() is load-bearing on the intercepted combos: returning
+    // false only stops xterm's own processing, NOT the browser default. Without
+    // it, Ctrl+V ALSO fired the native `paste` event on xterm's hidden textarea
+    // (xterm pastes it too) — every paste landed TWICE. Dictation tools that
+    // simulate Ctrl+V (Wispr Flow) hit the same double-paste.
     term.attachCustomKeyEventHandler((e): boolean => {
       if (e.type !== 'keydown') return true
       const mod = e.ctrlKey || e.metaKey
       const k = e.key.toLowerCase()
       if (mod && k === 'c' && term.hasSelection()) {
+        e.preventDefault()
         window.api.clipboard.write(term.getSelection())
         return false
       }
       if (mod && k === 'v') {
+        e.preventDefault()
         void pasteFromClipboard()
         return false
       }
       if (mod && k === 'f') {
+        e.preventDefault()
         setSearchOpen(true)
         return false
       }
       return true
+    })
+
+    // Copy-on-select (iTerm-style): finishing a mouse selection puts it on the
+    // clipboard — no extra keystroke, and the selection stays visible.
+    term.onSelectionChange(() => {
+      if (!useStore.getState().settings.copyOnSelect) return
+      const sel = term.getSelection()
+      if (sel) window.api.clipboard.write(sel)
     })
 
     let raf = 0
@@ -406,14 +437,18 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     setRetryNonce((n) => n + 1)
   }
 
+  // Context-menu actions hand focus back to the terminal, so you can keep
+  // typing right after Copy/Paste without clicking into the pane again.
   const copySelection = (): void => {
     const sel = termRef.current?.getSelection()
     if (sel) window.api.clipboard.write(sel)
     setMenu(null)
+    termRef.current?.focus()
   }
   const paste = (): void => {
     void pasteFromClipboard()
     setMenu(null)
+    termRef.current?.focus()
   }
 
   const dotColor = STATUS_COLOR[status]
@@ -427,14 +462,25 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
           : ''
   const ended = (status === 'exited' || status === 'error') && !spawnError
 
-  const style = {
-    position: 'absolute' as const,
-    top: 0,
-    left: 0,
-    transform: `translate(${agent.x}px, ${agent.y}px)`,
-    width: agent.w,
-    height: agent.h
-  }
+  // Focused = maximized to the viewport (real refit → more rows/cols, crisp
+  // text, correct mouse selection). Otherwise the pane sits in its tiled slot.
+  const style = focused
+    ? {
+        position: 'absolute' as const,
+        top: 0,
+        left: 0,
+        transform: `translate(${RAIL_INSET}px, ${PAD}px)`,
+        width: Math.max(MIN_FOCUS_SIZE, canvasW - RAIL_INSET - PAD),
+        height: Math.max(MIN_FOCUS_SIZE, canvasH - PAD * 2)
+      }
+    : {
+        position: 'absolute' as const,
+        top: 0,
+        left: 0,
+        transform: `translate(${agent.x}px, ${agent.y}px)`,
+        width: agent.w,
+        height: agent.h
+      }
 
   const commitRename = (): void => {
     renameAgent(id, draft.trim())
@@ -453,11 +499,21 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
   return (
     <>
     <div
-      className={'vec-pane' + (selected ? ' is-selected' : '') + ringClass + (closing ? ' is-closing' : '')}
+      className={
+        'vec-pane' +
+        (selected ? ' is-selected' : '') +
+        (focused ? ' is-focused' : '') +
+        ringClass +
+        (closing ? ' is-closing' : '')
+      }
       data-id={id}
       style={style}
     >
-      <div className="vec-pane__header" onDoubleClick={() => focusTerminal(id)}>
+      <div
+        className="vec-pane__header"
+        title={focused ? 'Double-click to restore' : 'Double-click to focus'}
+        onDoubleClick={() => (focused ? clearFocus() : focusTerminal(id))}
+      >
         <span
           className={
             'vec-pane__dot' +
