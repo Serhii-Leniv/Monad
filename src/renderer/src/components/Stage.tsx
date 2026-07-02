@@ -18,6 +18,7 @@ export default function Stage(): JSX.Element {
   const panX = useStore((s) => s.panX)
   const panY = useStore((s) => s.panY)
   const zoom = useStore((s) => s.zoom)
+  const focusedId = useStore((s) => s.focusedId)
 
   const stageRef = useRef<HTMLDivElement>(null)
   const moveableRef = useRef<Moveable>(null)
@@ -84,8 +85,10 @@ export default function Stage(): JSX.Element {
     return best
   }
 
+  // No drag while a pane is maximized — Moveable's inline transform would fight
+  // the focus geometry, and reordering makes no sense with one pane on screen.
   const dragTarget =
-    targets.length === 1
+    targets.length === 1 && !focusedId
       ? (targets[0].querySelector('.vec-pane__header') as HTMLElement) ?? undefined
       : undefined
 

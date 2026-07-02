@@ -121,6 +121,18 @@ export default function Settings(): JSX.Element {
                     <span className="settings__value">{settings.scrollback.toLocaleString()}</span>
                   </div>
                 </label>
+
+                <label className="settings__row settings__row--toggle">
+                  <span className="settings__label">
+                    Copy on select
+                    <span className="settings__hint">selecting text with the mouse copies it immediately</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={settings.copyOnSelect}
+                    onChange={(e) => setSetting('copyOnSelect', e.target.checked)}
+                  />
+                </label>
               </>
             )}
 

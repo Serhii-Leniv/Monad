@@ -126,7 +126,6 @@ interface AppState {
    *  matching TerminalPane picks this up and runs its guarded close flow. */
   pendingCloseId: string | null
   focusedId: string | null
-  prevView: { panX: number; panY: number; zoom: number } | null
   toasts: Toast[]
 
   openProject: (ref: ProjectRef, saved: PersistedCanvas | null, git: GitInfo) => void
@@ -142,7 +141,6 @@ interface AppState {
   setDiffAgentId: (id: string | null) => void
   requestClose: (id: string) => void
   clearPendingClose: () => void
-  setView: (panX: number, panY: number, zoom: number) => void
   addAgent: (opts?: {
     command?: string
     shellId?: string
@@ -176,6 +174,8 @@ export interface AppSettings {
   fontSize: number
   fontFamily: string
   scrollback: number
+  /** Selecting text with the mouse copies it immediately (iTerm-style). */
+  copyOnSelect: boolean
   confirmClose: boolean
   zoomFactor: number
   /** Accent colour (hex) — drives the whole UI palette. */
@@ -208,6 +208,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   fontSize: 14,
   fontFamily: 'Cascadia Code, Consolas, monospace',
   scrollback: 2000,
+  copyOnSelect: true,
   confirmClose: true,
   zoomFactor: 1.1,
   accent: '#ff453a',
@@ -245,8 +246,8 @@ function uuid(): string {
 }
 
 const GAP = 12
-const RAIL_INSET = 84 // room for the floating dock on the left (max adaptive width)
-const PAD = 14
+export const RAIL_INSET = 84 // room for the floating dock on the left (max adaptive width)
+export const PAD = 14
 const BOTTOM_INSET = 14 // bottom margin for the tiled panes (symmetric with the top PAD)
 
 /**
@@ -376,7 +377,6 @@ export const useStore = create<AppState>((set, get) => ({
   diffAgentId: null,
   pendingCloseId: null,
   focusedId: null,
-  prevView: null,
   toasts: [],
   panX: 0,
   panY: 0,
@@ -399,7 +399,6 @@ export const useStore = create<AppState>((set, get) => ({
         baseBranch: git.branch,
         selectedIds: [],
         focusedId: null,
-        prevView: null,
         layoutMode: mode,
         agents: laidOut(loaded, mode, s.canvasW, s.canvasH),
         panX: 0,
@@ -464,7 +463,6 @@ export const useStore = create<AppState>((set, get) => ({
   requestClose: (id) => set({ pendingCloseId: id }),
   clearPendingClose: () => set({ pendingCloseId: null }),
 
-  setView: (panX, panY, zoom) => set({ panX, panY, zoom }),
 
   addAgent: (opts) =>
     set((s) => {
@@ -573,7 +571,6 @@ export const useStore = create<AppState>((set, get) => ({
     set((s) => ({
       layoutMode: mode,
       focusedId: null,
-      prevView: null,
       agents: laidOut(s.agents, mode, s.canvasW, s.canvasH),
       panX: 0,
       panY: 0,
@@ -608,30 +605,15 @@ export const useStore = create<AppState>((set, get) => ({
       zoom: 1
     })),
 
-  // Camera focus: frame a single terminal to fill the viewport; restore on exit.
+  // Focus: the pane expands to fill the viewport (tmux-style zoom) rather than
+  // scaling the camera. A CSS scale() breaks xterm's mouse math — its cell
+  // hit-testing doesn't compensate for transforms, so selection landed on the
+  // wrong characters — and scaled glyphs blur. Maximizing refits the terminal
+  // instead: crisp text, MORE rows/cols, and pixel-perfect selection.
   focusTerminal: (id) =>
-    set((s) => {
-      const a = s.agents.find((x) => x.id === id)
-      if (!a) return s
-      const availW = s.canvasW - RAIL_INSET - PAD
-      const availH = s.canvasH - PAD * 2
-      const zoom = Math.min(availW / a.w, availH / a.h, 1.6)
-      return {
-        focusedId: id,
-        prevView: { panX: s.panX, panY: s.panY, zoom: s.zoom },
-        selectedIds: [id],
-        zoom,
-        panX: RAIL_INSET + (availW - a.w * zoom) / 2 - a.x * zoom,
-        panY: PAD + (availH - a.h * zoom) / 2 - a.y * zoom
-      }
-    }),
+    set((s) => (s.agents.some((x) => x.id === id) ? { focusedId: id, selectedIds: [id] } : s)),
 
-  clearFocus: () =>
-    set((s) =>
-      s.prevView
-        ? { focusedId: null, prevView: null, ...s.prevView }
-        : { focusedId: null, prevView: null }
-    ),
+  clearFocus: () => set({ focusedId: null }),
 
   setAgentRuntime: (id, rt) =>
     set((s) => ({ agents: s.agents.map((a) => (a.id === id ? { ...a, ...rt } : a)) })),
