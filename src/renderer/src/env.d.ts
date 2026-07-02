@@ -50,11 +50,19 @@ interface DiffResult {
   diff: string
   untracked: string[]
   hasChanges: boolean
+  /** Set when the diff couldn't be produced (e.g. too large to buffer). */
+  error?: string
 }
 
 interface MergeResult {
   ok: boolean
   error?: string
+}
+
+interface UpdateInfo {
+  current: string
+  latest: string
+  url: string
 }
 
 /** Shape of the per-project canvas file (.agent-canvas/canvas.json). */
@@ -83,6 +91,16 @@ interface Window {
       onData: (id: string, cb: DataHandler) => () => void
       onExit: (id: string, cb: ExitHandler) => () => void
     }
+    clipboard: {
+      read: () => Promise<string>
+      write: (text: string) => void
+      hasImage: () => Promise<boolean>
+      readFiles: () => Promise<string[]>
+    }
+    getPathForFile: (file: File) => string
+    menu: {
+      onEdit: (cb: (action: 'copy' | 'paste' | 'selectAll') => void) => () => void
+    }
     shells: {
       list: () => Promise<ShellInfo[]>
     }
@@ -90,6 +108,13 @@ interface Window {
       list: () => Promise<AgentCli[]>
     }
     openExternal: (url: string) => Promise<boolean>
+    file: {
+      exists: (base: string, raw: string) => Promise<boolean>
+      open: (base: string, raw: string) => Promise<boolean>
+    }
+    update: {
+      check: () => Promise<UpdateInfo | null>
+    }
     wallpaper: {
       pick: () => Promise<string | null>
       read: (path: string) => Promise<string | null>

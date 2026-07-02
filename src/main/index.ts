@@ -2,6 +2,7 @@ import { app, BrowserWindow, session, screen, nativeImage } from 'electron'
 import { join } from 'path'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { registerIpc } from './ipc'
+import { installMacMenu } from './menu'
 import type { PtyManager } from './pty-manager'
 
 const isDev = !!process.env['ELECTRON_RENDERER_URL']
@@ -86,14 +87,19 @@ function createWindow(): void {
     ...(process.platform !== 'darwin' && existsSync(iconPng) ? { icon: iconPng } : {}),
     minWidth: 720,
     minHeight: 480,
-    // Transparent bg + Windows 11 acrylic = frosted desktop behind the app.
+    // Transparent bg + Windows 11 backdrop material = frosted desktop behind the
+    // app. 'mica' reads sharper/calmer than 'acrylic' (it tints from the wallpaper
+    // instead of live-blurring the desktop) — swap back to 'acrylic' here to A/B.
     backgroundColor: '#00000000',
-    backgroundMaterial: 'acrylic',
+    backgroundMaterial: 'mica',
     vibrancy: 'under-window', // macOS equivalent (no-op on Windows)
-    // Hide the native title bar so the glass runs edge-to-edge; keep the
-    // native min/max/close as an overlay.
+    // Hide the native title bar so the glass runs edge-to-edge. Windows/Linux
+    // draw min/max/close as an overlay (top-right); macOS keeps its native
+    // traffic lights, nudged to sit centered in our 40px titlebar strip.
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#00000000', symbolColor: '#e6e9f0', height: 40 },
+    ...(process.platform === 'darwin'
+      ? { trafficLightPosition: { x: 16, y: 13 } }
+      : { titleBarOverlay: { color: '#00000000', symbolColor: '#e6e9f0', height: 40 } }),
     autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -146,6 +152,9 @@ function createWindow(): void {
 app.whenReady().then(() => {
   applyProductionCsp()
   ptyManager = registerIpc(() => win)
+  // macOS needs an explicit menu so ⌘C/⌘V/⌘A reach the terminal instead of being
+  // swallowed by the default Edit-menu key equivalents (see menu.ts).
+  installMacMenu(() => win)
 
   // macOS dock icon (the running dev app otherwise shows the Electron icon).
   if (process.platform === 'darwin' && app.dock && existsSync(iconPng)) {

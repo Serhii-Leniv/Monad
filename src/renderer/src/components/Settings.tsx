@@ -121,6 +121,18 @@ export default function Settings(): JSX.Element {
                     <span className="settings__value">{settings.scrollback.toLocaleString()}</span>
                   </div>
                 </label>
+
+                <label className="settings__row settings__row--toggle">
+                  <span className="settings__label">
+                    Copy on select
+                    <span className="settings__hint">selecting text with the mouse copies it immediately</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={settings.copyOnSelect}
+                    onChange={(e) => setSetting('copyOnSelect', e.target.checked)}
+                  />
+                </label>
               </>
             )}
 
@@ -260,6 +272,18 @@ export default function Settings(): JSX.Element {
                     checked={settings.notifyOnDone}
                     disabled={!settings.notifications}
                     onChange={(e) => setSetting('notifyOnDone', e.target.checked)}
+                  />
+                </label>
+
+                <label className="settings__row settings__row--toggle">
+                  <span className="settings__label">
+                    Sound cues
+                    <span className="settings__hint">soft chime when an agent needs you, finishes or errors</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={settings.sounds}
+                    onChange={(e) => setSetting('sounds', e.target.checked)}
                   />
                 </label>
               </>

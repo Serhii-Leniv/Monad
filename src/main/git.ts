@@ -5,11 +5,11 @@ import { existsSync } from 'fs'
 
 const pexec = promisify(execFile)
 
-async function git(cwd: string, args: string[]): Promise<string> {
+async function git(cwd: string, args: string[], opts?: { maxBuffer?: number }): Promise<string> {
   const { stdout } = await pexec('git', args, {
     cwd,
     windowsHide: true,
-    maxBuffer: 16 * 1024 * 1024
+    maxBuffer: opts?.maxBuffer ?? 16 * 1024 * 1024
   })
   return stdout
 }
@@ -127,6 +127,9 @@ export interface DiffResult {
   diff: string
   untracked: string[]
   hasChanges: boolean
+  /** Set when the diff couldn't be produced (e.g. too large to buffer), so the
+   *  UI can say so instead of silently showing "No changes". */
+  error?: string
 }
 
 /** An agent's changes (committed + uncommitted in its worktree) vs the base branch. */
@@ -137,13 +140,21 @@ export async function getAgentDiff(
 ): Promise<DiffResult> {
   const { path, branch } = worktreeInfo(repoRoot, agentId)
   let diff = ''
+  let error: string | undefined
   let untracked: string[] = []
   try {
     const args = ['--no-pager', 'diff']
     if (baseBranch) args.push(baseBranch)
-    diff = await git(path, args)
-  } catch {
-    /* worktree gone or base missing */
+    // 64MB — a generous ceiling so normal feature-sized diffs always render;
+    // beyond it we surface a clear message rather than a false "No changes".
+    diff = await git(path, args, { maxBuffer: 64 * 1024 * 1024 })
+  } catch (e) {
+    // Only a buffer overflow is actionable to the user; other failures (base
+    // ref missing on a fresh repo, worktree gone) stay quiet and fall through
+    // to the untracked-file listing below.
+    if (/maxBuffer/i.test(errText(e))) {
+      error = 'This change set is too large to display here — review it in your editor or terminal.'
+    }
   }
   try {
     const status = await git(path, ['status', '--porcelain'])
@@ -155,7 +166,14 @@ export async function getAgentDiff(
   } catch {
     /* ignore */
   }
-  return { branch, base: baseBranch, diff, untracked, hasChanges: diff.trim() !== '' || untracked.length > 0 }
+  return {
+    branch,
+    base: baseBranch,
+    diff,
+    untracked,
+    hasChanges: diff.trim() !== '' || untracked.length > 0,
+    error
+  }
 }
 
 export interface MergeResult {

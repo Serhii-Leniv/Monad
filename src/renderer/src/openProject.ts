@@ -3,10 +3,33 @@ import { RECENT_KEY, getRecent, removeRecent, type RecentProject } from './recen
 
 export type { RecentProject }
 
+// Surface a save failure once per "broken" streak — autosave fires every few
+// hundred ms, so we must not toast on every attempt. Reset when a save succeeds.
+let saveFailedNotified = false
+
 /** Single writer for a project's canvas file — shared by the debounced autosave
- *  in App and the flush-on-switch below, so the on-disk shape stays in one place. */
-export function saveCanvas(projectPath: string, agents: PersistedAgent[], layoutMode: LayoutMode): void {
-  void window.api.project.save(projectPath, { agents, layoutMode })
+ *  in App and the flush-on-switch below, so the on-disk shape stays in one place.
+ *  A read-only folder / full disk / network share returns false; we tell the user
+ *  once rather than silently dropping their canvas. */
+export async function saveCanvas(
+  projectPath: string,
+  agents: PersistedAgent[],
+  layoutMode: LayoutMode
+): Promise<void> {
+  let ok = false
+  try {
+    ok = await window.api.project.save(projectPath, { agents, layoutMode })
+  } catch {
+    ok = false
+  }
+  if (ok) {
+    saveFailedNotified = false
+  } else if (!saveFailedNotified) {
+    saveFailedNotified = true
+    useStore
+      .getState()
+      .pushToast('Couldn’t save this canvas — the project folder may be read-only.', 'error')
+  }
 }
 
 function pushRecent(ref: RecentProject): void {

@@ -39,6 +39,8 @@ The fixed names (set in [`electron-builder.yml`](electron-builder.yml)) are what
 the site's `releases/latest/download/<name>` links stable across versions. The site
 also reads the GitHub Releases API to show the live version, date, and download size.
 
-> Builds are unsigned (no paid signing certs yet), so the release is marked
-> **pre-release** and users get a one-time Gatekeeper / SmartScreen prompt. The
-> site explains the bypass.
+> Builds are unsigned (no paid signing certs yet), so users get a one-time
+> Gatekeeper / SmartScreen prompt; the site explains the bypass. The release
+> itself must be a **full release, not a prerelease** — the site's download
+> buttons and the app's in-app update check both use GitHub's `releases/latest`
+> API, which skips prereleases.

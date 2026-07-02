@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, webFrame } from 'electron'
+import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 
 type DataHandler = (data: string) => void
 type ExitHandler = (code: number) => void
@@ -41,6 +41,12 @@ export interface ProjectRef {
   name: string
 }
 
+export interface UpdateInfo {
+  current: string
+  latest: string
+  url: string
+}
+
 const api = {
   pty: {
     spawn: (opts: PtySpawnOptions): Promise<string> => ipcRenderer.invoke('pty:spawn', opts),
@@ -51,6 +57,30 @@ const api = {
     onData: (id: string, cb: DataHandler): (() => void) => subscribe(dataListeners, id, cb),
     onExit: (id: string, cb: ExitHandler): (() => void) => subscribe(exitListeners, id, cb)
   },
+  clipboard: {
+    read: (): Promise<string> => ipcRenderer.invoke('clipboard:read'),
+    write: (text: string): void => ipcRenderer.send('clipboard:write', { text }),
+    hasImage: (): Promise<boolean> => ipcRenderer.invoke('clipboard:hasImage'),
+    readFiles: (): Promise<string[]> => ipcRenderer.invoke('clipboard:readFiles')
+  },
+  // Absolute path of a File dropped onto the window (drag & drop into a
+  // terminal). Must run in the preload — the renderer can't see file paths.
+  getPathForFile: (file: File): string => {
+    try {
+      return webUtils.getPathForFile(file)
+    } catch {
+      return ''
+    }
+  },
+  // macOS Edit-menu commands (⌘C/⌘V/⌘A) forwarded from the main process so the
+  // renderer can route them by focus (terminal vs. plain input). See menu.ts.
+  menu: {
+    onEdit: (cb: (action: 'copy' | 'paste' | 'selectAll') => void): (() => void) => {
+      const handler = (_e: unknown, action: 'copy' | 'paste' | 'selectAll'): void => cb(action)
+      ipcRenderer.on('menu:edit', handler)
+      return () => ipcRenderer.removeListener('menu:edit', handler)
+    }
+  },
   shells: {
     list: (): Promise<unknown> => ipcRenderer.invoke('shells:list')
   },
@@ -58,6 +88,15 @@ const api = {
     list: (): Promise<unknown> => ipcRenderer.invoke('agents:list')
   },
   openExternal: (url: string): Promise<boolean> => ipcRenderer.invoke('open:external', url),
+  file: {
+    exists: (base: string, raw: string): Promise<boolean> =>
+      ipcRenderer.invoke('path:exists', { base, raw }),
+    open: (base: string, raw: string): Promise<boolean> =>
+      ipcRenderer.invoke('path:open', { base, raw })
+  },
+  update: {
+    check: (): Promise<UpdateInfo | null> => ipcRenderer.invoke('update:check')
+  },
   wallpaper: {
     pick: (): Promise<string | null> => ipcRenderer.invoke('wallpaper:pick'),
     read: (path: string): Promise<string | null> => ipcRenderer.invoke('wallpaper:read', path)
