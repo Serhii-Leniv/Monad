@@ -20,8 +20,7 @@ import {
   removeWorktree,
   pruneWorktrees,
   findOrphanWorktrees,
-  removeOrphanWorktrees,
-  type OrphanWorktree,
+  cleanOrphanWorktrees,
   getAgentDiff,
   mergeAgent,
   applyAgentFiles,
@@ -293,15 +292,19 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
     }
   )
 
+  // List→filter→remove happens atomically in here (reusing findOrphanWorktrees):
+  // the renderer only ever sends its OWN agent ids, never a path list to act on —
+  // nothing untrusted to re-validate, no TOCTOU between listing and removing.
+  // Orphans whose removal could lose work (hasWork) are never deleted.
   ipcMain.handle(
     'git:cleanOrphans',
     async (
       _e,
-      { projectPath, orphans }: { projectPath: string; orphans: OrphanWorktree[] }
+      { projectPath, ownedAgentIds }: { projectPath: string; ownedAgentIds: string[] }
     ) => {
       const repoRoot = await getRepoRootSafe(projectPath)
-      if (!repoRoot || !Array.isArray(orphans)) return 0
-      return removeOrphanWorktrees(repoRoot, orphans)
+      if (!repoRoot) return { removed: 0, keptWithWork: 0 }
+      return cleanOrphanWorktrees(repoRoot, Array.isArray(ownedAgentIds) ? ownedAgentIds : [])
     }
   )
 
