@@ -97,6 +97,9 @@ const api = {
   update: {
     check: (): Promise<UpdateInfo | null> => ipcRenderer.invoke('update:check')
   },
+  app: {
+    version: (): Promise<string> => ipcRenderer.invoke('app:version')
+  },
   wallpaper: {
     pick: (): Promise<string | null> => ipcRenderer.invoke('wallpaper:pick'),
     read: (path: string): Promise<string | null> => ipcRenderer.invoke('wallpaper:read', path)
