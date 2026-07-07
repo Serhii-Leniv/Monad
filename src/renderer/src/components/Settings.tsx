@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore, FONT_FAMILIES } from '../store'
 import { ACCENT_PRESETS } from '../accent'
 import { THEME_OPTIONS } from '../theme'
@@ -29,6 +29,15 @@ export default function Settings(): JSX.Element {
   const setShortcutsOpen = useStore((s) => s.setShortcutsOpen)
   const shells = useStore((s) => s.shells)
   const [tab, setTab] = useState<Tab>('terminal')
+  // Fetched once per open — cheap IPC, and it can't change mid-session.
+  const [version, setVersion] = useState('')
+  useEffect(() => {
+    let alive = true
+    void window.api.app.version().then((v) => alive && setVersion(v))
+    return () => {
+      alive = false
+    }
+  }, [])
 
   const pickWallpaper = async (): Promise<void> => {
     const p = await window.api.wallpaper.pick()
@@ -343,6 +352,7 @@ export default function Settings(): JSX.Element {
             Keyboard shortcuts
             <kbd className="kbd">{modLabel('/')}</kbd>
           </button>
+          {version && <span className="settings__version">Vectro v{version}</span>}
         </div>
       </div>
     </div>

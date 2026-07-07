@@ -136,6 +136,9 @@ interface Window {
     update: {
       check: () => Promise<UpdateInfo | null>
     }
+    app: {
+      version: () => Promise<string>
+    }
     wallpaper: {
       pick: () => Promise<string | null>
       read: (path: string) => Promise<string | null>

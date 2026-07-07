@@ -2227,9 +2227,22 @@ body.has-wallpaper .vec-pane__term {
    not of any settings category, so it lives outside the nav). */
 .settings__foot {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   padding: 9px 14px;
   border-top: 1px solid var(--hairline);
+}
+
+/* App version — quiet metadata pinned to the footer's far left, opposite the
+   shortcuts link. Selectable so users can copy it into bug reports. */
+.settings__version {
+  margin-right: auto;
+  order: -1;
+  padding: 5px 8px;
+  font-size: 12px;
+  color: var(--muted);
+  user-select: text;
+  cursor: text;
 }
 
 .settings__link {
