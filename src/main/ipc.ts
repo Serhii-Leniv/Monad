@@ -142,6 +142,11 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
   ipcMain.handle('shells:list', () => detectShells())
   ipcMain.handle('agents:list', () => detectAgents())
 
+  // App version for display (Settings). app.getVersion() reads package.json in
+  // dev and the packaged app metadata in production — same source the update
+  // check compares against, so the two can never disagree.
+  ipcMain.handle('app:version', () => app.getVersion())
+
   // Newer-release check against the vectro-site release feed (null = up to date
   // or the check failed; the renderer surfaces a toast only on a real update).
   ipcMain.handle('update:check', () => checkForUpdate())
