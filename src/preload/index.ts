@@ -132,8 +132,13 @@ const api = {
     prune: (projectPath: string): Promise<boolean> => ipcRenderer.invoke('git:prune', projectPath),
     orphans: (projectPath: string, ownedAgentIds: string[]): Promise<unknown> =>
       ipcRenderer.invoke('git:orphans', { projectPath, ownedAgentIds }),
-    cleanOrphans: (projectPath: string, orphans: unknown): Promise<number> =>
-      ipcRenderer.invoke('git:cleanOrphans', { projectPath, orphans }),
+    // Takes agent ids, not worktree paths — the main process re-lists orphans
+    // itself, so a stale/tampered path list can never reach the removal.
+    cleanOrphans: (
+      projectPath: string,
+      ownedAgentIds: string[]
+    ): Promise<{ removed: number; keptWithWork: number }> =>
+      ipcRenderer.invoke('git:cleanOrphans', { projectPath, ownedAgentIds }),
     diff: (projectPath: string, agentId: string): Promise<unknown> =>
       ipcRenderer.invoke('git:diff', { projectPath, agentId }),
     merge: (projectPath: string, agentId: string, message: string): Promise<unknown> =>
