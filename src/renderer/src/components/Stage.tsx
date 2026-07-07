@@ -188,6 +188,16 @@ export default function Stage(): JSX.Element {
         selectFromInside={false}
         toggleContinueSelect={['shift']}
         ratio={0}
+        // Reject the gesture BEFORE it engages when the press starts inside a
+        // terminal body (or its close button). onDragStart's e.stop() below only
+        // aborts AFTER Selecto's arbitration has run, which could set xterm's
+        // selection anchor late/wrong; dragCondition keeps the mousedown pristine so
+        // xterm owns text selection and it lands exactly where pressed.
+        dragCondition={(e: any) => {
+          const t = e.inputEvent?.target as HTMLElement | undefined
+          if (t?.closest?.('.vec-pane__term') || t?.closest?.('.vec-pane__close')) return false
+          return true
+        }}
         onDragStart={(e: any) => {
           const t = e.inputEvent.target as HTMLElement
           const mv = moveableRef.current
