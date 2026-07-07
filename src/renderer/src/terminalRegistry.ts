@@ -91,6 +91,8 @@ export async function handleMenuEdit(action: 'copy' | 'paste' | 'selectAll'): Pr
     // Route to the terminal they mean: the focused pane, or the single selected
     // one — so paste "just works" instead of silently going nowhere.
     const st = useStore.getState()
+    // Only an unambiguous target — the maximized pane or the sole selection; under a
+    // multi-select, paste stays suppressed rather than landing in an arbitrary pane.
     const targetId = st.focusedId ?? (st.selectedIds.length === 1 ? st.selectedIds[0] : null)
     const term = targetId ? terminals.get(targetId) : undefined
     if (term) await applyToTerm(term)

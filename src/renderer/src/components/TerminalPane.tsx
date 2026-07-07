@@ -217,6 +217,10 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       if (mod && k === 'c' && term.hasSelection()) {
         e.preventDefault()
         window.api.clipboard.write(term.getSelection())
+        // Explicit confirmation: Ctrl+C is ambiguous (copy vs. SIGINT), so without
+        // feedback the user can't tell it copied and re-hits it — which, after the
+        // clear below, sends SIGINT instead. A brief toast breaks that loop.
+        useStore.getState().pushToast('Copied', 'success')
         // On Windows/Linux `mod` IS Ctrl, so a lingering selection would make
         // every Ctrl+C copy instead of sending SIGINT — you couldn't interrupt a
         // runaway process without first clicking to clear the selection. Clear it
@@ -239,18 +243,67 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       return true
     })
 
-    // Copy-on-select (iTerm-style): a settled mouse selection lands on the
-    // clipboard. Debounced — writing on every onSelectionChange tick during a
-    // drag flooded the OS clipboard history (Win+V) with partial selections.
+    // Copy-on-select (iTerm-style). MOUSE selections copy on mouseup — the moment
+    // the drag settles — NOT on a debounce timer: the old 250ms debounce kept getting
+    // reset by trailing onSelectionChange ticks (autoscroll, a tiny drag correction),
+    // so the copy landed late or never and the user had to re-copy. Firing once on
+    // mouseup makes the settled selection always reach the clipboard and drops the
+    // Win+V clipboard-history spam. NON-mouse selections (context-menu / ⌘A Select
+    // All, keyboard) never produce a mouseup, so a short-debounced onSelectionChange
+    // still covers them — but it skips while a mouse drag is in flight so the two
+    // paths never double-copy.
+    //
+    // While an actual drag is in flight we add `.is-selecting` to THIS pane's term
+    // host (not a global class) so CSS drops just this terminal's backdrop blur and
+    // selecting stays smooth over a wallpaper — added on first move, so a plain click
+    // never flickers the blur.
+    let selecting = false
+    let dragging = false
+    const onTermMouseDown = (e: MouseEvent): void => {
+      if (e.button !== 0) return
+      selecting = true
+      dragging = false
+    }
+    const onTermMouseMove = (): void => {
+      if (selecting && !dragging) {
+        dragging = true
+        host.classList.add('is-selecting')
+      }
+    }
+    // `copy=false` (window blur) just tears the gesture down without touching the
+    // clipboard — the button was released outside the OS window (mouseup swallowed),
+    // so we must not leave `selecting`/`.is-selecting` stuck nor clobber the clipboard.
+    const endSelect = (copy: boolean): void => {
+      if (!selecting) return
+      selecting = false
+      dragging = false
+      host.classList.remove('is-selecting')
+      if (!copy) return
+      if (!useStore.getState().settings.copyOnSelect) return
+      if (!term.hasSelection()) return
+      const sel = term.getSelection()
+      if (sel) window.api.clipboard.write(sel)
+    }
+    const onWinMouseUp = (): void => endSelect(true)
+    const onWinBlur = (): void => endSelect(false)
+    // Debounced copy for NON-mouse selection changes (Select All etc.). Skipped
+    // while `selecting` — a mouse drag — so mouseup remains the single writer there.
     let selTimer: ReturnType<typeof setTimeout> | undefined
     term.onSelectionChange(() => {
+      if (selecting) return
       clearTimeout(selTimer)
       selTimer = setTimeout(() => {
         if (!useStore.getState().settings.copyOnSelect) return
         const sel = term.getSelection()
         if (sel) window.api.clipboard.write(sel)
-      }, 250)
+      }, 100)
     })
+    // Capture phase: xterm handles mouse events on its inner screen element, so
+    // listen on the way DOWN to reliably catch the press/move/release regardless.
+    host.addEventListener('mousedown', onTermMouseDown, true)
+    host.addEventListener('mousemove', onTermMouseMove, true)
+    window.addEventListener('mouseup', onWinMouseUp, true)
+    window.addEventListener('blur', onWinBlur)
 
     let raf = 0
     const doFit = (): void => {
@@ -539,6 +592,11 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       disposed = true
       clearTimeout(idleTimer)
       clearTimeout(selTimer)
+      host.removeEventListener('mousedown', onTermMouseDown, true)
+      host.removeEventListener('mousemove', onTermMouseMove, true)
+      window.removeEventListener('mouseup', onWinMouseUp, true)
+      window.removeEventListener('blur', onWinBlur)
+      host.classList.remove('is-selecting')
       cancelAnimationFrame(raf)
       ro.disconnect()
       unsubs.forEach((u) => u())
