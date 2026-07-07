@@ -113,6 +113,11 @@ const api = {
       return () => ipcRenderer.removeListener('notify:click', handler)
     }
   },
+  // How many agents currently need the user — drives the OS-level indicator
+  // (taskbar flash / dock badge) in the main process.
+  attention: {
+    set: (count: number): void => ipcRenderer.send('attention:set', { count })
+  },
   project: {
     pick: (): Promise<ProjectRef | null> => ipcRenderer.invoke('project:pick'),
     exists: (projectPath: string): Promise<boolean> =>
@@ -123,11 +128,24 @@ const api = {
   },
   git: {
     info: (projectPath: string): Promise<unknown> => ipcRenderer.invoke('git:info', projectPath),
+    init: (projectPath: string): Promise<unknown> => ipcRenderer.invoke('git:init', projectPath),
     prune: (projectPath: string): Promise<boolean> => ipcRenderer.invoke('git:prune', projectPath),
+    orphans: (projectPath: string, ownedAgentIds: string[]): Promise<unknown> =>
+      ipcRenderer.invoke('git:orphans', { projectPath, ownedAgentIds }),
+    cleanOrphans: (projectPath: string, orphans: unknown): Promise<number> =>
+      ipcRenderer.invoke('git:cleanOrphans', { projectPath, orphans }),
     diff: (projectPath: string, agentId: string): Promise<unknown> =>
       ipcRenderer.invoke('git:diff', { projectPath, agentId }),
     merge: (projectPath: string, agentId: string, message: string): Promise<unknown> =>
-      ipcRenderer.invoke('git:merge', { projectPath, agentId, message })
+      ipcRenderer.invoke('git:merge', { projectPath, agentId, message }),
+    applyFiles: (
+      projectPath: string,
+      agentId: string,
+      paths: string[],
+      deletedPaths: string[],
+      message: string
+    ): Promise<unknown> =>
+      ipcRenderer.invoke('git:applyFiles', { projectPath, agentId, paths, deletedPaths, message })
   },
   worktree: {
     create: (projectPath: string, agentId: string, isolation: string): Promise<unknown> =>

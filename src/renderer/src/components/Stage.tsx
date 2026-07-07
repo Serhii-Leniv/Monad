@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Moveable from 'react-moveable'
 import Selecto from 'react-selecto'
 import TerminalPane from './TerminalPane'
+import BroadcastBar from './BroadcastBar'
 import { useStore } from '../store'
 import { terminals } from '../terminalRegistry'
 
@@ -20,6 +21,9 @@ export default function Stage(): JSX.Element {
   const panY = useStore((s) => s.panY)
   const zoom = useStore((s) => s.zoom)
   const focusedId = useStore((s) => s.focusedId)
+  // The broadcast bar only makes sense over a visible canvas — hide it while an
+  // overlay (palette / settings / diff) covers the stage.
+  const overlayOpen = useStore((s) => s.settingsOpen || s.paletteOpen || !!s.diffAgentId)
 
   const stageRef = useRef<HTMLDivElement>(null)
   const moveableRef = useRef<Moveable>(null)
@@ -196,6 +200,9 @@ export default function Stage(): JSX.Element {
         dragCondition={(e: any) => {
           const t = e.inputEvent?.target as HTMLElement | undefined
           if (t?.closest?.('.vec-pane__term') || t?.closest?.('.vec-pane__close')) return false
+          // The broadcast bar floats over the stage — a press there is typing /
+          // a button click, never the start of a marquee.
+          if (t?.closest?.('.broadcast')) return false
           return true
         }}
         onDragStart={(e: any) => {
@@ -203,6 +210,7 @@ export default function Stage(): JSX.Element {
           const mv = moveableRef.current
           if (mv?.isMoveableElement(t)) return e.stop()
           if (t.closest?.('.vec-pane__term') || t.closest?.('.vec-pane__close')) return e.stop()
+          if (t.closest?.('.broadcast')) return e.stop()
           if (targets.some((el) => el === t || el.contains(t))) e.stop()
         }}
         onSelect={(e: any) =>
@@ -215,8 +223,12 @@ export default function Stage(): JSX.Element {
           // whether the click hit a pane (including RE-clicking the already-selected
           // one, which is a no-op selection change so the pane's own focus effect
           // won't re-fire) or landed on empty canvas (selection preserved by the
-          // store). Skip when this gesture is starting a drag-to-move.
-          if (!e.isDragStart) {
+          // store). Skip when this gesture is starting a drag-to-move — and when it
+          // marquee-selected 2+ panes: the marquee's mousedown blurred the terminal,
+          // so re-focusing here would fire the pane's onFocus, which collapses the
+          // selection to that pane and kills the broadcast bar the instant it opens
+          // (BroadcastBar deliberately never takes focus on appearance).
+          if (!e.isDragStart && ids.length <= 1) {
             const cur = ids[0] ?? useStore.getState().selectedIds[0]
             if (cur) terminals.get(cur)?.focus()
           }
@@ -228,6 +240,8 @@ export default function Stage(): JSX.Element {
           }
         }}
       />
+
+      {selectedIds.length > 1 && !overlayOpen && <BroadcastBar />}
     </div>
   )
 }

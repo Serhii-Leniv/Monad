@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../store'
-import { openProjectInteractive, openProjectByPath, closeCurrentProject } from '../openProject'
+import {
+  openProjectInteractive,
+  openProjectByPath,
+  closeCurrentProject,
+  initGitForProject
+} from '../openProject'
 import { emblemStyle } from '../projectColor'
 import { altModLabel } from '../shortcuts'
 
@@ -21,6 +26,7 @@ function prettyPath(p: string): string {
 export default function ProjectBar(): JSX.Element {
   const projectPath = useStore((s) => s.projectPath)
   const projectName = useStore((s) => s.projectName)
+  const isGit = useStore((s) => s.isGit)
   const workspaces = useStore((s) => s.workspaces)
   const [open, setOpen] = useState(false)
   const closeMenu = (): void => setOpen(false)
@@ -81,6 +87,21 @@ export default function ProjectBar(): JSX.Element {
           />
         </svg>
       </button>
+
+      {/* Persistent shared-mode indicator: unlike the one-shot open toast, this
+          stays as long as the folder isn't a git repo — the one state where the
+          headline feature (per-agent isolation) is silently off. Clicking it runs
+          the same git-init flow as the toast action; a successful init flips the
+          store's isGit and the chip disappears on its own. */}
+      {projectPath && !isGit && (
+        <button
+          className="projbar__chip"
+          title="This folder isn’t a git repository — agents share it directly and their changes can collide. Click to initialize git."
+          onClick={() => void initGitForProject(projectPath)}
+        >
+          no isolation
+        </button>
+      )}
 
       {open && (
         <>

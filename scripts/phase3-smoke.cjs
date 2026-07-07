@@ -83,7 +83,10 @@ app.whenReady().then(async () => {
   // Base branch (repo root working tree) should now contain the agent's work.
   const baseHasEdit = fs.readFileSync(join(REPO, 'README.md'), 'utf8').includes('AGENT_EDIT_LINE')
   const baseHasFile = fs.existsSync(join(REPO, 'feature.txt'))
-  const logHasMerge = git(['log', '--oneline']).includes('Merge canvas/')
+  // The merge commit carries the USER'S message (mergeAgent titles it with the
+  // message, not a canned "Merge canvas/…"), and must be a real merge commit —
+  // hence --merges, which is stricter than grepping the whole log.
+  const logHasMerge = git(['log', '--merges', '--oneline']).includes('agent work')
 
   console.log('[p3] worktree created     : ' + (wt.isolated === true))
   console.log('[p3] diff sees tracked    : ' + diffSeesTracked)

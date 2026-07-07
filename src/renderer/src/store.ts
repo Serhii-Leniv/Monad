@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { getRecent } from './recent'
+import { sanitizeTheme, type ThemePreference } from './theme'
 
 export type Isolation = 'worktree' | 'shared'
 export type LayoutMode = 'grid' | 'columns'
@@ -17,6 +18,23 @@ export interface Toast {
   /** Optional action button (e.g. "Download"); a toast with one never auto-dismisses. */
   actionLabel?: string
   onAction?: () => void
+  /** Optional lower-emphasis second action (e.g. "Skip this version"). */
+  secondaryLabel?: string
+  onSecondary?: () => void
+  /**
+   * Bumped when a duplicate push refreshes this toast instead of stacking a
+   * twin — Toasts.tsx keys its auto-dismiss timer on it so the toast gets a
+   * fresh 3.4s from the latest trigger.
+   */
+  refresh?: number
+}
+
+/** Visible toast cap — a 6th pushes the oldest (non-sticky first) off the stack. */
+const MAX_TOASTS = 5
+
+/** Sticky toasts never auto-dismiss: errors and anything with an action to lose. */
+export function toastIsSticky(t: Pick<Toast, 'kind' | 'actionLabel' | 'secondaryLabel'>): boolean {
+  return !!t.actionLabel || !!t.secondaryLabel || t.kind === 'error'
 }
 
 /** Hard cap — more than this on one canvas is unreadable. */
@@ -52,6 +70,8 @@ export interface AgentInstance {
   agentLabel?: string
   /** Id of the launched agent (claude/codex/gemini/…) → drives its icon. */
   agentId?: string
+  /** Double-weight tile: takes 2 shares of its row's width instead of 1. */
+  wide?: boolean
   // --- runtime only (never persisted) ---
   ptyId?: string
   branch?: string | null
@@ -83,6 +103,7 @@ export interface PersistedAgent {
   startupCommand?: string
   agentLabel?: string
   agentId?: string
+  wide?: boolean
 }
 
 interface AppState {
@@ -122,16 +143,24 @@ interface AppState {
   settings: AppSettings
   settingsOpen: boolean
   paletteOpen: boolean
+  /** Keyboard-shortcuts help overlay (⌘/ / Ctrl+Shift+/). */
+  shortcutsOpen: boolean
   /** Agent whose worktree changes are open in the diff/merge review modal. */
   diffAgentId: string | null
   /** Agent the user asked to close from outside its pane (⌘W / palette) — the
    *  matching TerminalPane picks this up and runs its guarded close flow. */
   pendingCloseId: string | null
+  /** Ids snapshotted when a bulk close was requested (⌘W on a multi-selection,
+   *  or the palette command) — one confirm in App.tsx closes them all. */
+  bulkCloseIds: string[] | null
   focusedId: string | null
   toasts: Toast[]
 
   openProject: (ref: ProjectRef, saved: PersistedCanvas | null, git: GitInfo) => void
   closeProject: () => void
+  /** Refresh the open project's git state in place (e.g. after "Initialize git")
+   *  without re-opening — keeps the shared-mode chip and isolation default live. */
+  setGitInfo: (git: GitInfo) => void
   setWorkspaces: (workspaces: Workspace[]) => void
   setCanvasSize: (w: number, h: number) => void
   setShells: (shells: ShellInfo[]) => void
@@ -140,9 +169,12 @@ interface AppState {
   setSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => void
   setSettingsOpen: (open: boolean) => void
   setPaletteOpen: (open: boolean) => void
+  setShortcutsOpen: (open: boolean) => void
   setDiffAgentId: (id: string | null) => void
   requestClose: (id: string) => void
   clearPendingClose: () => void
+  requestBulkClose: (ids: string[]) => void
+  clearBulkClose: () => void
   addAgent: (opts?: {
     command?: string
     shellId?: string
@@ -152,6 +184,7 @@ interface AppState {
   removeAgent: (id: string, opts?: { keepWorktree?: boolean }) => void
   reopenLast: () => void
   renameAgent: (id: string, label: string) => void
+  toggleWide: (id: string) => void
   setLayoutMode: (mode: LayoutMode) => void
   setDraggingId: (id: string | null) => void
   reorderAgent: (id: string, toIndex: number) => void
@@ -160,7 +193,11 @@ interface AppState {
   clearFocus: () => void
   setAgentRuntime: (id: string, rt: Partial<AgentInstance>) => void
   setStatus: (id: string, status: AgentStatus) => void
-  pushToast: (text: string, kind?: Toast['kind'], action?: Pick<Toast, 'actionLabel' | 'onAction'>) => void
+  pushToast: (
+    text: string,
+    kind?: Toast['kind'],
+    action?: Pick<Toast, 'actionLabel' | 'onAction' | 'secondaryLabel' | 'onSecondary'>
+  ) => void
   dismissToast: (id: string) => void
 }
 
@@ -180,11 +217,17 @@ export interface AppSettings {
   copyOnSelect: boolean
   confirmClose: boolean
   zoomFactor: number
+  /** UI theme — 'system' follows the OS light/dark setting live. */
+  theme: ThemePreference
   /** Accent colour (hex) — drives the whole UI palette. */
   accent: string
   /** Desktop notification when a backgrounded/off-screen agent needs you. */
   notifications: boolean
-  /** Also notify when a long-running agent finishes a task (working → idle). */
+  /**
+   * Alert when a long-running agent finishes (working → idle / clean exit).
+   * Independent master switch for the finish event; `notifications` gates the
+   * desktop popup and `sounds` gates the chime.
+   */
   notifyOnDone: boolean
   /** Soft chime when an agent needs you / finishes / errors. */
   sounds: boolean
@@ -213,6 +256,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   copyOnSelect: true,
   confirmClose: true,
   zoomFactor: 1.1,
+  theme: 'dark', // dark is the app's native look — existing users see zero change
   accent: '#ff453a',
   notifications: true,
   notifyOnDone: true,
@@ -238,7 +282,8 @@ function loadSettings(): AppSettings {
       fontSize: clampNum(merged.fontSize, 9, 22, DEFAULT_SETTINGS.fontSize),
       scrollback: clampNum(merged.scrollback, 500, 20000, DEFAULT_SETTINGS.scrollback),
       zoomFactor: clampNum(merged.zoomFactor, 0.7, 1.8, DEFAULT_SETTINGS.zoomFactor),
-      terminalOpacity: clampNum(merged.terminalOpacity, 0.4, 1, DEFAULT_SETTINGS.terminalOpacity)
+      terminalOpacity: clampNum(merged.terminalOpacity, 0.4, 1, DEFAULT_SETTINGS.terminalOpacity),
+      theme: sanitizeTheme(merged.theme)
     }
   } catch {
     return DEFAULT_SETTINGS
@@ -299,10 +344,19 @@ function laidOut(
   let i = 0
   for (let r = 0; r < rows; r++) {
     const cols = perRow[r]
-    const cw = Math.round((availW - GAP * (cols - 1)) / cols)
+    // Widths within a row are allocated by weight (wide = 2, normal = 1) rather
+    // than equally; which cards land in which row stays purely count-based above.
+    const rowAgents = agents.slice(i, i + cols)
+    const totalWeight = rowAgents.reduce((sum, a) => sum + (a.wide ? 2 : 1), 0)
+    const inner = availW - GAP * (cols - 1)
+    let x = RAIL_INSET
+    let used = 0
     for (let c = 0; c < cols; c++) {
       const a = agents[i++]
-      const x = Math.round(RAIL_INSET + c * (cw + GAP))
+      // Integer widths (crisp glyphs, see above); the LAST card in a row absorbs
+      // the rounding remainder so every row still fills the full width exactly.
+      const cw =
+        c === cols - 1 ? inner - used : Math.round((inner * (a.wide ? 2 : 1)) / totalWeight)
       const y = Math.round(PAD + r * (ch + GAP))
       // The dragged card keeps its position constant so React never fights
       // Moveable for its transform — it follows the cursor; its slot stays an
@@ -310,17 +364,19 @@ function laidOut(
       // drop* so the canvas can draw a placeholder there.
       if (skipId && a.id === skipId) {
         out.push({ ...a, dropX: x, dropY: y, dropW: cw, dropH: ch })
-        continue
+      } else {
+        // Reuse the SAME object when its slot is unchanged — a fresh `{...a}` every
+        // relayout would give each pane a new identity and defeat TerminalPane's
+        // memo, re-rendering every xterm on each drag-cross / resize tick.
+        const unchanged =
+          a.x === x && a.y === y && a.w === cw && a.h === ch &&
+          a.dropX === undefined && a.dropY === undefined &&
+          a.dropW === undefined && a.dropH === undefined
+        if (unchanged) out.push(a)
+        else out.push({ ...a, x, y, w: cw, h: ch, dropX: undefined, dropY: undefined, dropW: undefined, dropH: undefined })
       }
-      // Reuse the SAME object when its slot is unchanged — a fresh `{...a}` every
-      // relayout would give each pane a new identity and defeat TerminalPane's
-      // memo, re-rendering every xterm on each drag-cross / resize tick.
-      const unchanged =
-        a.x === x && a.y === y && a.w === cw && a.h === ch &&
-        a.dropX === undefined && a.dropY === undefined &&
-        a.dropW === undefined && a.dropH === undefined
-      if (unchanged) out.push(a)
-      else out.push({ ...a, x, y, w: cw, h: ch, dropX: undefined, dropY: undefined, dropW: undefined, dropH: undefined })
+      used += cw
+      x += cw + GAP
     }
   }
   return out
@@ -368,7 +424,8 @@ export function toPersisted(agents: AgentInstance[]): PersistedAgent[] {
     shellId: a.shellId,
     startupCommand: a.startupCommand,
     agentLabel: a.agentLabel,
-    agentId: a.agentId
+    agentId: a.agentId,
+    wide: a.wide
   }))
 }
 
@@ -393,8 +450,10 @@ export const useStore = create<AppState>((set, get) => ({
   settings: loadSettings(),
   settingsOpen: false,
   paletteOpen: false,
+  shortcutsOpen: false,
   diffAgentId: null,
   pendingCloseId: null,
+  bulkCloseIds: null,
   focusedId: null,
   toasts: [],
   panX: 0,
@@ -424,6 +483,7 @@ export const useStore = create<AppState>((set, get) => ({
         closingIds: [],
         draggingId: null,
         pendingCloseId: null,
+        bulkCloseIds: null,
         diffAgentId: null,
         lastClosed: null,
         layoutMode: mode,
@@ -446,10 +506,13 @@ export const useStore = create<AppState>((set, get) => ({
       closingIds: [],
       draggingId: null,
       pendingCloseId: null,
+      bulkCloseIds: null,
       diffAgentId: null,
       lastClosed: null,
       focusedId: null
     }),
+
+  setGitInfo: (git) => set({ isGit: git.isGit, baseBranch: git.branch }),
 
   setWorkspaces: (workspaces) => set({ workspaces }),
 
@@ -500,12 +563,19 @@ export const useStore = create<AppState>((set, get) => ({
 
   setPaletteOpen: (open) => set({ paletteOpen: open }),
 
+  setShortcutsOpen: (open) => set({ shortcutsOpen: open }),
+
   setDiffAgentId: (id) => set({ diffAgentId: id }),
 
   // The pane owning `id` runs the guarded close (dirty-check + confirm); these
   // just hand the request to it and clear it once picked up.
   requestClose: (id) => set({ pendingCloseId: id }),
   clearPendingClose: () => set({ pendingCloseId: null }),
+
+  // Bulk close is confirmed (and executed) by the modal in App.tsx; the store
+  // only carries the request so both ⌘W and the palette can raise it.
+  requestBulkClose: (ids) => set({ bulkCloseIds: ids }),
+  clearBulkClose: () => set({ bulkCloseIds: null }),
 
 
   addAgent: (opts) => {
@@ -629,6 +699,21 @@ export const useStore = create<AppState>((set, get) => ({
       agents: s.agents.map((a) => (a.id === id ? { ...a, label: label || a.label } : a))
     })),
 
+  // Toggle a card's wide (double-weight) tile and re-tile. A layout action, so
+  // it resets the camera like the others (setLayoutMode / relayout).
+  toggleWide: (id) =>
+    set((s) => ({
+      agents: laidOut(
+        s.agents.map((a) => (a.id === id ? { ...a, wide: !a.wide } : a)),
+        s.layoutMode,
+        s.canvasW,
+        s.canvasH
+      ),
+      panX: 0,
+      panY: 0,
+      zoom: 1
+    })),
+
   // Switch the persistent layout and re-tile immediately.
   setLayoutMode: (mode) =>
     set((s) => ({
@@ -685,7 +770,26 @@ export const useStore = create<AppState>((set, get) => ({
     set((s) => ({ agents: s.agents.map((a) => (a.id === id ? { ...a, status } : a)) })),
 
   pushToast: (text, kind = 'info', action) =>
-    set((s) => ({ toasts: [...s.toasts, { id: uuid(), text, kind, ...action }] })),
+    set((s) => {
+      // De-dupe: the same message firing again (e.g. a burst of merge/CLI errors)
+      // must not wallpaper the corner with twins. Refresh the live one instead —
+      // move it to the top of the stack and bump `refresh` so its timer restarts.
+      const dup = s.toasts.find((t) => t.text === text && t.kind === kind)
+      if (dup) {
+        return {
+          toasts: [...s.toasts.filter((t) => t !== dup), { ...dup, refresh: (dup.refresh ?? 0) + 1 }]
+        }
+      }
+      let toasts: Toast[] = [...s.toasts, { id: uuid(), text, kind, ...action }]
+      // Cap the stack: evict the OLDEST, preferring non-sticky (sticky ones carry
+      // an action or an error the user must see). Never drop the newest — the
+      // user just triggered it.
+      if (toasts.length > MAX_TOASTS) {
+        const victim = toasts.find((t) => !toastIsSticky(t)) ?? toasts[0]
+        toasts = toasts.filter((t) => t !== victim)
+      }
+      return { toasts }
+    }),
 
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }))
 }))

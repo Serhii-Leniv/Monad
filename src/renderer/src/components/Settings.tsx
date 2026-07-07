@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { useStore, FONT_FAMILIES } from '../store'
 import { ACCENT_PRESETS } from '../accent'
+import { THEME_OPTIONS } from '../theme'
 import { IconClose, IconTerminal, IconFolder, IconBell } from './Icons'
+import { modLabel } from '../shortcuts'
+import { previewCue } from '../sound'
 
 type Tab = 'terminal' | 'appearance' | 'workspace' | 'notifications'
 
@@ -23,6 +26,7 @@ export default function Settings(): JSX.Element {
   const settings = useStore((s) => s.settings)
   const setSetting = useStore((s) => s.setSetting)
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
+  const setShortcutsOpen = useStore((s) => s.setShortcutsOpen)
   const shells = useStore((s) => s.shells)
   const [tab, setTab] = useState<Tab>('terminal')
 
@@ -138,6 +142,26 @@ export default function Settings(): JSX.Element {
 
             {tab === 'appearance' && (
               <>
+                <div className="settings__row">
+                  <span className="settings__label">
+                    Theme
+                    <span className="settings__hint">terminals stay dark either way</span>
+                  </span>
+                  <div className="settings__seg">
+                    {THEME_OPTIONS.map((t) => (
+                      <button
+                        key={t.id}
+                        className={
+                          'settings__seg-btn' + (settings.theme === t.id ? ' is-active' : '')
+                        }
+                        onClick={() => setSetting('theme', t.id)}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="settings__row">
                   <span className="settings__label">Accent</span>
                   <div className="settings__swatches">
@@ -262,15 +286,18 @@ export default function Settings(): JSX.Element {
                   />
                 </label>
 
+                {/* Independent of the toggles around it: this decides WHETHER a
+                   finish alerts at all; those decide the channel (popup / chime). */}
                 <label className="settings__row settings__row--toggle">
                   <span className="settings__label">
-                    Notify when an agent finishes
-                    <span className="settings__hint">ping me when a long task settles back to idle</span>
+                    Alert when an agent finishes
+                    <span className="settings__hint">
+                      when a long task settles back to idle — popup and/or chime per the toggles here
+                    </span>
                   </span>
                   <input
                     type="checkbox"
                     checked={settings.notifyOnDone}
-                    disabled={!settings.notifications}
                     onChange={(e) => setSetting('notifyOnDone', e.target.checked)}
                   />
                 </label>
@@ -280,15 +307,42 @@ export default function Settings(): JSX.Element {
                     Sound cues
                     <span className="settings__hint">soft chime when an agent needs you, finishes or errors</span>
                   </span>
-                  <input
-                    type="checkbox"
-                    checked={settings.sounds}
-                    onChange={(e) => setSetting('sounds', e.target.checked)}
-                  />
+                  <span className="settings__inline">
+                    <button
+                      type="button"
+                      className="settings__btn"
+                      // Always visible so the affordance is discoverable, but inert
+                      // until sounds are on — previewing a cue you'd never hear lies.
+                      disabled={!settings.sounds}
+                      onClick={() => previewCue('done')}
+                    >
+                      Preview
+                    </button>
+                    <input
+                      type="checkbox"
+                      checked={settings.sounds}
+                      onChange={(e) => setSetting('sounds', e.target.checked)}
+                    />
+                  </span>
                 </label>
               </>
             )}
           </div>
+        </div>
+
+        {/* Footer: a subtle text link, not another nav tab — the reference is a
+           one-shot overlay, not a settings category. Swaps this modal for it. */}
+        <div className="settings__foot">
+          <button
+            className="settings__link"
+            onClick={() => {
+              setSettingsOpen(false)
+              setShortcutsOpen(true)
+            }}
+          >
+            Keyboard shortcuts
+            <kbd className="kbd">{modLabel('/')}</kbd>
+          </button>
         </div>
       </div>
     </div>

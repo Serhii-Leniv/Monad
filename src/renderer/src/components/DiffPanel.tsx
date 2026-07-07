@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore, displayBranch } from '../store'
 import { celebrate } from '../celebrate'
-import { IconClose } from './Icons'
+import { IconClose, IconRefresh } from './Icons'
 
 type FileStatus = 'added' | 'deleted' | 'renamed' | 'modified'
 
@@ -84,6 +84,7 @@ function parseDiff(text: string): FileGroup[] {
 export default function DiffPanel(): JSX.Element {
   const id = useStore((s) => s.diffAgentId) as string
   const label = useStore((s) => s.agents.find((a) => a.id === id)?.label ?? 'Terminal')
+  const status = useStore((s) => s.agents.find((a) => a.id === id)?.status)
   const projectPath = useStore((s) => s.projectPath)
   const baseBranch = useStore((s) => s.baseBranch)
   const setDiffAgentId = useStore((s) => s.setDiffAgentId)
@@ -95,7 +96,15 @@ export default function DiffPanel(): JSX.Element {
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [conflictFiles, setConflictFiles] = useState<string[] | null>(null)
   const [merged, setMerged] = useState(false)
+  /** > 0 after a PARTIAL apply — the success copy differs (branch stays unmerged). */
+  const [appliedCount, setAppliedCount] = useState(0)
+  const [mergedInto, setMergedInto] = useState<string | null>(null)
+  /** Paths the user UNchecked — default is everything selected. */
+  const [deselected, setDeselected] = useState<Set<string>>(new Set())
+  // Once the user has typed in the message box, reloads must not clobber it.
+  const messageEdited = useRef(false)
 
   const close = (): void => setDiffAgentId(null)
 
@@ -112,7 +121,7 @@ export default function DiffPanel(): JSX.Element {
       .diff(projectPath, id)
       .then((d) => {
         setDiff(d)
-        setMessage(`Merge ${displayBranch(d.branch) || label}`)
+        if (!messageEdited.current) setMessage(`Merge ${displayBranch(d.branch) || label}`)
       })
       // A rejected diff (git missing, worktree gone) must clear the spinner too.
       .catch((e) => setError(e instanceof Error ? e.message : 'Couldn’t load changes'))
@@ -121,28 +130,93 @@ export default function DiffPanel(): JSX.Element {
 
   useEffect(load, [id, projectPath])
 
+  // Auto-refresh when the agent settles (working → idle/attention) while the
+  // review is open — whatever's on screen is likely stale by then.
+  const prevStatus = useRef(status)
+  useEffect(() => {
+    const prev = prevStatus.current
+    prevStatus.current = status
+    if (
+      status !== prev &&
+      (status === 'idle' || status === 'attention') &&
+      !busy &&
+      !merged &&
+      !loading
+    )
+      load()
+  }, [status])
+
   const groups = useMemo(() => (diff?.diff ? parseDiff(diff.diff) : []), [diff])
   const totals = useMemo(() => {
     const adds = groups.reduce((n, g) => n + g.adds, 0)
     const dels = groups.reduce((n, g) => n + g.dels, 0)
-    const files = groups.length + (diff?.untracked.length ?? 0)
-    return { adds, dels, files }
-  }, [groups, diff])
-  const hasChanges = !!diff && (diff.hasChanges || diff.untracked.length > 0)
+    return { adds, dels, files: groups.length }
+  }, [groups])
+  const hasChanges = !!diff && diff.hasChanges
+
+  // Per-file selection: which groups take part in the merge/apply. Everything
+  // is included until the user unticks a file.
+  const selectedGroups = useMemo(
+    () => groups.filter((g) => !deselected.has(g.path)),
+    [groups, deselected]
+  )
+  const allSelected = selectedGroups.length === groups.length
+  const selCount = selectedGroups.length
+  const toggleFile = (path: string): void =>
+    setDeselected((prev) => {
+      const next = new Set(prev)
+      if (next.has(path)) next.delete(path)
+      else next.add(path)
+      return next
+    })
 
   const doMerge = async (): Promise<void> => {
     if (!projectPath) return
     setBusy(true)
     setError(null)
+    setConflictFiles(null)
     const r = await window.api.git.merge(projectPath, id, message.trim() || `Merge ${diff?.branch}`)
     setBusy(false)
     if (r.ok) {
       setMerged(true)
+      setMergedInto(r.mergedInto ?? null)
       celebrate()
       // Show the branch actually merged into — it may differ from the base at open
       // if the user switched branches in the main repo since.
       pushToast(`Merged “${label}” into ${r.mergedInto || baseBranch || 'base'}`, 'success')
-    } else setError(r.error || 'Merge failed')
+    } else {
+      setError(r.error || 'Merge failed')
+      if (r.conflictFiles && r.conflictFiles.length > 0) setConflictFiles(r.conflictFiles)
+    }
+  }
+
+  // Subset selected: apply just those files onto the current branch as a plain
+  // commit — the agent's branch stays unmerged.
+  const doApply = async (): Promise<void> => {
+    if (!projectPath) return
+    const paths = selectedGroups.filter((g) => g.status !== 'deleted').map((g) => g.path)
+    const deletedPaths = selectedGroups.filter((g) => g.status === 'deleted').map((g) => g.path)
+    setBusy(true)
+    setError(null)
+    setConflictFiles(null)
+    const r = await window.api.git.applyFiles(
+      projectPath,
+      id,
+      paths,
+      deletedPaths,
+      message.trim() || `Apply files from ${diff?.branch}`
+    )
+    setBusy(false)
+    if (r.ok) {
+      setMerged(true)
+      setAppliedCount(selCount)
+      setMergedInto(r.mergedInto ?? null)
+      celebrate()
+      pushToast(
+        `Applied ${selCount} file${selCount === 1 ? '' : 's'} from “${label}”`,
+        'success'
+      )
+    } else setError(r.error || 'Apply failed')
   }
 
   // Two-step destructive confirm, in place of a native window.confirm: the
@@ -182,12 +256,22 @@ export default function DiffPanel(): JSX.Element {
           {!loading && !merged && hasChanges && (
             <div className="review__summary" title={`${totals.files} file${totals.files === 1 ? '' : 's'} changed`}>
               <span className="review__sum-files">
-                {totals.files} {totals.files === 1 ? 'file' : 'files'}
+                {allSelected
+                  ? `${totals.files} ${totals.files === 1 ? 'file' : 'files'}`
+                  : `${selCount} of ${totals.files} files selected`}
               </span>
               {totals.adds > 0 && <span className="review__sum-add">+{totals.adds}</span>}
               {totals.dels > 0 && <span className="review__sum-del">−{totals.dels}</span>}
             </div>
           )}
+          <button
+            className="settings__close review__refresh"
+            onClick={load}
+            disabled={loading || busy || merged}
+            title="Refresh changes"
+          >
+            <IconRefresh size={15} />
+          </button>
           <button className="settings__close" onClick={close} title="Close">
             <IconClose size={16} />
           </button>
@@ -197,14 +281,26 @@ export default function DiffPanel(): JSX.Element {
           {loading ? (
             <div className="review__empty">Loading changes…</div>
           ) : merged ? (
-            <div className="review__empty review__empty--ok">
-              ✓ Merged into {baseBranch || 'the base branch'}.
-              <br />
-              <span className="review__empty-sub">
-                The terminal’s worktree is still on disk — remove it to clean up, or keep it to
-                keep working on the branch.
-              </span>
-            </div>
+            appliedCount > 0 ? (
+              <div className="review__empty review__empty--ok">
+                ✓ Applied {appliedCount} file{appliedCount === 1 ? '' : 's'} to{' '}
+                {mergedInto || baseBranch || 'the current branch'}.
+                <br />
+                <span className="review__empty-sub">
+                  This branch still has unmerged work — the terminal and its worktree are
+                  untouched, so the agent can keep going and you can merge the rest later.
+                </span>
+              </div>
+            ) : (
+              <div className="review__empty review__empty--ok">
+                ✓ Merged into {mergedInto || baseBranch || 'the base branch'}.
+                <br />
+                <span className="review__empty-sub">
+                  The terminal’s worktree is still on disk — remove it to clean up, or keep it to
+                  keep working on the branch.
+                </span>
+              </div>
+            )
           ) : !hasChanges ? (
             <div className="review__empty">
               {error ?? diff?.error ?? 'No changes on this branch yet.'}
@@ -212,28 +308,17 @@ export default function DiffPanel(): JSX.Element {
           ) : (
             <>
               {diff!.error && <div className="review__note">{diff!.error}</div>}
-              {diff!.untracked.length > 0 && (
-                <div className="review__file review__file--untracked">
-                  <span className="review__fstat review__fstat--add" title="New file">
-                    A
-                  </span>
-                  <span className="review__fname">
-                    {diff!.untracked.length} new {diff!.untracked.length === 1 ? 'file' : 'files'}
-                  </span>
-                </div>
-              )}
-              {diff!.untracked.length > 0 && (
-                <div className="review__untracked">
-                  {diff!.untracked.map((f) => (
-                    <div key={f} className="diff__line diff__line--new">
-                      + {f}
-                    </div>
-                  ))}
-                </div>
-              )}
               {groups.map((g, gi) => (
                 <div key={g.path + gi} className="review__group">
                   <div className="review__file">
+                    <input
+                      type="checkbox"
+                      className="review__fcheck"
+                      checked={!deselected.has(g.path)}
+                      onChange={() => toggleFile(g.path)}
+                      disabled={busy}
+                      title="Include this file when merging / applying"
+                    />
                     <span
                       className={'review__fstat ' + STATUS_META[g.status].cls}
                       title={STATUS_META[g.status].title}
@@ -259,25 +344,54 @@ export default function DiffPanel(): JSX.Element {
           )}
         </div>
 
-        {error && hasChanges && <div className="review__error">{error}</div>}
+        {conflictFiles && !merged ? (
+          <div className="review__conflict">
+            <div className="review__conflict-title">
+              Merge conflict — {conflictFiles.length} file
+              {conflictFiles.length === 1 ? '' : 's'} couldn’t merge automatically
+            </div>
+            <div className="review__conflict-files">
+              {conflictFiles.map((f) => (
+                <div key={f}>{f}</div>
+              ))}
+            </div>
+            <div className="review__conflict-hint">
+              The merge was safely rolled back — {baseBranch || 'your base branch'} is untouched.
+              The easiest fix: ask the agent to pull the base branch into its own branch and
+              resolve the conflicts there — paste{' '}
+              <code>git merge {baseBranch || '<base-branch>'}</code> into its terminal — then
+              retry the merge here.
+            </div>
+          </div>
+        ) : (
+          error && hasChanges && <div className="review__error">{error}</div>
+        )}
 
         <div className="review__foot">
           {merged ? (
             <>
               <button
-                className="review__btn"
+                className={'review__btn' + (appliedCount > 0 ? ' review__btn--merge' : '')}
                 onClick={close}
-                title="Keep the terminal and its worktree — you can keep working on this branch"
+                title={
+                  appliedCount > 0
+                    ? 'Keep the terminal and its worktree — the branch still has unmerged work'
+                    : 'Keep the terminal and its worktree — you can keep working on this branch'
+                }
               >
                 Keep terminal
               </button>
               <button
-                className="review__btn review__btn--merge"
+                className={'review__btn' + (appliedCount > 0 ? '' : ' review__btn--merge')}
                 onClick={() => {
                   removeAgent(id)
                   close()
                 }}
-                title="Remove the terminal and delete its now-merged worktree + branch"
+                title={
+                  appliedCount > 0
+                    ? 'Remove the terminal and delete its worktree + branch — unmerged work on it is lost'
+                    : 'Remove the terminal and delete its now-merged worktree + branch'
+                }
               >
                 Remove &amp; clean up
               </button>
@@ -287,8 +401,11 @@ export default function DiffPanel(): JSX.Element {
               <input
                 className="review__msg"
                 value={message}
-                placeholder="Commit message"
-                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Merge commit message"
+                onChange={(e) => {
+                  messageEdited.current = true
+                  setMessage(e.target.value)
+                }}
                 disabled={busy || !hasChanges}
               />
               <button
@@ -303,10 +420,21 @@ export default function DiffPanel(): JSX.Element {
               </button>
               <button
                 className="review__btn review__btn--merge"
-                onClick={doMerge}
-                disabled={busy || !hasChanges}
+                onClick={allSelected ? doMerge : doApply}
+                disabled={busy || !hasChanges || selCount === 0}
+                title={
+                  allSelected
+                    ? undefined
+                    : 'Takes the agent’s version of the selected files onto the current branch as a normal commit — not a merge; the branch stays unmerged'
+                }
               >
-                {busy ? 'Merging…' : 'Merge'}
+                {busy
+                  ? allSelected
+                    ? 'Merging…'
+                    : 'Applying…'
+                  : allSelected
+                    ? 'Merge'
+                    : `Apply ${selCount} file${selCount === 1 ? '' : 's'}`}
               </button>
             </>
           )}

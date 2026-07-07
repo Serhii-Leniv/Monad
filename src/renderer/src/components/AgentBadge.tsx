@@ -1,9 +1,12 @@
 /**
  * A small transparent icon marking which agent a terminal runs. Uses the official
  * brand mark (via simple-icons) in its brand colour where available, with a
- * contrast guard so near-black logos stay visible on the dark header. Agents with
- * no published icon fall back to a simple original glyph / colored monogram.
+ * theme-aware contrast guard: near-black logos get lightened on the dark header,
+ * near-white ones get darkened on the light header. Agents with no published
+ * icon fall back to a simple original glyph / colored monogram.
  */
+
+import { useSyncExternalStore } from 'react'
 
 interface Brand {
   hex: string
@@ -36,12 +39,28 @@ const BRAND: Record<string, Brand> = {
   }
 }
 
-/** Brand colour, lightened when it's too dark to read on the header. */
-function markColor(hex: string): string {
+// The resolved theme lives on <html data-theme> — theme.ts stamps it there,
+// including the live 'system' resolution, so observing the attribute always
+// matches what the CSS is actually rendering (no store + matchMedia re-derive).
+function subscribeTheme(onChange: () => void): () => void {
+  const mo = new MutationObserver(onChange)
+  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+  return () => mo.disconnect()
+}
+
+function readTheme(): 'dark' | 'light' {
+  return document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'
+}
+
+/** Brand colour, adjusted only when it can't be read against the header:
+ *  near-black marks get lightened on the dark theme, near-white ones get
+ *  darkened on the light theme; everything else renders as the true brand hex. */
+function markColor(hex: string, theme: 'dark' | 'light'): string {
   const r = parseInt(hex.slice(0, 2), 16)
   const g = parseInt(hex.slice(2, 4), 16)
   const b = parseInt(hex.slice(4, 6), 16)
   const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+  if (theme === 'light') return lum > 0.66 ? '#2a2f3a' : `#${hex}`
   return lum < 0.34 ? '#e2e6ee' : `#${hex}`
 }
 
@@ -70,6 +89,8 @@ export default function AgentBadge({
   id?: string
   label?: string
 }): JSX.Element | null {
+  // Unconditional (hooks rule) — cheap even when the badge renders nothing.
+  const theme = useSyncExternalStore(subscribeTheme, readTheme)
   if (!id && !label) return null
 
   const brand = id ? BRAND[id] : undefined
@@ -77,7 +98,7 @@ export default function AgentBadge({
     return (
       <span className="vec-pane__agent" title={label ?? id}>
         <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
-          <path d={brand.path} fill={markColor(brand.hex)} />
+          <path d={brand.path} fill={markColor(brand.hex, theme)} />
         </svg>
       </span>
     )

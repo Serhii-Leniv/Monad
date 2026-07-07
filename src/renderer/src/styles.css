@@ -78,6 +78,28 @@
   --glass-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
   --menu-bg: rgba(16, 18, 24, 0.86);
 
+  /* --- Theme-flippable component tokens (light theme overrides them below).
+     Each dark value here is EXACTLY the literal it replaced, so the dark theme
+     stays pixel-identical. --- */
+  /* Hover tints for quiet controls (menu items, icon buttons): white lightens
+     surfaces on dark; the light theme flips these to translucent dark inks. */
+  --hover-bg-soft: rgba(255, 255, 255, 0.06);
+  --hover-bg: rgba(255, 255, 255, 0.08);
+  --hover-bg-strong: rgba(255, 255, 255, 0.12);
+  /* Recessed input/select surface (sits INSIDE glass panels). */
+  --surface-input: rgba(10, 16, 26, 0.5);
+  /* Strongest ink — headings/titles that were plain #fff on dark. */
+  --ink-strong: #fff;
+  /* One shadow scale: cards (resting / ringed / hover / dragged) and the
+     floating chrome (modals, menus, small floats). Light softens these. */
+  --shadow-card: 0 14px 40px rgba(0, 0, 0, 0.42), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-card-heavy: 0 14px 40px rgba(0, 0, 0, 0.45);
+  --shadow-card-hover: 0 20px 52px rgba(0, 0, 0, 0.52), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-card-drag: 0 36px 70px rgba(0, 0, 0, 0.68);
+  --shadow-pop: var(--shadow-pop);
+  --shadow-menu: var(--shadow-menu);
+  --shadow-float: 0 10px 26px rgba(0, 0, 0, 0.5);
+
   /* Card surface inside the canvas transform (solid-translucent, not blurred). */
   --card-bg: rgba(22, 25, 32, 0.72);
   --card-bg-strong: rgba(30, 34, 44, 0.76);
@@ -103,6 +125,67 @@
   --dur-snap: 340ms;
   --dur-spring: 440ms;
   --dur-resize: 220ms;
+}
+
+/* ----------------------------------------------------------------------------
+   Light theme — token overrides. Stamped as data-theme="light" on <html> by
+   theme.ts (Settings → Appearance → Theme; 'system' follows the OS). The dark
+   palette above stays the untouched base, so dark renders pixel-identical.
+   Deliberate exception: terminal interiors stay DARK in light mode (--term-bg
+   and the pane body veil are not flipped) — developers expect dark terminals,
+   and it spares re-theming xterm's ANSI palette.
+---------------------------------------------------------------------------- */
+:root[data-theme='light'] {
+  /* Ink scale on warm paper-white: near-black body text, secondary kept dark
+     enough (~#5a5f6b when blended) to hold ≥4.5:1 on the light surfaces. */
+  --text: rgba(26, 29, 36, 0.95);
+  --text-2: rgba(44, 50, 62, 0.78);
+  --muted: rgba(44, 50, 62, 0.66);
+  --ink-strong: #14171e;
+
+  /* Hairlines flip to translucent dark ink. */
+  --line-1: rgba(16, 20, 30, 0.1);
+  --line-2: rgba(16, 20, 30, 0.16);
+  --line-3: rgba(16, 20, 30, 0.24);
+
+  /* Glass turns to translucent white with dark hairlines; speculars stay white
+     (a brighter top edge still reads as light hitting the surface). */
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-bg-strong: rgba(255, 255, 255, 0.72);
+  --glass-highlight: rgba(255, 255, 255, 0.7);
+  --glass-sheen: linear-gradient(150deg, rgba(255, 255, 255, 0.7), transparent 44%);
+  --glass-specular: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  --glass-shadow: 0 20px 50px rgba(31, 38, 54, 0.2);
+  --menu-bg: rgba(249, 249, 251, 0.9);
+
+  --hover-bg-soft: rgba(18, 22, 32, 0.05);
+  --hover-bg: rgba(18, 22, 32, 0.07);
+  --hover-bg-strong: rgba(18, 22, 32, 0.1);
+  --surface-input: rgba(255, 255, 255, 0.72);
+
+  /* Softer, cooler shadows: lower alpha, slightly blue-gray so they don't read
+     as dirt on the paper background. */
+  --shadow-card: 0 14px 40px rgba(31, 38, 54, 0.16), 0 1px 2px rgba(31, 38, 54, 0.1);
+  --shadow-card-heavy: 0 14px 40px rgba(31, 38, 54, 0.18);
+  --shadow-card-hover: 0 20px 52px rgba(31, 38, 54, 0.2), 0 1px 2px rgba(31, 38, 54, 0.1);
+  --shadow-card-drag: 0 36px 70px rgba(31, 38, 54, 0.3);
+  --shadow-pop: 0 30px 80px rgba(31, 38, 54, 0.28);
+  --shadow-menu: 0 18px 50px rgba(31, 38, 54, 0.22);
+  --shadow-float: 0 10px 26px rgba(31, 38, 54, 0.18);
+
+  --card-bg: rgba(255, 255, 255, 0.7);
+  --card-bg-strong: rgba(248, 249, 251, 0.85);
+  /* --term-bg deliberately NOT overridden — terminals stay dark. */
+
+  /* Status colours darkened for contrast as text/rings on light surfaces.
+     (Bright fills that need to stay vivid keep hardcoded values.) */
+  --success: #1f9d45;
+  --danger: #d0453c;
+  --status-working: #1f9d45;
+  --status-idle: #93a0b4;
+  --status-attention: #c77800;
+  --status-done: #1f9d45;
+  --status-error: #d0453c;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -328,14 +411,14 @@ body.has-wallpaper .aurora {
     box-shadow:
       0 0 0 1px rgba(255, 159, 10, 0.5),
       0 0 14px rgba(255, 159, 10, 0.26),
-      0 14px 40px rgba(0, 0, 0, 0.45),
+      var(--shadow-card-heavy),
       inset 0 1px 0 var(--glass-highlight);
   }
   50% {
     box-shadow:
       0 0 0 1px rgba(255, 159, 10, 0.72),
       0 0 30px rgba(255, 159, 10, 0.5),
-      0 14px 40px rgba(0, 0, 0, 0.45),
+      var(--shadow-card-heavy),
       inset 0 1px 0 var(--glass-highlight);
   }
 }
@@ -391,16 +474,16 @@ body.has-wallpaper .aurora {
 }
 @keyframes merge-flash {
   0% {
-    box-shadow: var(--glass-specular), 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 0 0 rgba(48, 209, 88, 0);
+    box-shadow: var(--glass-specular), var(--shadow-pop), 0 0 0 0 rgba(48, 209, 88, 0);
   }
   28% {
     box-shadow:
       var(--glass-specular),
-      0 30px 80px rgba(0, 0, 0, 0.6),
+      var(--shadow-pop),
       0 0 64px 4px rgba(48, 209, 88, 0.55);
   }
   100% {
-    box-shadow: var(--glass-specular), 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 0 0 rgba(48, 209, 88, 0);
+    box-shadow: var(--glass-specular), var(--shadow-pop), 0 0 0 0 rgba(48, 209, 88, 0);
   }
 }
 .review__empty--ok {
@@ -417,6 +500,109 @@ body.has-wallpaper .aurora {
   }
 }
 
+/* "Task finished" nod — the long-burst done path (TerminalPane) settled to
+   idle. One soft green ring sweep on the card plus a ✓ that pops over the
+   status dot and fades. Deliberately restrained: it plays on every settled
+   work burst, so it must read as a quiet acknowledgment, not a celebration. */
+.vec-pane.is-done-flash {
+  animation: done-flash 1.2s var(--ease-out);
+}
+@keyframes done-flash {
+  /* Base card shadow restated in every frame (like attention-breathe) so the
+     sweep only ADDS the green layers instead of dropping the resting depth. */
+  0%,
+  100% {
+    box-shadow:
+      var(--shadow-card),
+      inset 0 1px 0 var(--glass-highlight);
+  }
+  24% {
+    box-shadow:
+      0 0 0 1px rgba(48, 209, 88, 0.55),
+      0 0 24px rgba(48, 209, 88, 0.3),
+      var(--shadow-card),
+      inset 0 1px 0 var(--glass-highlight);
+  }
+}
+.vec-pane__done-check {
+  /* Anchored to the card (not in the header's flex flow) so the nod never
+     shoves the title/branch around; it lands over the status dot, where the
+     eye already reads state. `forwards` holds it invisible until unmounted. */
+  position: absolute;
+  top: 8px;
+  left: 7px;
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--success);
+  color: #04180b;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 2;
+  animation: done-check 1.2s var(--ease-decelerate) forwards;
+}
+@keyframes done-check {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  16% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vec-pane.is-done-flash {
+    animation: none;
+  }
+  /* The ✓ ends held at opacity 0 (forwards) — with its pop collapsed to 0.01ms
+     it would just blink for a frame; hide it entirely instead. */
+  .vec-pane__done-check {
+    display: none;
+  }
+}
+
+/* Broadcast landed — one quick accent ring pulse on every targeted pane, so a
+   multi-send visibly reaches all of them. Lighter and faster than done-flash:
+   it's an input acknowledgment, not a completion. */
+.vec-pane.is-broadcast-pulse {
+  animation: broadcast-pulse 500ms var(--ease-out);
+}
+@keyframes broadcast-pulse {
+  /* Base card shadow restated in every frame (like done-flash) so the pulse
+     only ADDS the accent layers instead of dropping the resting depth. */
+  0%,
+  100% {
+    box-shadow:
+      var(--shadow-card),
+      inset 0 1px 0 var(--glass-highlight);
+  }
+  30% {
+    box-shadow:
+      0 0 0 1px rgba(var(--accent-rgb), 0.6),
+      0 0 22px rgba(var(--accent-rgb), 0.35),
+      var(--shadow-card),
+      inset 0 1px 0 var(--glass-highlight);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vec-pane.is-broadcast-pulse {
+    animation: none;
+  }
+}
+
 /* Tactile press feedback — buttons "give" a touch when clicked. */
 .rail-btn:active:not(:disabled),
 .rail__seg-btn:active,
@@ -426,6 +612,9 @@ body.has-wallpaper .aurora {
 .settings__step:active,
 .settings__close:active,
 .vec-pane__close:active,
+.vec-pane__wide:active,
+.broadcast__send:active,
+.broadcast__dismiss:active,
 .vec-pane__relaunch:active,
 .vec-pane__retry:active {
   transform: scale(0.92);
@@ -450,8 +639,7 @@ body.has-wallpaper .aurora {
 /* Hover-lift via shadow only (no move → no conflict with the pane's position). */
 .vec-pane:not(.is-selected):not(.is-attention):not(.is-error):not(.is-dragging):hover {
   box-shadow:
-    0 20px 52px rgba(0, 0, 0, 0.52),
-    0 1px 2px rgba(0, 0, 0, 0.3),
+    var(--shadow-card-hover),
     inset 0 1px 0 var(--glass-highlight);
 }
 
@@ -504,9 +692,14 @@ body.has-wallpaper .aurora {
 .toast--error {
   border-left-color: var(--danger);
 }
-.toast__action {
-  display: block;
+/* Row of toast buttons — primary first, optional low-emphasis secondary beside it. */
+.toast__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-top: 8px;
+}
+.toast__action {
   padding: 5px 12px;
   font: inherit;
   font-size: 12px;
@@ -519,6 +712,19 @@ body.has-wallpaper .aurora {
 }
 .toast__action:hover {
   filter: brightness(1.15);
+}
+/* Secondary action ("Skip this version"): quiet ghost button so it can't compete
+   with the primary — visible on inspection, invisible at a glance. */
+.toast__action--secondary {
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line-2);
+}
+.toast__action--secondary:hover {
+  filter: none;
+  color: var(--text);
+  border-color: var(--muted);
 }
 @keyframes toast-in {
   from {
@@ -789,6 +995,47 @@ body.has-wallpaper .aurora {
   transform: rotate(180deg);
   color: var(--accent-2);
 }
+/* Persistent "no isolation" chip — the attention amber (#ff9f0a) kept at low
+   intensity so it reads as a standing caution next to the pill, not an alarm.
+   It's a button: clicking runs git init (see ProjectBar). */
+.projbar__chip {
+  align-self: center;
+  margin-left: 8px;
+  padding: 4px 11px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  color: #ffbe66;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.01) 58%),
+    rgba(255, 159, 10, 0.1);
+  border: 1px solid rgba(255, 159, 10, 0.32);
+  border-radius: 999px;
+  cursor: pointer;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 6px 18px rgba(0, 0, 0, 0.35);
+  transition:
+    border-color var(--dur-select) var(--ease-out),
+    background var(--dur-select) var(--ease-out),
+    box-shadow var(--dur-select) var(--ease-out);
+}
+.projbar__chip:hover {
+  border-color: rgba(255, 159, 10, 0.55);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.02) 58%),
+    rgba(255, 159, 10, 0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 0 16px rgba(255, 159, 10, 0.18),
+    0 6px 18px rgba(0, 0, 0, 0.38);
+}
+.projbar__chip:focus-visible {
+  outline: none;
+  border-color: rgba(255, 159, 10, 0.7);
+  box-shadow: 0 0 0 2px rgba(255, 159, 10, 0.45);
+}
 .projbar__backdrop {
   position: fixed;
   inset: 0;
@@ -814,7 +1061,7 @@ body.has-wallpaper .aurora {
   border-radius: var(--r-lg);
   box-shadow:
     var(--glass-specular),
-    0 18px 50px rgba(0, 0, 0, 0.55);
+    var(--shadow-menu);
 }
 
 .app__main {
@@ -861,8 +1108,7 @@ body.has-wallpaper .aurora {
   background: transparent;
   border: 1px solid var(--glass-border);
   box-shadow:
-    0 14px 40px rgba(0, 0, 0, 0.42),
-    0 1px 2px rgba(0, 0, 0, 0.3),
+    var(--shadow-card),
     inset 0 1px 0 var(--glass-highlight);
   transition:
     transform var(--dur-spring) var(--ease-spring),
@@ -884,7 +1130,7 @@ body.has-wallpaper .aurora {
   will-change: transform;
   box-shadow:
     0 0 0 1px var(--accent),
-    0 36px 70px rgba(0, 0, 0, 0.68),
+    var(--shadow-card-drag),
     inset 0 1px 0 var(--glass-highlight);
 }
 
@@ -955,7 +1201,7 @@ body.has-wallpaper .aurora {
   box-shadow:
     0 0 0 1px var(--accent),
     0 0 22px rgba(var(--accent-rgb), 0.38),
-    0 14px 40px rgba(0, 0, 0, 0.45),
+    var(--shadow-card-heavy),
     inset 0 1px 0 var(--glass-highlight);
 }
 
@@ -965,7 +1211,7 @@ body.has-wallpaper .aurora {
   border-color: rgba(255, 159, 10, 0.55);
   box-shadow:
     0 0 0 1px rgba(255, 159, 10, 0.5),
-    0 14px 40px rgba(0, 0, 0, 0.45),
+    var(--shadow-card-heavy),
     inset 0 1px 0 var(--glass-highlight);
 }
 
@@ -973,7 +1219,7 @@ body.has-wallpaper .aurora {
   border-color: rgba(255, 107, 99, 0.5);
   box-shadow:
     0 0 0 1px rgba(255, 107, 99, 0.45),
-    0 14px 40px rgba(0, 0, 0, 0.45),
+    var(--shadow-card-heavy),
     inset 0 1px 0 var(--glass-highlight);
 }
 
@@ -1030,7 +1276,7 @@ body.has-wallpaper .aurora {
 
 .vec-pane__title {
   flex: 1;
-  color: #fff;
+  color: var(--ink-strong);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1081,6 +1327,25 @@ body.has-wallpaper .aurora {
 .vec-pane__close:hover {
   color: #ff6b63;
   background: rgba(255, 107, 99, 0.12);
+}
+
+/* Wide/normal width toggle — same quiet icon-button shape as the close button,
+   but a neutral hover (it's a layout action, not a destructive one). */
+.vec-pane__wide {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.vec-pane__wide:hover {
+  color: var(--text);
+  background: var(--hover-bg);
 }
 
 .vec-pane__body {
@@ -1214,7 +1479,7 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .vec-pane__retry:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--hover-bg-strong);
   border-color: rgba(var(--accent-rgb), 0.4);
 }
 
@@ -1233,7 +1498,7 @@ body.has-wallpaper .vec-pane__term {
   -webkit-backdrop-filter: var(--blur-md);
   border: 1px solid var(--line-2);
   border-radius: var(--r-sm);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-float);
 }
 
 .vec-pane__search-input {
@@ -1267,7 +1532,7 @@ body.has-wallpaper .vec-pane__term {
 
 .vec-pane__search-btn:hover {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--hover-bg);
 }
 
 /* Slim bar when a process has ended — keeps scrollback visible. */
@@ -1289,7 +1554,7 @@ body.has-wallpaper .vec-pane__term {
   -webkit-backdrop-filter: var(--blur-sm);
   border: 1px solid var(--line-2);
   border-radius: var(--r-sm);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-float);
 }
 
 .vec-pane__relaunch {
@@ -1344,7 +1609,7 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .vec-pane__menu-item:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--hover-bg);
 }
 
 .vec-pane__menu-item:disabled {
@@ -1483,13 +1748,13 @@ body.has-wallpaper .vec-pane__term {
   transition: background var(--dur-select) var(--ease-out), transform var(--dur-select) var(--ease-out);
 }
 .rail__switcher-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--hover-bg-soft);
 }
 .rail__switcher-btn:active {
   transform: scale(0.94);
 }
 .rail__switcher-btn.is-open {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--hover-bg);
 }
 .rail__switcher-btn svg,
 .rail__switcher-btn img {
@@ -1550,7 +1815,7 @@ body.has-wallpaper .vec-pane__term {
   transition: background var(--dur-select) var(--ease-out);
 }
 .rail__proj:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--hover-bg);
 }
 .rail__proj.is-active {
   background: rgba(var(--accent-rgb), 0.16);
@@ -1693,7 +1958,7 @@ body.has-wallpaper .vec-pane__term {
 
 .rail-btn:hover:not(:disabled) {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--hover-bg-soft);
 }
 
 .rail-btn:disabled {
@@ -1793,7 +2058,7 @@ body.has-wallpaper .vec-pane__term {
   border-radius: var(--r-lg);
   box-shadow:
     var(--glass-specular),
-    0 18px 50px rgba(0, 0, 0, 0.55);
+    var(--shadow-menu);
 }
 
 .rail__menu-item {
@@ -1809,7 +2074,7 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .rail__menu-item:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--hover-bg);
 }
 
 .rail__menu-item.is-active {
@@ -1870,7 +2135,7 @@ body.has-wallpaper .vec-pane__term {
   border: 1px solid var(--line-2);
   box-shadow:
     var(--glass-specular),
-    0 30px 80px rgba(0, 0, 0, 0.6);
+    var(--shadow-pop);
 }
 
 .settings__head {
@@ -1884,7 +2149,7 @@ body.has-wallpaper .vec-pane__term {
 .settings__title {
   font-size: 15px;
   font-weight: 600;
-  color: #fff;
+  color: var(--ink-strong);
 }
 
 .settings__close {
@@ -1901,7 +2166,7 @@ body.has-wallpaper .vec-pane__term {
 
 .settings__close:hover {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--hover-bg);
 }
 
 /* Two-column body: category sidebar + the active category's settings. */
@@ -1941,10 +2206,10 @@ body.has-wallpaper .vec-pane__term {
 }
 .settings__nav-item:hover {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--hover-bg-soft);
 }
 .settings__nav-item.is-active {
-  color: #fff;
+  color: var(--ink-strong);
   background: rgba(var(--accent-rgb), 0.18);
 }
 .settings__nav-item.is-active svg {
@@ -1956,6 +2221,33 @@ body.has-wallpaper .vec-pane__term {
   flex: 1;
   padding: 14px 20px 18px;
   overflow-y: auto;
+}
+
+/* Footer strip: home for the keyboard-shortcuts link (a peer of the modal,
+   not of any settings category, so it lives outside the nav). */
+.settings__foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: 9px 14px;
+  border-top: 1px solid var(--hairline);
+}
+
+.settings__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 8px;
+  font-size: 12px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--r-xs);
+  cursor: pointer;
+  transition: color var(--dur-select) var(--ease-out);
+}
+
+.settings__link:hover {
+  color: var(--text);
 }
 
 /* Slider control (replaces +/− steppers for continuous values). */
@@ -2035,7 +2327,7 @@ body.has-wallpaper .vec-pane__term {
   padding: 7px 10px;
   font-size: 12.5px;
   color: var(--text);
-  background: rgba(10, 16, 26, 0.5);
+  background: var(--surface-input);
   border: 1px solid var(--glass-border);
   border-radius: var(--r-xs);
   outline: none;
@@ -2089,7 +2381,7 @@ body.has-wallpaper .vec-pane__term {
 
 .settings__step:hover {
   border-color: rgba(var(--accent-rgb), 0.4);
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--hover-bg-strong);
 }
 
 .settings__btn {
@@ -2105,8 +2397,67 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .settings__btn:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--hover-bg-strong);
   border-color: rgba(var(--accent-rgb), 0.4);
+}
+
+.settings__btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.settings__btn:disabled:hover {
+  background: var(--glass-bg-strong);
+  border-color: var(--glass-border);
+}
+
+/* Row-end group: a button sitting beside the row's control (e.g. sound Preview). */
+.settings__inline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Segmented control (Theme: Dark / Light / System) — same recessed surface as
+   the selects, with the active segment lifted on the accent gradient. */
+.settings__seg {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--surface-input);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-xs);
+}
+
+.settings__seg-btn {
+  padding: 5px 13px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--r-xs) - 2px);
+  cursor: pointer;
+  transition: color var(--dur-select) var(--ease-out),
+    background var(--dur-select) var(--ease-out);
+}
+
+.settings__seg-btn:hover:not(.is-active) {
+  color: var(--text);
+  background: var(--hover-bg-soft);
+}
+
+/* White-on-accent in BOTH themes (like the dock's segmented toggle). */
+.settings__seg-btn.is-active {
+  color: #fff;
+  background: linear-gradient(180deg, var(--accent-2), var(--accent));
+  box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.35);
+}
+
+.settings__seg-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.6);
 }
 
 .settings__swatches {
@@ -2194,7 +2545,7 @@ body.has-wallpaper .vec-pane__term {
   border: 1px solid var(--line-2);
   box-shadow:
     var(--glass-specular),
-    0 30px 80px rgba(0, 0, 0, 0.6);
+    var(--shadow-pop);
 }
 
 .palette__input {
@@ -2249,6 +2600,97 @@ body.has-wallpaper .vec-pane__term {
   font-size: 13px;
 }
 
+/* ---------- Keycap (shortcut chords in the help overlay & settings) ---------- */
+.kbd {
+  padding: 2px 7px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: nowrap;
+  color: var(--text);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--glass-border);
+  border-radius: 5px;
+  /* Slight bottom weight = physical key; subtle inner specular keeps it glassy. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 1px 0 rgba(0, 0, 0, 0.35);
+}
+
+/* ---------- Keyboard-shortcuts help overlay ---------- */
+.shortcuts {
+  width: 720px;
+  max-width: 94vw;
+  max-height: 84vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-xl);
+  overflow: hidden;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.025) 48%),
+    rgba(15, 21, 32, 0.66);
+  backdrop-filter: var(--blur-lg);
+  -webkit-backdrop-filter: var(--blur-lg);
+  border: 1px solid var(--line-2);
+  box-shadow:
+    var(--glass-specular),
+    var(--shadow-pop);
+}
+
+/* Two explicit columns (not CSS multicol — that balances by height and can
+   split a section across columns). Scrolls only as a small-window fallback. */
+.shortcuts__body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 34px;
+  padding: 16px 22px 20px;
+  overflow-y: auto;
+}
+
+.shortcuts__col {
+  min-width: 0;
+}
+
+.shortcuts__section {
+  margin-bottom: 18px;
+}
+.shortcuts__section:last-child {
+  margin-bottom: 0;
+}
+
+.shortcuts__heading {
+  margin: 0 0 7px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.shortcuts__row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 3.5px 0;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+/* Dotted leader between label and keycap, like a table of contents. */
+.shortcuts__dots {
+  flex: 1;
+  min-width: 14px;
+  border-bottom: 1px dotted rgba(255, 255, 255, 0.16);
+  transform: translateY(3px);
+}
+
+.shortcuts__note {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 /* ---------- Confirm dialog (destructive actions) ---------- */
 .confirm {
   width: 400px;
@@ -2263,13 +2705,13 @@ body.has-wallpaper .vec-pane__term {
   border: 1px solid var(--line-2);
   box-shadow:
     var(--glass-specular),
-    0 30px 80px rgba(0, 0, 0, 0.6);
+    var(--shadow-pop);
 }
 
 .confirm__title {
   font-size: 15px;
   font-weight: 600;
-  color: #fff;
+  color: var(--ink-strong);
   margin-bottom: 8px;
 }
 
@@ -2304,7 +2746,7 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .confirm__btn:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--hover-bg-strong);
 }
 
 .confirm__btn--safe {
@@ -2338,7 +2780,7 @@ body.has-wallpaper .vec-pane__term {
   border: 1px solid var(--line-2);
   box-shadow:
     var(--glass-specular),
-    0 30px 80px rgba(0, 0, 0, 0.6);
+    var(--shadow-pop);
 }
 
 .review__head {
@@ -2360,7 +2802,7 @@ body.has-wallpaper .vec-pane__term {
 .review__name {
   font-size: 15px;
   font-weight: 600;
-  color: #fff;
+  color: var(--ink-strong);
 }
 
 .review__branch {
@@ -2465,6 +2907,19 @@ body.has-wallpaper .vec-pane__term {
   color: #8fb8ff;
   background: rgba(90, 140, 255, 0.16);
 }
+/* Per-file include checkbox — drives merge-vs-partial-apply in the footer. */
+.review__fcheck {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: rgba(var(--accent-rgb), 0.9);
+  cursor: pointer;
+}
+.review__fcheck:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
 .review__fname {
   flex: 1;
   min-width: 0;
@@ -2503,6 +2958,49 @@ body.has-wallpaper .vec-pane__term {
   border-top: 1px solid var(--line-1);
 }
 
+/* Merge-conflict panel: attention-toned (amber), NOT error-red — the merge was
+   rolled back cleanly and there's a clear path forward. */
+.review__conflict {
+  padding: 12px 18px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  background: rgba(255, 159, 10, 0.08);
+  border-top: 1px solid rgba(255, 159, 10, 0.28);
+}
+.review__conflict-title {
+  font-weight: 600;
+  color: #ffbf5e;
+}
+.review__conflict-files {
+  max-height: 96px;
+  overflow: auto;
+  margin: 8px 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: #ffd9a0;
+}
+.review__conflict-hint {
+  color: var(--muted);
+  line-height: 1.55;
+}
+.review__conflict-hint code {
+  padding: 1px 5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #ffd9a0;
+  background: rgba(255, 159, 10, 0.12);
+  border: 1px solid rgba(255, 159, 10, 0.22);
+  border-radius: 4px;
+}
+
+/* Refresh (re-load the diff) sits beside the close button in the header. */
+.review__refresh:disabled {
+  opacity: 0.35;
+  cursor: default;
+  background: transparent;
+}
+
 .review__foot {
   display: flex;
   align-items: center;
@@ -2517,7 +3015,7 @@ body.has-wallpaper .vec-pane__term {
   padding: 8px 12px;
   font-size: 13px;
   color: var(--text);
-  background: rgba(10, 16, 26, 0.5);
+  background: var(--surface-input);
   border: 1px solid var(--glass-border);
   border-radius: var(--r-sm);
   outline: none;
@@ -2543,7 +3041,7 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .review__btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--hover-bg-strong);
 }
 
 .review__btn:disabled {
@@ -2592,7 +3090,7 @@ body.has-wallpaper .vec-pane__term {
   min-width: 0;
   font: inherit;
   font-size: 12px;
-  color: #fff;
+  color: var(--ink-strong);
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid var(--accent);
   border-radius: 6px;
@@ -2958,7 +3456,7 @@ body.has-wallpaper .vec-pane__term {
 
 .empty__card h1 {
   margin: 0 0 8px;
-  color: #fff;
+  color: var(--ink-strong);
   font-weight: 600;
   letter-spacing: 0.5px;
 }
@@ -3168,4 +3666,464 @@ body.has-wallpaper .vec-pane__term {
 }
 .crash__btn:hover {
   filter: brightness(1.07);
+}
+
+/* ---------- Broadcast bar (send to every selected terminal) ---------- */
+.broadcast {
+  position: absolute;
+  left: 50%;
+  bottom: 26px; /* floats just above the tiles' bottom inset */
+  transform: translateX(-50%);
+  z-index: 40; /* over the cards (panes top out at 6), under modals (100) */
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  width: min(560px, calc(100% - 220px));
+  padding: 5px 5px 5px 14px;
+  border-radius: 21px;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03) 50%),
+    rgba(15, 21, 32, 0.72);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--line-2);
+  box-shadow:
+    var(--glass-specular),
+    var(--shadow-menu);
+  animation: pop-in 240ms var(--ease-decelerate);
+  transition:
+    border-color var(--dur-select) var(--ease-out),
+    box-shadow var(--dur-select) var(--ease-out);
+}
+
+.broadcast:focus-within {
+  border-color: rgba(var(--accent-rgb), 0.55);
+  box-shadow:
+    var(--glass-specular),
+    0 0 0 1px rgba(var(--accent-rgb), 0.12),
+    0 0 22px rgba(var(--accent-rgb), 0.22),
+    var(--shadow-menu);
+}
+
+/* Styled as a single-line pill; BroadcastBar's autosize effect grows it with
+   content up to ~4 lines (max-height mirrors its MAX_INPUT_PX), then it scrolls. */
+.broadcast__input {
+  flex: 1;
+  min-width: 0;
+  max-height: 84px;
+  margin: 5px 0;
+  padding: 0;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+}
+
+.broadcast__input::placeholder {
+  color: var(--muted);
+}
+
+.broadcast__send,
+.broadcast__dismiss {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.broadcast__send {
+  color: #fff;
+  background: linear-gradient(180deg, var(--accent-2), var(--accent));
+  box-shadow: 0 0 14px rgba(var(--accent-rgb), 0.35);
+}
+
+.broadcast__send:hover {
+  filter: brightness(1.07);
+}
+
+.broadcast__dismiss {
+  color: var(--muted);
+  background: transparent;
+}
+
+.broadcast__dismiss:hover {
+  color: var(--text);
+  background: var(--hover-bg);
+}
+
+/* ----------------------------------------------------------------------------
+   Light theme — component overrides. Everything the token flip above can't
+   reach: hardcoded dark surfaces, white-highlight gradients, and status tints
+   that assumed a dark backdrop. Grouped here (instead of inline next to each
+   rule) so the dark cascade above stays byte-for-byte untouched.
+---------------------------------------------------------------------------- */
+
+/* Warm paper-white scene instead of the dark veil. */
+:root[data-theme='light'] body {
+  background:
+    radial-gradient(1200px 820px at 18% -6%, rgba(var(--brand-rgb), 0.08), transparent 55%),
+    linear-gradient(180deg, #f5f4f0, #edece7);
+}
+
+/* Wallpaper scrim flips to a light veil so light chrome stays legible over it. */
+:root[data-theme='light'] .wallpaper::after {
+  background: linear-gradient(180deg, rgba(246, 245, 242, 0.3), rgba(246, 245, 242, 0.5));
+}
+
+/* Aurora stays, but desaturated and quieter so the background reads airy, not
+   murky — on paper-white the full-strength orbs looked like bruises. */
+:root[data-theme='light'] .aurora__orb--1 {
+  background: radial-gradient(circle, rgba(var(--brand-rgb), 0.16), transparent 62%);
+}
+:root[data-theme='light'] .aurora__orb--2 {
+  background: radial-gradient(circle, rgba(46, 132, 162, 0.12), transparent 62%);
+}
+:root[data-theme='light'] .aurora__orb--3 {
+  background: radial-gradient(circle, rgba(122, 92, 222, 0.09), transparent 62%);
+}
+
+/* Film grain: overlay blend brightens on light — keep it fainter. */
+:root[data-theme='light'] .grain {
+  opacity: 0.03;
+}
+
+/* Modal scrim: still a dark dim (standard on light UIs) but softer. */
+:root[data-theme='light'] .modal {
+  background: rgba(34, 40, 54, 0.32);
+}
+
+/* ---- Project bar ---- */
+:root[data-theme='light'] .projbar__btn {
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.45) 58%),
+    rgba(250, 250, 252, 0.72);
+  box-shadow:
+    var(--glass-specular),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.5),
+    0 1px 0 rgba(255, 255, 255, 0.4),
+    0 12px 30px rgba(31, 38, 54, 0.16);
+}
+:root[data-theme='light'] .projbar__btn:hover {
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.6) 58%),
+    rgba(252, 252, 254, 0.8);
+  box-shadow:
+    var(--glass-specular),
+    0 0 0 1px rgba(var(--accent-rgb), 0.12),
+    0 0 22px rgba(var(--accent-rgb), 0.18),
+    0 14px 34px rgba(31, 38, 54, 0.18);
+}
+:root[data-theme='light'] .projbar__btn.is-open {
+  box-shadow:
+    var(--glass-specular),
+    0 0 0 1px rgba(var(--accent-rgb), 0.18),
+    0 0 24px rgba(var(--accent-rgb), 0.22),
+    0 14px 34px rgba(31, 38, 54, 0.18);
+}
+:root[data-theme='light'] .projbar__btn:focus-visible {
+  box-shadow:
+    var(--glass-specular),
+    0 0 0 2px rgba(var(--accent-rgb), 0.6),
+    0 12px 30px rgba(31, 38, 54, 0.16);
+}
+:root[data-theme='light'] .projbar__emblem--empty {
+  background: rgba(18, 22, 32, 0.07);
+}
+/* Standing-caution chip: darker amber ink for contrast on the light pill row. */
+:root[data-theme='light'] .projbar__chip {
+  color: #8a5a00;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.15) 58%),
+    rgba(199, 120, 0, 0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    0 6px 18px rgba(31, 38, 54, 0.12);
+}
+
+/* ---- Dock / rail ---- */
+:root[data-theme='light'] .rail {
+  background:
+    linear-gradient(150deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.5) 55%),
+    rgba(248, 248, 250, 0.78);
+}
+:root[data-theme='light'] .rail__seg {
+  background: rgba(18, 22, 32, 0.06);
+}
+:root[data-theme='light'] .rail__ws-tile {
+  background: rgba(18, 22, 32, 0.05);
+}
+:root[data-theme='light'] .rail__ws-tile:hover {
+  background: rgba(18, 22, 32, 0.09);
+}
+/* The attention dot's punch-out ring must match the light dock body. */
+:root[data-theme='light'] .rail__ws-dot {
+  box-shadow: 0 0 0 2px rgba(248, 248, 250, 0.92);
+}
+:root[data-theme='light'] .rail__menu-item--danger:hover {
+  background: rgba(208, 69, 60, 0.1);
+  color: #b3382f;
+}
+
+/* ---- Terminal cards: light chrome, deliberately dark terminal wells ---- */
+/* A touch stronger card border so the light header + dark body read as one
+   intentional card, not a hole in the page. */
+:root[data-theme='light'] .vec-pane {
+  border-color: rgba(16, 20, 30, 0.28);
+}
+:root[data-theme='light'] .vec-pane__header {
+  background: linear-gradient(180deg, rgba(250, 250, 252, 0.92), rgba(242, 243, 246, 0.86));
+}
+/* The dark veil now sits over a LIGHT canvas: at the settings slider's lower
+   alphas (default 0.55) it blends to a mid-grey that washes out the dark-palette
+   ANSI colours — clamp it near-opaque here so the well genuinely stays dark.
+   Dark mode keeps the full translucency range (its backdrop is already dark). */
+:root[data-theme='light'] .vec-pane__term {
+  background: rgba(10, 13, 18, max(var(--term-alpha, 0.8), 0.92));
+}
+:root[data-theme='light'] .vec-pane__branch {
+  background: rgba(18, 26, 44, 0.05);
+}
+:root[data-theme='light'] .vec-pane__branch--shared {
+  color: #9a5f2e;
+}
+:root[data-theme='light'] .vec-pane__close:hover {
+  color: #b3382f;
+}
+/* The spawn-error panel sits on the still-dark terminal well: keep its text
+   light-on-dark in both themes (the flipped tokens would make it unreadable). */
+:root[data-theme='light'] .vec-pane__error-title {
+  color: #ff6b63;
+}
+:root[data-theme='light'] .vec-pane__error-msg {
+  color: rgba(235, 235, 245, 0.55);
+}
+:root[data-theme='light'] .vec-pane__retry {
+  color: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+:root[data-theme='light'] .vec-pane__retry:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+/* Same story for the "process ended" bar floating over the dark well. */
+:root[data-theme='light'] .vec-pane__ended {
+  color: rgba(235, 235, 245, 0.6);
+}
+/* The find bar goes light with the chrome; its input recesses with dark ink. */
+:root[data-theme='light'] .vec-pane__search-input {
+  background: rgba(18, 22, 32, 0.06);
+}
+:root[data-theme='light'] .vec-pane__rename {
+  background: rgba(255, 255, 255, 0.75);
+}
+:root[data-theme='light'] .vec-pane__menu {
+  box-shadow: 0 16px 40px rgba(31, 38, 54, 0.22);
+}
+
+/* ---- Toasts ---- */
+:root[data-theme='light'] .toast {
+  box-shadow:
+    var(--glass-specular),
+    0 14px 36px rgba(31, 38, 54, 0.2);
+}
+/* Action button is white-on-accent; --text flipped to dark ink, so restate. */
+:root[data-theme='light'] .toast__action {
+  color: #fff;
+}
+
+/* ---- Scrollbars & keycaps ---- */
+:root[data-theme='light'] .review__body::-webkit-scrollbar-thumb,
+:root[data-theme='light'] .palette__list::-webkit-scrollbar-thumb,
+:root[data-theme='light'] .settings__body::-webkit-scrollbar-thumb,
+:root[data-theme='light'] .rail__menu::-webkit-scrollbar-thumb,
+:root[data-theme='light'] .diff__body::-webkit-scrollbar-thumb {
+  background: rgba(16, 20, 30, 0.28);
+  background-clip: padding-box;
+}
+:root[data-theme='light'] .review__body::-webkit-scrollbar-thumb:hover,
+:root[data-theme='light'] .palette__list::-webkit-scrollbar-thumb:hover,
+:root[data-theme='light'] .settings__body::-webkit-scrollbar-thumb:hover,
+:root[data-theme='light'] .rail__menu::-webkit-scrollbar-thumb:hover,
+:root[data-theme='light'] .diff__body::-webkit-scrollbar-thumb:hover {
+  background: rgba(16, 20, 30, 0.42);
+  background-clip: padding-box;
+}
+:root[data-theme='light'] .kbd {
+  background: linear-gradient(180deg, #ffffff, #f0f0f2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 1px 0 rgba(16, 20, 30, 0.2);
+}
+:root[data-theme='light'] .shortcuts__dots {
+  border-bottom-color: rgba(16, 20, 30, 0.22);
+}
+
+/* ---- Overlay panels (settings / palette / shortcuts / confirm / review) ---- */
+:root[data-theme='light'] .settings,
+:root[data-theme='light'] .shortcuts {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.55) 48%),
+    rgba(247, 247, 249, 0.82);
+}
+:root[data-theme='light'] .palette {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.55) 48%),
+    rgba(247, 247, 249, 0.85);
+}
+:root[data-theme='light'] .confirm,
+:root[data-theme='light'] .review {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.5) 50%),
+    rgba(247, 247, 249, 0.86);
+}
+:root[data-theme='light'] .palette__item:hover {
+  background: rgba(18, 22, 32, 0.05);
+}
+:root[data-theme='light'] .settings__select option {
+  background: #ffffff;
+}
+:root[data-theme='light'] .settings__slider input[type='range'] {
+  background: rgba(16, 20, 30, 0.16);
+}
+:root[data-theme='light'] .settings__swatch {
+  border-color: rgba(16, 20, 30, 0.2);
+}
+/* Active-swatch ring inverts: white gap against the panel, dark outer ring. */
+:root[data-theme='light'] .settings__swatch.is-active {
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.9),
+    0 0 0 4px #1a1d24;
+}
+:root[data-theme='light'] .confirm__btn--safe {
+  color: #31519c;
+}
+:root[data-theme='light'] .confirm__btn--danger {
+  color: #b3382f;
+}
+:root[data-theme='light'] .confirm__btn--danger:hover {
+  background: rgba(208, 69, 60, 0.1);
+}
+
+/* ---- Review / diff: green-red tints re-inked for a light backdrop ---- */
+:root[data-theme='light'] .review__sum-add {
+  color: #1a7a4a;
+}
+:root[data-theme='light'] .review__sum-del,
+:root[data-theme='light'] .review__error,
+:root[data-theme='light'] .review__btn--discard,
+:root[data-theme='light'] .diff__btn--discard {
+  color: #b3382f;
+}
+:root[data-theme='light'] .review__btn--discard:hover:not(:disabled) {
+  background: rgba(208, 69, 60, 0.1);
+}
+:root[data-theme='light'] .review__file {
+  background: linear-gradient(180deg, rgba(249, 250, 252, 0.97), rgba(242, 244, 247, 0.95));
+}
+:root[data-theme='light'] .review__file--untracked {
+  background: linear-gradient(180deg, rgba(235, 246, 239, 0.97), rgba(228, 241, 233, 0.95));
+}
+:root[data-theme='light'] .review__fstat--add {
+  color: #1a7a4a;
+  background: rgba(31, 157, 69, 0.14);
+}
+:root[data-theme='light'] .review__fstat--del {
+  color: #b3382f;
+  background: rgba(208, 69, 60, 0.12);
+}
+:root[data-theme='light'] .review__fstat--mod {
+  color: #8a5a00;
+  background: rgba(199, 120, 0, 0.14);
+}
+:root[data-theme='light'] .review__fstat--ren {
+  color: #2f5cc4;
+  background: rgba(60, 110, 240, 0.12);
+}
+:root[data-theme='light'] .review__note {
+  color: #8a5a00;
+}
+:root[data-theme='light'] .review__conflict-title {
+  color: #8a5a00;
+}
+:root[data-theme='light'] .review__conflict-files {
+  color: #7a5200;
+}
+:root[data-theme='light'] .review__conflict-hint code {
+  color: #7a5200;
+}
+:root[data-theme='light'] .diff {
+  background: rgba(248, 248, 250, 0.94);
+}
+:root[data-theme='light'] .diff__msg {
+  background: rgba(18, 26, 44, 0.04);
+}
+:root[data-theme='light'] .diff__line--add {
+  background: rgba(31, 157, 69, 0.13);
+  color: #14713a;
+}
+:root[data-theme='light'] .diff__line--del {
+  background: rgba(208, 69, 60, 0.11);
+  color: #a32e26;
+}
+:root[data-theme='light'] .diff__line--new {
+  color: #177a41;
+}
+:root[data-theme='light'] .diff__line--hunk {
+  color: #0f6b8a;
+}
+
+/* ---- Home / empty state ---- */
+/* Wordmark inverts: near-black letters, the accent sheen still sweeps across.
+   background-size must be restated — the shorthand here would reset it. */
+:root[data-theme='light'] .home__title {
+  background: linear-gradient(
+    100deg,
+    #1a1d24 0%,
+    #1a1d24 38%,
+    var(--accent) 50%,
+    #1a1d24 62%,
+    #1a1d24 100%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+:root[data-theme='light'] .home__card {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.45) 60%),
+    rgba(250, 250, 252, 0.7);
+}
+:root[data-theme='light'] .home__card:hover {
+  box-shadow:
+    0 12px 30px rgba(31, 38, 54, 0.16),
+    0 0 0 1px rgba(var(--accent-rgb), 0.35);
+}
+:root[data-theme='light'] .empty__card {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.4) 50%),
+    rgba(250, 250, 252, 0.65);
+  box-shadow:
+    var(--glass-specular),
+    0 30px 80px rgba(31, 38, 54, 0.24);
+}
+
+/* ---- Broadcast bar ---- */
+:root[data-theme='light'] .broadcast {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.55) 50%),
+    rgba(250, 250, 252, 0.8);
+}
+
+/* ---- Crash screen ---- */
+:root[data-theme='light'] .crash {
+  background: radial-gradient(900px 500px at 50% -10%, rgba(var(--accent-rgb), 0.12), transparent 60%),
+    #f2f1ed;
+}
+:root[data-theme='light'] .crash__detail {
+  color: #a32e26;
 }

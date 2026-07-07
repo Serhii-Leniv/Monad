@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow, Notification, shell, clipboard } from 'electron'
+import { app, ipcMain, dialog, BrowserWindow, Notification, shell, clipboard } from 'electron'
 import { join, basename, isAbsolute } from 'path'
 import { promises as fs } from 'fs'
 import { execFile } from 'child_process'
@@ -15,11 +15,16 @@ import { PtyManager, type SpawnOptions } from './pty-manager'
 import {
   getGitInfo,
   getRepoRootSafe,
+  initRepo,
   createWorktree,
   removeWorktree,
   pruneWorktrees,
+  findOrphanWorktrees,
+  removeOrphanWorktrees,
+  type OrphanWorktree,
   getAgentDiff,
   mergeAgent,
+  applyAgentFiles,
   friendlyGitError
 } from './git'
 import { detectShells, detectAgents } from './shells'
@@ -264,11 +269,41 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
   // --- Git / per-agent worktree isolation ---
   ipcMain.handle('git:info', (_e, projectPath: string) => getGitInfo(projectPath))
 
+  // `git init` only (see initRepo) — offered when a non-git folder is opened so
+  // the user can unlock worktree isolation without leaving the app.
+  ipcMain.handle('git:init', (_e, projectPath: string) => initRepo(projectPath))
+
   ipcMain.handle('git:prune', async (_e, projectPath: string) => {
     const repoRoot = await getRepoRootSafe(projectPath)
     if (repoRoot) await pruneWorktrees(repoRoot)
     return true
   })
+
+  // Leftover canvas/* worktrees from crashed or force-quit sessions — prune
+  // can't remove them (still registered), so the renderer offers a cleanup.
+  ipcMain.handle(
+    'git:orphans',
+    async (
+      _e,
+      { projectPath, ownedAgentIds }: { projectPath: string; ownedAgentIds: string[] }
+    ) => {
+      const repoRoot = await getRepoRootSafe(projectPath)
+      if (!repoRoot) return []
+      return findOrphanWorktrees(repoRoot, Array.isArray(ownedAgentIds) ? ownedAgentIds : [])
+    }
+  )
+
+  ipcMain.handle(
+    'git:cleanOrphans',
+    async (
+      _e,
+      { projectPath, orphans }: { projectPath: string; orphans: OrphanWorktree[] }
+    ) => {
+      const repoRoot = await getRepoRootSafe(projectPath)
+      if (!repoRoot || !Array.isArray(orphans)) return 0
+      return removeOrphanWorktrees(repoRoot, orphans)
+    }
+  )
 
   // Resolve an agent's working dir: a git worktree when isolated, else the
   // shared project dir. Falls back to shared on any git failure.
@@ -320,6 +355,29 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
     }
   )
 
+  // OS-level "agents need you" indicator. The renderer reports how many agents
+  // are waiting (attention/error/exited); while the window is unfocused the
+  // taskbar flashes (Windows/Linux) or the dock badges + bounces (macOS).
+  // Flash/bounce only on a rising edge — re-triggering on every report would
+  // restart the blink forever while the count sits unchanged. The window's
+  // 'focus' handler (index.ts) stops the flash; the dock badge stays until the
+  // count actually returns to 0, since it's a passive count, not a nag.
+  let attentionCount = 0
+  ipcMain.on('attention:set', (_e, { count }: { count: number }) => {
+    const prev = attentionCount
+    attentionCount = Math.max(0, Math.floor(count) || 0)
+    const w = getWindow()
+    if (!w || w.isDestroyed()) return
+    if (process.platform === 'darwin') {
+      app.dock?.setBadge(attentionCount > 0 ? String(attentionCount) : '')
+      if (attentionCount > prev && !w.isFocused()) app.dock?.bounce('informational')
+    } else if (attentionCount === 0) {
+      w.flashFrame(false)
+    } else if (attentionCount > prev && !w.isFocused()) {
+      w.flashFrame(true)
+    }
+  })
+
   ipcMain.handle(
     'worktree:remove',
     async (_e, { projectPath, agentId }: { projectPath: string; agentId: string }) => {
@@ -348,6 +406,32 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
       const info = await getGitInfo(projectPath)
       if (!info.repoRoot) return { ok: false, error: 'Not a git repository' }
       return mergeAgent(info.repoRoot, agentId, message)
+    }
+  )
+
+  // Partial apply: take the agent's version of selected files onto the current
+  // branch as a plain commit (no merge — the branch stays unmerged).
+  ipcMain.handle(
+    'git:applyFiles',
+    async (
+      _e,
+      {
+        projectPath,
+        agentId,
+        paths,
+        deletedPaths,
+        message
+      }: {
+        projectPath: string
+        agentId: string
+        paths: string[]
+        deletedPaths: string[]
+        message: string
+      }
+    ) => {
+      const info = await getGitInfo(projectPath)
+      if (!info.repoRoot) return { ok: false, error: 'Not a git repository' }
+      return applyAgentFiles(info.repoRoot, agentId, paths, deletedPaths, message)
     }
   )
 

@@ -29,11 +29,23 @@ const NOTES: Record<Cue, [number, number]> = {
 }
 
 export function playCue(cue: Cue): void {
-  const ac = audio()
-  if (!ac) return
   const now = Date.now()
   if (now - last < 1200) return
   last = now
+  play(cue)
+}
+
+/**
+ * Settings "Preview" button — bypasses ONLY the rate limiter (clicking Preview
+ * must always sound, even right after a real cue), same tone and volume.
+ */
+export function previewCue(cue: Cue): void {
+  play(cue)
+}
+
+function play(cue: Cue): void {
+  const ac = audio()
+  if (!ac) return
   try {
     if (ac.state === 'suspended') void ac.resume()
     const t0 = ac.currentTime
