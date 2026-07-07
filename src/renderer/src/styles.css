@@ -1124,6 +1124,16 @@ body.has-wallpaper .vec-pane__term {
   -webkit-backdrop-filter: none !important;
 }
 
+/* Text selection inside a terminal: drop the blur on JUST that pane so drag-
+   selecting stays smooth over a wallpaper. The node-drag rule above only covers
+   moving panes; a selection drag (the pane's own .is-selecting, set by TerminalPane
+   once a drag actually starts) repaints the blurred translucent layer every frame
+   otherwise. Scoped to the dragged pane so other terminals never flicker. */
+.vec-pane__term.is-selecting {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
 .vec-pane__term .xterm,
 .vec-pane__term .xterm-viewport {
   height: 100%;

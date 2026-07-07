@@ -96,6 +96,10 @@ export default function App(): JSX.Element {
       if (el?.closest?.('.vec-pane__term')) return // xterm handles it itself
       if (el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA') return // native input
       const st = useStore.getState()
+      // Only an UNAMBIGUOUS target: the maximized pane, or the sole selection.
+      // Under a multi-select there's no single active terminal, so pasting into
+      // selectedIds[0] could auto-run a clipboard command in a pane the user didn't
+      // mean — keep suppressing it there (paste dead-ends, which is the safe choice).
       const id = st.focusedId ?? (st.selectedIds.length === 1 ? st.selectedIds[0] : null)
       const term = id ? terminals.get(id) : null
       if (!term) return
@@ -118,6 +122,39 @@ export default function App(): JSX.Element {
     if (prevOverlayOpen.current && !overlayOpen) requestAnimationFrame(focusActiveTerminal)
     prevOverlayOpen.current = overlayOpen
   }, [overlayOpen])
+
+  // When the OS window regains focus (returning from Wispr Flow, alt-tab, another
+  // app), Chromium doesn't reliably restore DOM focus to xterm's hidden textarea —
+  // it often falls to <body>. Dictation/paste tools (Wispr Flow) then see no focused
+  // text field and refuse to insert ("click a text box first"), and typed input
+  // dead-ends. Re-focus the active terminal — but ONLY when focus actually fell
+  // through (body/null) and no overlay owns it, so we never steal from a focused
+  // rename/search field or a terminal that already has focus. rAF lets Chromium's
+  // own focus restoration settle first.
+  useEffect(() => {
+    const onFocus = (): void => {
+      requestAnimationFrame(() => {
+        const st = useStore.getState()
+        if (st.settingsOpen || st.paletteOpen || st.diffAgentId) return
+        const el = document.activeElement
+        if (el && el !== document.body) return
+        // A multi-select has no single active terminal; focusing selectedIds[0] would
+        // fire its onFocus → setSelected([id]) and silently collapse the selection.
+        // Leave focus on <body> in that case (typing already has no single target).
+        if (!st.focusedId && st.selectedIds.length > 1) return
+        // If a pane's search box is open, its input is the intended target — restore
+        // focus there instead of stealing it into the terminal.
+        const search = document.querySelector('.vec-pane__search-input') as HTMLElement | null
+        if (search) {
+          search.focus()
+          return
+        }
+        focusActiveTerminal()
+      })
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [])
 
   // Load the chosen wallpaper (read in main → data URL so CSP stays strict).
   useEffect(() => {
