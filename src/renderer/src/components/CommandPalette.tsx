@@ -10,13 +10,42 @@ interface Cmd {
   run: () => void
 }
 
+/**
+ * Subsequence fuzzy match: every query char must appear in order in the title
+ * (case-insensitive). Returns a score for ranking, or null on no match.
+ * Greedy left-to-right is enough at this scale (dozens of commands) — no need
+ * for optimal-alignment scoring. Weights: word-boundary hits and consecutive
+ * runs score high (so "lg" → "Layout: Grid", "clo" → "Close…"), scattered
+ * matches score low but still match; a start-of-title hit gets a small bonus.
+ */
+function fuzzyScore(query: string, title: string): number | null {
+  const t = title.toLowerCase()
+  let score = 0
+  let ti = 0
+  let prevHit = -2 // not adjacent to index 0
+  for (const ch of query) {
+    const at = t.indexOf(ch, ti)
+    if (at === -1) return null
+    if (at === prevHit + 1) score += 3 // consecutive run
+    else if (at === 0 || !/[a-z0-9]/.test(t[at - 1])) score += 2 // word boundary
+    else score += 1 // scattered
+    if (at === 0) score += 1 // start-of-title bonus
+    prevHit = at
+    ti = at + 1
+  }
+  return score
+}
+
 export default function CommandPalette(): JSX.Element {
   const setPaletteOpen = useStore((s) => s.setPaletteOpen)
   const addAgent = useStore((s) => s.addAgent)
   const setLayoutMode = useStore((s) => s.setLayoutMode)
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
+  const setShortcutsOpen = useStore((s) => s.setShortcutsOpen)
   const setDiffAgentId = useStore((s) => s.setDiffAgentId)
   const requestClose = useStore((s) => s.requestClose)
+  const requestBulkClose = useStore((s) => s.requestBulkClose)
+  const toggleWide = useStore((s) => s.toggleWide)
   const reopenLast = useStore((s) => s.reopenLast)
   const lastClosed = useStore((s) => s.lastClosed)
   const focusTerminal = useStore((s) => s.focusTerminal)
@@ -61,7 +90,23 @@ export default function CommandPalette(): JSX.Element {
           list.push({ id: 'review', title: 'Review changes & merge…', run: () => setDiffAgentId(sel) })
         }
         list.push({ id: 'focus', title: 'Maximize terminal', run: () => focusTerminal(sel) })
-        list.push({ id: 'close', title: 'Close selected terminal', hint: modLabel('W'), run: () => requestClose(sel) })
+        if (selectedIds.length >= 2) {
+          // Mirrors ⌘W on a multi-selection: one confirm (in App.tsx) closes the batch.
+          list.push({
+            id: 'close-selected',
+            title: `Close ${selectedIds.length} selected terminals`,
+            hint: modLabel('W'),
+            run: () => requestBulkClose(selectedIds)
+          })
+        } else {
+          list.push({ id: 'close', title: 'Close selected terminal', hint: modLabel('W'), run: () => requestClose(sel) })
+          // Width toggle only makes sense for a single card (it's per-tile).
+          list.push({
+            id: 'wide',
+            title: selAgent?.wide ? 'Make card normal' : 'Make card wider',
+            run: () => toggleWide(sel)
+          })
+        }
       }
     }
     list.push({ id: 'open', title: 'Open project…', run: openProjectInteractive })
@@ -74,8 +119,9 @@ export default function CommandPalette(): JSX.Element {
       list.push({ id: 'close-project', title: 'Close project', run: closeCurrentProject })
     }
     list.push({ id: 'settings', title: 'Settings', run: () => setSettingsOpen(true) })
+    list.push({ id: 'shortcuts', title: 'Keyboard shortcuts', hint: modLabel('/'), run: () => setShortcutsOpen(true) })
     return list
-  }, [projectPath, shells, agentClis, workspaces, selectedIds, agents, lastClosed, addAgent, setLayoutMode, focusTerminal, requestClose, reopenLast, setSettingsOpen, setDiffAgentId])
+  }, [projectPath, shells, agentClis, workspaces, selectedIds, agents, lastClosed, addAgent, setLayoutMode, focusTerminal, requestClose, requestBulkClose, toggleWide, reopenLast, setSettingsOpen, setShortcutsOpen, setDiffAgentId])
 
   const q = query.trim().toLowerCase()
   const items = useMemo<Cmd[]>(() => {
@@ -84,10 +130,22 @@ export default function CommandPalette(): JSX.Element {
     if (q && projectPath && !full) {
       out.push({ id: 'run', title: `Run "${query.trim()}" in a new terminal`, run: () => addAgent({ command: query.trim() }) })
     }
-    out.push(...(q ? base.filter((c) => c.title.toLowerCase().includes(q)) : base))
+    if (q) {
+      // Rank fuzzy hits by score; Array.sort is stable, so equal scores keep
+      // the deliberate build order of `base`.
+      const scored: { c: Cmd; s: number }[] = []
+      for (const c of base) {
+        const s = fuzzyScore(q, c.title)
+        if (s !== null) scored.push({ c, s })
+      }
+      scored.sort((a, b) => b.s - a.s)
+      out.push(...scored.map((x) => x.c))
+    } else {
+      out.push(...base)
+    }
     if (q && projectPath) {
       agents
-        .filter((a) => a.label.toLowerCase().includes(q))
+        .filter((a) => fuzzyScore(q, a.label) !== null)
         .forEach((a) => out.push({ id: 'focus-' + a.id, title: `Focus: ${a.label}`, run: () => focusTerminal(a.id) }))
     }
     return out

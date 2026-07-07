@@ -9,8 +9,9 @@ import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { useStore, displayBranch, RAIL_INSET, PAD, type AgentInstance, type AgentStatus } from '../store'
 import { terminals, quotePaths, pasteIntoTerminal } from '../terminalRegistry'
 import { needsAttention, clampTail } from '../attention'
+import { AGENT_INSTALL_URLS } from '../agentInstall'
 import { playCue, type Cue } from '../sound'
-import { IconClose } from './Icons'
+import { IconClose, IconWide, IconNarrow } from './Icons'
 import AgentBadge from './AgentBadge'
 
 // DECSCUSR (CSI Ps SP q) — shells like PSReadLine use it to force a (fast)
@@ -82,6 +83,7 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
   const scrollback = useStore((s) => s.settings.scrollback)
   const confirmClose = useStore((s) => s.settings.confirmClose)
   const renameAgent = useStore((s) => s.renameAgent)
+  const toggleWide = useStore((s) => s.toggleWide)
   const focusTerminal = useStore((s) => s.focusTerminal)
   const clearFocus = useStore((s) => s.clearFocus)
   const focused = useStore((s) => s.focusedId === id)
@@ -108,6 +110,17 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     /** Shared-dir terminal: closing deletes nothing on disk. */
     shared?: boolean
   } | null>(null)
+  // Transient "task finished" nod: set by the long-burst done path in
+  // evaluateIdle, cleared once the one-shot CSS animation has played out
+  // (see .is-done-flash). Timer survives a relaunch (retryNonce) harmlessly —
+  // it only flips this flag back off.
+  const [doneFlash, setDoneFlash] = useState(false)
+  const doneFlashTimer = useRef<number>()
+  useEffect(() => () => window.clearTimeout(doneFlashTimer.current), [])
+  // Once-per-pane guard for the "agent binary isn't installed" toast. A ref (not
+  // effect-local) so a Relaunch (retryNonce re-runs the effect) doesn't re-nag
+  // about the same missing binary.
+  const missingBinNotified = useRef(false)
 
   // Ctrl/⌘-V and the context-menu Paste both route through the shared paste
   // routine (see terminalRegistry.pasteIntoTerminal).
@@ -210,6 +223,19 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
         mod &&
         e.shiftKey &&
         (e.code === 'Enter' || e.code === 'BracketRight' || e.code === 'BracketLeft')
+      ) {
+        return false
+      }
+      // Spatial navigation (⌘Arrow / Ctrl+Shift+Arrow) is app-level too. On mac
+      // the chord carries no Shift, so it's checked apart from the trio above —
+      // plain Ctrl+Arrow (readline word-jump) still reaches the pty on Win/Linux.
+      if (
+        mod &&
+        (isMac || e.shiftKey) &&
+        (e.code === 'ArrowLeft' ||
+          e.code === 'ArrowRight' ||
+          e.code === 'ArrowUp' ||
+          e.code === 'ArrowDown')
       ) {
         return false
       }
@@ -388,10 +414,17 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       window.api.notify.agent({ id, title: labelOf(), body })
     }
 
-    // Audible cue — gated only by the setting (not by backgrounding), so you also
-    // hear it for the agent you're watching. Rate-limiting lives in playCue.
+    // Audible cue — gated by `sounds` alone (not by `notifications` or by
+    // backgrounding), so you also hear it for the agent you're watching. The
+    // 'done' cue additionally honours notifyOnDone: that toggle decides whether
+    // a finish alerts AT ALL; sounds/notifications pick the channel. Both clean
+    // finish paths (settle and exit-0) pass cue 'done', so gating on the cue
+    // covers them. Rate-limiting lives in playCue.
     const maybeSound = (cue: Cue): void => {
-      if (useStore.getState().settings.sounds) playCue(cue)
+      const st = useStore.getState().settings
+      if (!st.sounds) return
+      if (cue === 'done' && !st.notifyOnDone) return
+      playCue(cue)
     }
 
     const evaluateIdle = (): void => {
@@ -415,7 +448,46 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
         // A real task wrapped up (worked a while, then went quiet without a prompt).
         maybeNotify('done')
         maybeSound('done')
+        // Quiet visual nod on the card itself (green ring sweep + ✓ in the
+        // header). The timeout slightly outlives the 1.2s animation so the
+        // class is never yanked mid-sweep.
+        setDoneFlash(true)
+        window.clearTimeout(doneFlashTimer.current)
+        doneFlashTimer.current = window.setTimeout(() => setDoneFlash(false), 1400)
       }
+    }
+
+    // Missing agent binary: a pane with a startupCommand auto-runs an agent CLI,
+    // and when the binary is gone the shell just prints its "command not found"
+    // with zero app-level feedback. Watch the SAME raw tail onActivity already
+    // maintains (no extra subscription) during the first 20s after spawn — the
+    // error must name the binary too, so a stray "No such file or directory"
+    // about some other path can't false-positive on its own.
+    const startupBin = (((agent.startupCommand ?? '').trim().split(/\s+/)[0] ?? '')
+      .split(/[\\/]/)
+      .pop() ?? '')
+      .replace(/\.(exe|cmd|bat)$/i, '')
+      .toLowerCase()
+    const MISSING_BIN_WINDOW_MS = 20000
+    // bash/zsh · cmd.exe · PowerShell · POSIX exec, case-insensitive.
+    const MISSING_BIN_RE =
+      /command not found|is not recognized as an internal or external command|is not recognized as the name of a cmdlet|no such file or directory/i
+    let spawnedAt = 0
+    const checkMissingBin = (): void => {
+      if (!startupBin || missingBinNotified.current) return
+      if (!spawnedAt || Date.now() - spawnedAt > MISSING_BIN_WINDOW_MS) return
+      if (!MISSING_BIN_RE.test(tail) || !tail.toLowerCase().includes(startupBin)) return
+      missingBinNotified.current = true
+      const url = AGENT_INSTALL_URLS[startupBin]
+      // Sticky error toast (Toasts.tsx never auto-dismisses errors); unknown
+      // binaries have no docs URL to offer, so they get no action button.
+      useStore.getState().pushToast(
+        `“${startupBin}” isn’t installed or isn’t on your PATH`,
+        'error',
+        url
+          ? { actionLabel: 'Install guide', onAction: () => void window.api.openExternal(url) }
+          : undefined
+      )
     }
 
     // Coalesce a stream of output into a single "working" flip (avoids a store
@@ -424,6 +496,7 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     // leaked halves of escape sequences split across chunk boundaries.
     const onActivity = (d: string): void => {
       tail = clampTail(tail + d, 1200)
+      checkMissingBin()
       // Once classified steady, stop flipping to "working" on each chunk — just
       // keep the tail current (for attention detection) and let the idle timer
       // re-check whenever the stream finally pauses.
@@ -577,7 +650,12 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
         }
         if (cd) window.api.pty.write(pid, cd + '\r')
       }
-      if (agent.startupCommand) window.api.pty.write(pid, agent.startupCommand + '\r')
+      if (agent.startupCommand) {
+        // Arm the missing-binary watch from the moment the command is sent (not
+        // shell spawn — a slow profile could eat most of the window otherwise).
+        spawnedAt = Date.now()
+        window.api.pty.write(pid, agent.startupCommand + '\r')
+      }
     }
     void start().catch((e) => {
       if (disposed) return
@@ -773,7 +851,8 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
         (selected ? ' is-selected' : '') +
         (focused ? ' is-focused' : '') +
         ringClass +
-        (closing ? ' is-closing' : '')
+        (closing ? ' is-closing' : '') +
+        (doneFlash ? ' is-done-flash' : '')
       }
       data-id={id}
       style={style}
@@ -802,6 +881,11 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
           }
           style={{ background: dotColor }}
         />
+        {doneFlash && (
+          <span className="vec-pane__done-check" aria-hidden="true">
+            ✓
+          </span>
+        )}
         <AgentBadge id={agent.agentId} label={agent.agentLabel} />
         {editing ? (
           <input
@@ -855,6 +939,21 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
               {displayBranch(branch)}
             </button>
           )
+        )}
+        {!focused && (
+          // Hidden while maximized: the tiled geometry it changes isn't visible
+          // there, so the toggle would read as a broken button.
+          <button
+            className="vec-pane__wide"
+            title={agent.wide ? 'Normal width' : 'Wider card'}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              toggleWide(id)
+            }}
+          >
+            {agent.wide ? <IconNarrow /> : <IconWide />}
+          </button>
         )}
         {focused && (
           <button

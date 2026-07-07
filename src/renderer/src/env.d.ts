@@ -36,12 +36,24 @@ interface GitInfo {
   branch: string | null
 }
 
+interface GitInitResult {
+  ok: boolean
+  error?: string
+}
+
 interface WorktreeResult {
   cwd: string
   branch: string | null
   isolated: boolean
   /** Why isolation was downgraded to the shared dir (when isolated is false). */
   reason?: string
+}
+
+/** A leftover canvas/* worktree from a crashed or force-quit session. */
+interface OrphanWorktree {
+  path: string
+  /** Short branch name; null when the worktree is detached. */
+  branch: string | null
 }
 
 interface DiffResult {
@@ -60,6 +72,8 @@ interface MergeResult {
   /** The branch actually merged into (the main worktree's HEAD at merge time),
    *  which may differ from the base captured at project open. */
   mergedInto?: string
+  /** Files that couldn't merge automatically (captured before the abort). */
+  conflictFiles?: string[]
 }
 
 interface UpdateInfo {
@@ -81,6 +95,8 @@ interface PersistedCanvas {
     h: number
     isolation: 'worktree' | 'shared'
     shellId?: string
+    /** Double-weight tile (takes 2 shares of its row's width). */
+    wide?: boolean
   }>
 }
 
@@ -129,6 +145,9 @@ interface Window {
       agent: (payload: { id: string; title: string; body: string }) => Promise<boolean>
       onClick: (cb: (id: string) => void) => () => void
     }
+    attention: {
+      set: (count: number) => void
+    }
     project: {
       pick: () => Promise<ProjectRef | null>
       exists: (projectPath: string) => Promise<boolean>
@@ -137,9 +156,19 @@ interface Window {
     }
     git: {
       info: (projectPath: string) => Promise<GitInfo>
+      init: (projectPath: string) => Promise<GitInitResult>
       prune: (projectPath: string) => Promise<boolean>
+      orphans: (projectPath: string, ownedAgentIds: string[]) => Promise<OrphanWorktree[]>
+      cleanOrphans: (projectPath: string, orphans: OrphanWorktree[]) => Promise<number>
       diff: (projectPath: string, agentId: string) => Promise<DiffResult>
       merge: (projectPath: string, agentId: string, message: string) => Promise<MergeResult>
+      applyFiles: (
+        projectPath: string,
+        agentId: string,
+        paths: string[],
+        deletedPaths: string[],
+        message: string
+      ) => Promise<MergeResult>
     }
     worktree: {
       create: (projectPath: string, agentId: string, isolation: string) => Promise<WorktreeResult>

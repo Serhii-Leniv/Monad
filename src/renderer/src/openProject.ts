@@ -56,6 +56,84 @@ function saveCurrent(): void {
   saveCanvas(st.projectPath, toPersisted(st.agents), st.layoutMode)
 }
 
+/** Run `git init` in a project folder, then refresh the store's git state so the
+ *  non-git affordances (shared-mode chip, isolation default) update in place.
+ *  Shared by the open-time toast action and the ProjectBar chip. Init alone
+ *  doesn't create a commit, so worktree isolation still needs one — the follow-up
+ *  toast says so (and the isolation-failure toast repeats it if they forget). */
+export async function initGitForProject(path: string): Promise<void> {
+  try {
+    const res = await window.api.git.init(path)
+    if (!res.ok) {
+      useStore.getState().pushToast(res.error ?? 'Couldn’t initialize git here.', 'error')
+      return
+    }
+    const git = await window.api.git.info(path)
+    // The user may have switched projects while init ran — never stamp the
+    // now-open project with another folder's git state.
+    if (useStore.getState().projectPath === path) useStore.getState().setGitInfo(git)
+    useStore
+      .getState()
+      .pushToast(
+        'Git initialized. Commit your files to enable isolated agents (each gets its own branch + worktree).',
+        'info'
+      )
+  } catch (e) {
+    console.error('[vectro] git init failed:', e)
+    useStore.getState().pushToast('Couldn’t initialize git here.', 'error')
+  }
+}
+
+/** Remove the orphaned worktrees the open-time check found. Re-lists at click
+ *  time rather than trusting the stale toast payload: agents added since the
+ *  check own fresh worktrees that must never be swept. */
+async function cleanOrphanWorktrees(path: string): Promise<void> {
+  try {
+    // The toast can outlive a project switch — never sweep against another
+    // project's agent list (same guard pattern as initGitForProject).
+    if (useStore.getState().projectPath !== path) return
+    const owned = useStore.getState().agents.map((a) => a.id)
+    const orphans = await window.api.git.orphans(path, owned)
+    if (orphans.length === 0) return
+    const removed = await window.api.git.cleanOrphans(path, orphans)
+    if (useStore.getState().projectPath !== path) return
+    if (removed > 0) {
+      useStore
+        .getState()
+        .pushToast(`Removed ${removed} worktree${removed === 1 ? '' : 's'}`, 'success')
+    }
+  } catch (e) {
+    console.error('[vectro] worktree cleanup failed:', e)
+    useStore.getState().pushToast('Couldn’t clean up the leftover worktrees.', 'error')
+  }
+}
+
+/** Fire-and-forget after a git project opens: stale canvas/* worktrees from
+ *  crashed/force-quit sessions are still registered (so `worktree prune` skips
+ *  them) and otherwise invisible — surface them with a cleanup offer. */
+async function checkOrphanWorktrees(path: string): Promise<void> {
+  try {
+    // Read the agent list NOW (post-open, post-default-agent) so every live
+    // agent's worktree — including ones being created this instant — is owned.
+    const owned = useStore.getState().agents.map((a) => a.id)
+    const orphans = await window.api.git.orphans(path, owned)
+    // The user may have switched projects while the check ran — this toast
+    // (and its action) belongs to that project only.
+    if (useStore.getState().projectPath !== path) return
+    if (orphans.length === 0) return
+    const n = orphans.length
+    useStore
+      .getState()
+      .pushToast(
+        `${n} leftover agent worktree${n === 1 ? '' : 's'} from previous sessions`,
+        'info',
+        { actionLabel: 'Clean up', onAction: () => void cleanOrphanWorktrees(path) }
+      )
+  } catch {
+    /* best-effort — never block or fail a project open over this */
+  }
+}
+
 // Set while an open is in flight. Opening is async (canvas load + git info) and
 // the Home card/button stay clickable meanwhile, so a second click (or a stray
 // double-click) would spawn a duplicate canvas + a second set of shells.
@@ -87,15 +165,24 @@ export async function openProjectByPath(ref: RecentProject): Promise<void> {
     pushRecent(ref)
     useStore.getState().openProject(ref, saved, git)
     // A non-git folder silently loses the headline feature (per-agent worktree
-    // isolation) — say so once instead of quietly downgrading to a shared dir.
+    // isolation) — say so instead of quietly downgrading to a shared dir, and
+    // offer the fix in place. The action makes this toast sticky (Toasts.tsx),
+    // so it can't vanish before the user reads it.
     if (!git.isGit) {
       useStore
         .getState()
-        .pushToast('Not a git repo — agents share this folder (no per-agent isolation).', 'info')
+        .pushToast('Not a git repo — agents will share this folder without isolation.', 'info', {
+          actionLabel: 'Initialize git',
+          onAction: () => void initGitForProject(ref.path)
+        })
     }
     // Always land on at least one terminal so a freshly-opened project isn't a
     // bare canvas.
     if (useStore.getState().agents.length === 0) useStore.getState().addAgent()
+    // After the canvas (and its default agent) exists, look for worktrees left
+    // by crashed sessions — must run after addAgent so the fresh agent's ids
+    // are in the owned set.
+    if (git.isGit) void checkOrphanWorktrees(ref.path)
   } catch (e) {
     console.error('[vectro] open project failed:', e)
     useStore.getState().pushToast(`Couldn’t open “${ref.name}”`, 'error')

@@ -170,6 +170,14 @@ function createWindow(): void {
   win.on('resize', scheduleSave)
   win.on('move', scheduleSave)
   win.on('close', () => win && saveWinState(win))
+
+  // Returning to the window means the attention flash (attention:set in ipc.ts)
+  // has done its job — stop it. macOS needs nothing here: the dock bounce
+  // self-cancels on activation, and the badge is a passive count that should
+  // survive focus until the agents are actually dealt with.
+  win.on('focus', () => {
+    if (win && !win.isDestroyed()) win.flashFrame(false)
+  })
 }
 
 // Single-instance: a second launch focuses the existing window instead of running

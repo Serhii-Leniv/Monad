@@ -11,9 +11,11 @@ import ProjectBar from './components/ProjectBar'
 const Settings = lazy(() => import('./components/Settings'))
 const CommandPalette = lazy(() => import('./components/CommandPalette'))
 const DiffPanel = lazy(() => import('./components/DiffPanel'))
-import { useStore, toPersisted } from './store'
+const ShortcutsHelp = lazy(() => import('./components/ShortcutsHelp'))
+import { useStore, toPersisted, NEEDS_ATTENTION } from './store'
 import { openProjectByPath, restoreLastProject, saveCanvas } from './openProject'
 import { applyAccent } from './accent'
+import { applyTheme } from './theme'
 import { handleMenuEdit, terminals, focusActiveTerminal, pasteIntoTerminal } from './terminalRegistry'
 
 export default function App(): JSX.Element {
@@ -23,12 +25,19 @@ export default function App(): JSX.Element {
   const setAgentClis = useStore((s) => s.setAgentClis)
   const settingsOpen = useStore((s) => s.settingsOpen)
   const paletteOpen = useStore((s) => s.paletteOpen)
+  const shortcutsOpen = useStore((s) => s.shortcutsOpen)
   const diffAgentId = useStore((s) => s.diffAgentId)
   const zoomFactor = useStore((s) => s.settings.zoomFactor)
+  const theme = useStore((s) => s.settings.theme)
   const accent = useStore((s) => s.settings.accent)
   const wallpaper = useStore((s) => s.settings.wallpaper)
   const terminalOpacity = useStore((s) => s.settings.terminalOpacity)
   const [wallpaperUrl, setWallpaperUrl] = useState<string | null>(null)
+  // Ids snapshotted when a bulk close is requested (⌘W on a multi-selection, or
+  // the palette command) — one confirm closes all. Store-held so the palette can
+  // raise it too; this component owns the confirm UI.
+  const bulkCloseIds = useStore((s) => s.bulkCloseIds)
+  const clearBulkClose = useStore((s) => s.clearBulkClose)
   const saveTimer = useRef<number>()
 
   // Detect the shells + agent CLIs installed on this machine, once on launch.
@@ -54,9 +63,24 @@ export default function App(): JSX.Element {
     const t = window.setTimeout(() => {
       void window.api.update.check().then((u) => {
         if (!u) return
+        // "Skip this version" mutes exactly that release — a later release has a
+        // different version string, so it prompts again. No expiry needed.
+        try {
+          if (localStorage.getItem('vectro.skipVersion') === u.latest) return
+        } catch {
+          /* storage unavailable — just show the toast */
+        }
         useStore.getState().pushToast(`Vectro ${u.latest} is available`, 'info', {
           actionLabel: 'Download',
-          onAction: () => void window.api.openExternal(u.url)
+          onAction: () => void window.api.openExternal(u.url),
+          secondaryLabel: 'Skip this version',
+          onSecondary: () => {
+            try {
+              localStorage.setItem('vectro.skipVersion', u.latest)
+            } catch {
+              /* storage unavailable — skip won't persist, worst case it re-toasts */
+            }
+          }
         })
       })
     }, 5000)
@@ -68,10 +92,33 @@ export default function App(): JSX.Element {
     window.api.zoom.set(zoomFactor)
   }, [zoomFactor])
 
-  // Clicking a desktop notification focuses the agent that raised it.
+  // Mirror the "needs you" count to the OS (taskbar flash / dock badge), so a
+  // backgrounded window still signals waiting agents. The memo derives a plain
+  // number, so the effect — and the IPC send — only fires when it changes,
+  // not on every agents-array churn.
+  const attentionCount = useMemo(
+    () => agents.filter((a) => NEEDS_ATTENTION.includes(a.status ?? 'starting')).length,
+    [agents]
+  )
+  useEffect(() => {
+    window.api.attention.set(attentionCount)
+  }, [attentionCount])
+
+  // Clicking a desktop notification lands on the agent that raised it. With a
+  // DIFFERENT card maximized, that card would hide the one you came for — so
+  // retarget the maximize. With nothing maximized, selecting is enough (the
+  // sole-selection effect hands over keyboard focus); never force-maximize.
   useEffect(() => {
     return window.api.notify.onClick((agentId) => {
-      useStore.getState().focusTerminal(agentId)
+      const st = useStore.getState()
+      // The pane may have been closed between the notification and the click —
+      // don't select a ghost id (focusTerminal has its own existence guard).
+      if (!st.agents.some((a) => a.id === agentId)) return
+      if (st.focusedId) {
+        if (st.focusedId !== agentId) st.focusTerminal(agentId)
+      } else {
+        st.setSelected([agentId])
+      }
     })
   }, [])
 
@@ -111,12 +158,12 @@ export default function App(): JSX.Element {
     return () => window.removeEventListener('keydown', onKey, true)
   }, [])
 
-  // When every overlay closes (palette / settings / diff), hand keyboard focus
+  // When every overlay closes (palette / settings / diff / shortcuts), hand keyboard focus
   // back to the active terminal. Dismissing an overlay unmounts its input and
   // React drops focus to <body>; since selectedIds doesn't change, TerminalPane's
   // selection-driven focus effect never re-fires, so typing would dead-end until
   // the user clicks a pane. rAF lets the overlay finish unmounting first.
-  const overlayOpen = settingsOpen || paletteOpen || !!diffAgentId
+  const overlayOpen = settingsOpen || paletteOpen || shortcutsOpen || !!diffAgentId
   const prevOverlayOpen = useRef(false)
   useEffect(() => {
     if (prevOverlayOpen.current && !overlayOpen) requestAnimationFrame(focusActiveTerminal)
@@ -132,10 +179,37 @@ export default function App(): JSX.Element {
   // rename/search field or a terminal that already has focus. rAF lets Chromium's
   // own focus restoration settle first.
   useEffect(() => {
+    // Re-detect agent CLIs on focus too: "install claude, alt-tab back" should
+    // just work — the launch-time detect otherwise pins the + menu until a full
+    // app restart. Throttled (focus can flap on overlay/dialog churn) and the
+    // store only updates when the detected set actually changed, so the common
+    // no-change case re-renders nothing.
+    let lastAgentScan = 0
+    const rescanAgents = (): void => {
+      if (Date.now() - lastAgentScan < 5000) return
+      lastAgentScan = Date.now()
+      void window.api.agents.list().then((next) => {
+        const st = useStore.getState()
+        // The launch-time detect hasn't landed yet — let it be the baseline,
+        // or every pre-installed CLI would toast as "newly detected".
+        if (!st.agentClisLoaded) return
+        const prevIds = st.agentClis.map((c) => c.id)
+        // detectAgents returns a stable (KNOWN_AGENTS) order, so a positional
+        // compare is an exact set compare.
+        if (next.length === prevIds.length && next.every((c, i) => c.id === prevIds[i])) return
+        st.setAgentClis(next)
+        for (const c of next) {
+          if (!prevIds.includes(c.id)) {
+            st.pushToast(`${c.label} detected — available under +`, 'success')
+          }
+        }
+      })
+    }
     const onFocus = (): void => {
+      rescanAgents()
       requestAnimationFrame(() => {
         const st = useStore.getState()
-        if (st.settingsOpen || st.paletteOpen || st.diffAgentId) return
+        if (st.settingsOpen || st.paletteOpen || st.shortcutsOpen || st.diffAgentId) return
         const el = document.activeElement
         if (el && el !== document.body) return
         // A multi-select has no single active terminal; focusing selectedIds[0] would
@@ -187,13 +261,21 @@ export default function App(): JSX.Element {
     applyAccent(accent)
   }, [accent])
 
+  // Theme (dark / light / system) → data-theme on <html>. main.tsx already
+  // applied it pre-paint; this keeps it live when the setting changes (and
+  // applyTheme itself tracks OS switches while set to 'system').
+  useEffect(() => {
+    applyTheme(theme)
+  }, [theme])
+
   // Keyboard shortcuts: ⌘ on macOS, Ctrl+Shift on Windows/Linux (avoids the
   // shell's own Ctrl-key readline bindings).
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       const st = useStore.getState()
       if (e.key === 'Escape') {
-        if (st.diffAgentId) st.setDiffAgentId(null)
+        if (st.shortcutsOpen) st.setShortcutsOpen(false)
+        else if (st.diffAgentId) st.setDiffAgentId(null)
         else if (st.paletteOpen) st.setPaletteOpen(false)
         else if (st.settingsOpen) st.setSettingsOpen(false)
         else if (st.focusedId) {
@@ -207,6 +289,10 @@ export default function App(): JSX.Element {
         }
         return
       }
+      // While the broadcast bar's input is focused, every keystroke is text for
+      // the bar (it handles Enter/Escape itself) — never an app chord. Only the
+      // Escape handling above may act; ⌘W/⌘T/arrows must not fire from typing.
+      if ((document.activeElement as HTMLElement | null)?.closest?.('.broadcast')) return
       // Switch workspace — ⌘⌥1…9 (Ctrl+Alt on Win/Linux). Saves the current
       // canvas first; no-op if that slot is already open or empty. Exclude AltGr
       // (which reports as Ctrl+Alt): on EU layouts it types digits/brackets, and
@@ -253,10 +339,18 @@ export default function App(): JSX.Element {
         st.setPaletteOpen(!st.paletteOpen)
         return
       }
+      // ⌘/ (Ctrl+Shift+/): keyboard-shortcuts help. On layouts where Shift+/
+      // types '?', the Windows chord reports key === '?' — match both. Like ⌘K
+      // this toggles even over another overlay (it renders on top).
+      if (e.key === '/' || e.key === '?') {
+        e.preventDefault()
+        st.setShortcutsOpen(!st.shortcutsOpen)
+        return
+      }
       // With an overlay up, the canvas is hidden — don't let ⌘T/⌘1/⌘2/⌘W/cycle
       // fire actions the user can't see (spawning panes behind Settings, silently
-      // swapping layout, stealing selection). Only Escape / ⌘K operate above.
-      if (st.settingsOpen || st.paletteOpen || st.diffAgentId) return
+      // swapping layout, stealing selection). Only Escape / ⌘K / ⌘/ operate above.
+      if (st.settingsOpen || st.paletteOpen || st.shortcutsOpen || st.diffAgentId) return
       if (!st.projectPath) return
       if (k === 't') {
         e.preventDefault()
@@ -268,11 +362,18 @@ export default function App(): JSX.Element {
         e.preventDefault()
         st.setLayoutMode('columns')
       } else if (k === 'w') {
-        const sel = st.selectedIds[0]
-        if (sel) {
+        if (st.selectedIds.length >= 2) {
+          // Multi-selection: ONE confirm for the whole batch (the per-pane flow
+          // would stack N dialogs). Safe default — worktrees are kept.
           e.preventDefault()
-          // Guarded close (worktree dirty-check + confirm) — never force-delete.
-          st.requestClose(sel)
+          st.requestBulkClose(st.selectedIds)
+        } else {
+          const sel = st.selectedIds[0]
+          if (sel) {
+            e.preventDefault()
+            // Guarded close (worktree dirty-check + confirm) — never force-delete.
+            st.requestClose(sel)
+          }
         }
       } else if (e.code === 'Enter' && e.shiftKey) {
         // ⌘⇧Enter (Ctrl+Shift+Enter): toggle maximize on the current terminal.
@@ -295,11 +396,70 @@ export default function App(): JSX.Element {
         if (st.focusedId) st.focusTerminal(next.id)
         else st.setSelected([next.id])
         terminals.get(next.id)?.focus()
+      } else if (
+        e.code === 'ArrowLeft' ||
+        e.code === 'ArrowRight' ||
+        e.code === 'ArrowUp' ||
+        e.code === 'ArrowDown'
+      ) {
+        // ⌘Arrow (Ctrl+Shift+Arrow): move selection to the geometrically nearest
+        // card in that direction, using the tiled rect centres. No wrap-around —
+        // pressing into an edge is a no-op, which is what "spatial" implies.
+        e.preventDefault()
+        const list = st.agents
+        const curId = st.focusedId ?? st.selectedIds[0]
+        const cur = list.find((a) => a.id === curId)
+        if (!cur) return
+        const cx = cur.x + cur.w / 2
+        const cy = cur.y + cur.h / 2
+        const horiz = e.code === 'ArrowLeft' || e.code === 'ArrowRight'
+        const sign = e.code === 'ArrowRight' || e.code === 'ArrowDown' ? 1 : -1
+        let best: (typeof list)[number] | null = null
+        let bestP = Infinity
+        let bestS = Infinity
+        for (const a of list) {
+          if (a.id === cur.id) continue
+          const dx = a.x + a.w / 2 - cx
+          const dy = a.y + a.h / 2 - cy
+          // Primary = travel along the pressed axis (must be strictly forward);
+          // secondary breaks ties between cards equally far in that direction.
+          // The ±0.5 slop absorbs the integer rounding in laidOut, so cards in
+          // the same row/column compare as equals despite 1px centre drift.
+          const p = (horiz ? dx : dy) * sign
+          const s2 = Math.abs(horiz ? dy : dx)
+          if (p <= 0.5) continue
+          if (p < bestP - 0.5 || (Math.abs(p - bestP) <= 0.5 && s2 < bestS)) {
+            best = a
+            bestP = p
+            bestS = s2
+          }
+        }
+        if (!best) return
+        // Follows maximize like the cycle chord: retarget the maximized pane to
+        // the destination instead of dropping back to the grid.
+        if (st.focusedId) st.focusTerminal(best.id)
+        else st.setSelected([best.id])
+        terminals.get(best.id)?.focus()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  // Escape dismisses the bulk-close confirm. Capture + stopImmediatePropagation
+  // so the window keydown handler above doesn't ALSO act on the same Esc —
+  // mirrors the per-pane close confirm in TerminalPane.
+  useEffect(() => {
+    if (!bulkCloseIds) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      clearBulkClose()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [bulkCloseIds, clearBulkClose])
 
   // Only the persisted fields drive autosave, so runtime churn (status/pty id)
   // doesn't trigger disk writes. The compact key gates the effect (a flat join of
@@ -315,7 +475,9 @@ export default function App(): JSX.Element {
             // (startupCommand/agentId/agentLabel) changes none of the geometry
             // fields, so without them here the autosave never fires and the agent
             // comes back as a bare shell on reopen.
-            `${p.id}:${p.x},${p.y},${p.w},${p.h}:${p.isolation}:${p.shellId ?? ''}:${p.label}:${p.startupCommand ?? ''}:${p.agentId ?? ''}:${p.agentLabel ?? ''}`
+            // `wide` is included for the same reason: toggling it back off can
+            // restore the exact previous geometry, so the flag alone must fire.
+            `${p.id}:${p.x},${p.y},${p.w},${p.h}:${p.isolation}:${p.shellId ?? ''}:${p.label}:${p.startupCommand ?? ''}:${p.agentId ?? ''}:${p.agentLabel ?? ''}:${p.wide ? 1 : 0}`
         )
         .join('|'),
     [persisted]
@@ -350,10 +512,44 @@ export default function App(): JSX.Element {
         <div className="app__canvas">{projectPath ? <Stage /> : <Home />}</div>
       </div>
       <Suspense fallback={null}>
-        {paletteOpen && <CommandPalette />}
+        {/* Stacking order mirrors the Escape handler's close order (shortcuts →
+           diff → palette → settings), bottom to top: ⌘K over Settings must paint
+           the palette ON TOP, not open it hidden underneath with focus stolen. */}
         {settingsOpen && <Settings />}
+        {paletteOpen && <CommandPalette />}
         {diffAgentId && <DiffPanel />}
+        {/* Last: shortcuts help can be summoned over another overlay and must paint on top. */}
+        {shortcutsOpen && <ShortcutsHelp />}
       </Suspense>
+      {bulkCloseIds && (
+        <div className="modal" onPointerDown={clearBulkClose}>
+          <div className="confirm" onPointerDown={(e) => e.stopPropagation()}>
+            <div className="confirm__title">Close {bulkCloseIds.length} terminals?</div>
+            <div className="confirm__body">
+              This ends their processes. Isolated terminals keep their branches and worktrees on
+              disk — no work is lost, and you can merge or clean them up later.
+            </div>
+            <div className="confirm__actions">
+              <button className="confirm__btn" onClick={clearBulkClose}>
+                Cancel
+              </button>
+              <button
+                className="confirm__btn confirm__btn--danger"
+                onClick={() => {
+                  // keepWorktree for every card: a batch close must never cascade
+                  // into silent worktree deletion (a no-op for shared panes, and
+                  // for any pane closed individually in the meantime).
+                  const { removeAgent } = useStore.getState()
+                  for (const id of bulkCloseIds) removeAgent(id, { keepWorktree: true })
+                  clearBulkClose()
+                }}
+              >
+                Close all
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <Toasts />
     </div>
   )

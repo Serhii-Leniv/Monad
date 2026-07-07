@@ -1,7 +1,7 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { join, dirname, basename } from 'path'
-import { existsSync } from 'fs'
+import { existsSync, promises as fsp } from 'fs'
 
 const pexec = promisify(execFile)
 
@@ -39,6 +39,23 @@ export async function getGitInfo(dir: string): Promise<GitInfo> {
 
 export async function getRepoRootSafe(dir: string): Promise<string | null> {
   return (await getGitInfo(dir)).repoRoot
+}
+
+export interface InitResult {
+  ok: boolean
+  error?: string
+}
+
+/** `git init` and nothing else — no add, no commit. Auto-committing a user's
+ *  folder (possibly a node_modules jungle with no .gitignore yet) is not ours
+ *  to do; the UI tells them to commit when they're ready. */
+export async function initRepo(dir: string): Promise<InitResult> {
+  try {
+    await git(dir, ['init'])
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: friendlyGitError(e) }
+  }
 }
 
 // 12 chars of the (already-unique) agent UUID — long enough that two agents in a
@@ -121,6 +138,107 @@ export async function pruneWorktrees(repoRoot: string): Promise<void> {
   }
 }
 
+export interface OrphanWorktree {
+  path: string
+  /** Short branch name (refs/heads/ stripped); null for a detached worktree. */
+  branch: string | null
+}
+
+/** Case-fold + slash-normalize for path identity checks — git prints forward
+ *  slashes even on Windows, while worktreeInfo builds native paths. */
+function normPath(p: string): string {
+  const n = p.replace(/\\/g, '/').replace(/\/+$/, '')
+  return process.platform === 'win32' ? n.toLowerCase() : n
+}
+
+/**
+ * Worktrees left behind by crashed / force-quit sessions. `worktree prune` at
+ * project open can't help — these are still registered, with live folders and
+ * branches. Detection is deliberately narrow: only entries inside THIS repo's
+ * `.agent-canvas-worktrees` container that follow this repo's `<repoName>-<short>`
+ * naming, minus the ones owned by current agents (derived via the exact same
+ * worktreeInfo the app creates worktrees with, so a live agent can never match).
+ */
+export async function findOrphanWorktrees(
+  repoRoot: string,
+  ownedAgentIds: string[]
+): Promise<OrphanWorktree[]> {
+  let out = ''
+  try {
+    out = await git(repoRoot, ['worktree', 'list', '--porcelain'])
+  } catch {
+    return []
+  }
+  // Porcelain blocks: `worktree <path>` then `HEAD …` / `branch refs/heads/…`
+  // (or `detached`) lines. Take the branch from here — the folder name only
+  // encodes the short id, not what's actually checked out.
+  const entries: OrphanWorktree[] = []
+  let cur: OrphanWorktree | null = null
+  for (const line of out.split('\n')) {
+    if (line.startsWith('worktree ')) {
+      if (cur) entries.push(cur)
+      cur = { path: line.slice('worktree '.length).trim(), branch: null }
+    } else if (cur && line.startsWith('branch ')) {
+      cur.branch = line.slice('branch '.length).trim().replace(/^refs\/heads\//, '')
+    }
+  }
+  if (cur) entries.push(cur)
+
+  // container/naming don't depend on the agent id — any id yields them.
+  const container = normPath(worktreeInfo(repoRoot, 'probe').container) + '/'
+  const namePrefix = normPath(`${basename(repoRoot)}-`)
+  const owned = new Set(ownedAgentIds.map((id) => normPath(worktreeInfo(repoRoot, id).path)))
+  return entries.filter((e) => {
+    const n = normPath(e.path)
+    if (!n.startsWith(container)) return false
+    const name = n.slice(container.length)
+    // Direct child of the container, named for THIS repo, ending in a shortId-
+    // shaped suffix — another repo's worktrees share the container, skip them.
+    if (name.includes('/')) return false
+    if (!name.startsWith(namePrefix)) return false
+    if (!/^[a-z0-9]+$/i.test(name.slice(namePrefix.length))) return false
+    return !owned.has(n)
+  })
+}
+
+/** Remove orphans found by findOrphanWorktrees: worktree + its canvas branch,
+ *  each best-effort, then one prune for any leftover registrations. Returns how
+ *  many orphans were actually cleaned (at least one of the two steps worked). */
+export async function removeOrphanWorktrees(
+  repoRoot: string,
+  orphans: OrphanWorktree[]
+): Promise<number> {
+  // The list crosses IPC from the renderer — re-apply the containment check so
+  // this can never remove a path outside the repo's worktree container.
+  const container = normPath(worktreeInfo(repoRoot, 'probe').container) + '/'
+  let removed = 0
+  for (const o of orphans) {
+    if (!o?.path || !normPath(o.path).startsWith(container)) continue
+    let ok = false
+    try {
+      await git(repoRoot, ['worktree', 'remove', '--force', o.path])
+      ok = true
+    } catch {
+      /* folder already gone / not registered — the branch delete below still counts */
+    }
+    if (o.branch && o.branch.startsWith('canvas/')) {
+      try {
+        await git(repoRoot, ['branch', '-D', o.branch])
+        ok = true
+      } catch {
+        /* branch already deleted */
+      }
+    }
+    if (ok) removed++
+  }
+  try {
+    await git(repoRoot, ['worktree', 'prune'])
+  } catch {
+    /* ignore */
+  }
+  return removed
+}
+
 export interface DiffResult {
   branch: string
   base: string | null
@@ -130,6 +248,79 @@ export interface DiffResult {
   /** Set when the diff couldn't be produced (e.g. too large to buffer), so the
    *  UI can say so instead of silently showing "No changes". */
   error?: string
+}
+
+/** Git's porcelain output wraps paths containing spaces/quotes/non-ASCII in
+ *  double quotes with C-style escapes (\", \\, \t, \303\251 …). Decode them —
+ *  octal escapes are UTF-8 bytes, so collect bytes and decode once at the end. */
+function unquoteGitPath(raw: string): string {
+  if (!raw.startsWith('"') || !raw.endsWith('"')) return raw
+  const inner = raw.slice(1, -1)
+  const bytes: number[] = []
+  for (let i = 0; i < inner.length; i++) {
+    const c = inner[i]
+    if (c !== '\\') {
+      for (const b of Buffer.from(c, 'utf8')) bytes.push(b)
+      continue
+    }
+    const n = inner[++i]
+    if (n === undefined) break // malformed (trailing backslash) — stop cleanly
+    if (n >= '0' && n <= '7') {
+      bytes.push(parseInt(inner.slice(i, i + 3), 8))
+      i += 2
+    } else {
+      const esc: Record<string, string> = { n: '\n', t: '\t', r: '\r', '"': '"', '\\': '\\' }
+      for (const b of Buffer.from(esc[n] ?? n, 'utf8')) bytes.push(b)
+    }
+  }
+  return Buffer.from(bytes).toString('utf8')
+}
+
+// Untracked-file rendering caps: big enough for any hand-reviewable file, small
+// enough that a stray node_modules/build artifact can't balloon the IPC payload.
+const UNTRACKED_FILE_CAP = 400 * 1024
+const UNTRACKED_TOTAL_CAP = 4 * 1024 * 1024
+
+/** Untracked files never appear in `git diff`, so the review used to show them
+ *  as bare names. Synthesize a real "new file" section per file so the panel
+ *  renders (and counts) them exactly like tracked additions. */
+async function synthesizeUntrackedDiff(worktree: string, files: string[]): Promise<string> {
+  let out = ''
+  let total = 0
+  for (const rel of files) {
+    // Emit the path unquoted even if it has spaces — the renderer's parser reads
+    // everything after " b/" as the path, which is exactly what we want here.
+    const header = `diff --git a/${rel} b/${rel}\nnew file mode 100644\n--- /dev/null\n+++ b/${rel}\n`
+    try {
+      const abs = join(worktree, rel)
+      const stat = await fsp.stat(abs)
+      if (!stat.isFile()) continue
+      if (stat.size > UNTRACKED_FILE_CAP || total + stat.size > UNTRACKED_TOTAL_CAP) {
+        out += header + `(file too large to display — ${Math.ceil(stat.size / 1024)} KB)\n`
+        continue
+      }
+      const buf = await fsp.readFile(abs)
+      total += buf.length
+      // Binary sniff: a NUL in the first 8KB (same heuristic git uses).
+      if (buf.subarray(0, 8192).includes(0)) {
+        out += header + `Binary file ${rel} added\n`
+        continue
+      }
+      // Split on \n only so a CRLF file keeps its \r with each line — rendering
+      // is unaffected and the content isn't silently rewritten.
+      const lines = buf.toString('utf8').split('\n')
+      if (lines[lines.length - 1] === '') lines.pop()
+      if (lines.length === 0) {
+        out += header // empty file: header alone still renders an "A" entry
+        continue
+      }
+      out += header + `@@ -0,0 +1,${lines.length} @@\n`
+      for (const l of lines) out += '+' + l + '\n'
+    } catch {
+      /* vanished mid-read or unreadable (permissions) — skip it, never fail the diff */
+    }
+  }
+  return out
 }
 
 /** An agent's changes (committed + uncommitted in its worktree) vs the base branch. */
@@ -171,14 +362,19 @@ export async function getAgentDiff(
     }
   }
   try {
-    const status = await git(path, ['status', '--porcelain'])
+    // -uall so brand-new directories enumerate their files instead of showing
+    // up as a single "dir/" entry we couldn't read a diff for.
+    const status = await git(path, ['status', '--porcelain', '-uall'])
     untracked = status
       .split('\n')
       .filter((l) => l.startsWith('??'))
-      .map((l) => l.slice(3).trim())
+      .map((l) => unquoteGitPath(l.slice(3).trim()))
       .filter(Boolean)
   } catch {
     /* ignore */
+  }
+  if (untracked.length > 0) {
+    diff += await synthesizeUntrackedDiff(path, untracked)
   }
   return {
     branch,
@@ -195,6 +391,8 @@ export interface MergeResult {
   error?: string
   /** The branch actually merged into — the main worktree's HEAD at merge time. */
   mergedInto?: string
+  /** Files that couldn't merge automatically (captured before the abort). */
+  conflictFiles?: string[]
 }
 
 /** Commit any pending work in the agent's worktree, then merge its branch into
@@ -215,7 +413,9 @@ export async function mergeAgent(
     return { ok: false, error: friendlyGitError(e) }
   }
   try {
-    await git(repoRoot, ['merge', '--no-ff', branch, '-m', `Merge ${branch}`])
+    // The user's message names the merge commit too — it's the commit they'll
+    // actually see on the base branch, so their words belong on it.
+    await git(repoRoot, ['merge', '--no-ff', branch, '-m', message || `Merge ${branch}`])
     // Report the branch we actually merged into. `git merge` targets whatever is
     // checked out in the main worktree NOW, which may differ from the base the UI
     // captured at project open (the user could have switched branches since).
@@ -227,10 +427,81 @@ export async function mergeAgent(
     }
     return { ok: true, mergedInto }
   } catch (e) {
+    // Which files collided — must be read BEFORE the abort wipes the merge state.
+    let conflictFiles: string[] | undefined
+    try {
+      const out = await git(repoRoot, ['diff', '--name-only', '--diff-filter=U'])
+      const files = out.split('\n').map((l) => unquoteGitPath(l.trim())).filter(Boolean)
+      if (files.length > 0) conflictFiles = files
+    } catch {
+      /* best-effort — fall back to the plain error message */
+    }
     try {
       await git(repoRoot, ['merge', '--abort'])
     } catch {
       /* nothing to abort */
+    }
+    return { ok: false, error: friendlyGitError(e), conflictFiles }
+  }
+}
+
+/** Take the agent's version of SPECIFIC files onto the current branch as a
+ *  plain commit — no merge, so the agent's branch stays unmerged and it can
+ *  keep working. Deleted files can't come via `checkout <branch> --` (the
+ *  branch has no blob for them), so those are `git rm`'d here instead. */
+export async function applyAgentFiles(
+  repoRoot: string,
+  agentId: string,
+  paths: string[],
+  deletedPaths: string[],
+  message: string
+): Promise<MergeResult> {
+  const { path, branch } = worktreeInfo(repoRoot, agentId)
+  const touched = [...paths, ...deletedPaths]
+  if (touched.length === 0) return { ok: false, error: 'No files selected.' }
+  // Same first step as mergeAgent: the branch tip must include pending work,
+  // or `checkout <branch> -- <file>` would apply a stale version of the file.
+  try {
+    await git(path, ['add', '-A'])
+    const staged = await git(path, ['status', '--porcelain'])
+    if (staged.trim() !== '') {
+      await git(path, ['commit', '-m', message || `Work from ${branch}`])
+    }
+  } catch (e) {
+    return { ok: false, error: friendlyGitError(e) }
+  }
+  try {
+    if (paths.length > 0) await git(repoRoot, ['checkout', branch, '--', ...paths])
+    if (deletedPaths.length > 0)
+      await git(repoRoot, ['rm', '-q', '--ignore-unmatch', '--', ...deletedPaths])
+    const pending = await git(repoRoot, ['status', '--porcelain', '--', ...touched])
+    if (pending.trim() === '') {
+      return { ok: false, error: 'The selected files already match the current branch — nothing to apply.' }
+    }
+    // Pathspec commit: records ONLY the touched paths, so anything the user had
+    // staged in the main worktree for their own next commit stays staged.
+    await git(repoRoot, ['commit', '-m', message || `Apply files from ${branch}`, '--', ...touched])
+    let mergedInto: string | undefined
+    try {
+      mergedInto = (await git(repoRoot, ['rev-parse', '--abbrev-ref', 'HEAD'])).trim() || undefined
+    } catch {
+      /* detached HEAD / unusual state — leave undefined */
+    }
+    return { ok: true, mergedInto }
+  } catch (e) {
+    // Best-effort rollback, scoped to the touched paths only: unstage them, then
+    // restore their working-tree contents from HEAD. Files new on the agent's
+    // branch have no HEAD version — the checkout skips them, which is the best
+    // we can do without risking the user's own files.
+    try {
+      await git(repoRoot, ['reset', '-q', 'HEAD', '--', ...touched])
+    } catch {
+      /* ignore */
+    }
+    try {
+      await git(repoRoot, ['checkout', 'HEAD', '--', ...touched])
+    } catch {
+      /* some paths may not exist in HEAD — nothing more to restore */
     }
     return { ok: false, error: friendlyGitError(e) }
   }

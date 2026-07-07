@@ -81,6 +81,45 @@ export const IconClose = ({ size = 14 }: { size?: number }): JSX.Element => (
   </Svg>
 )
 
+export const IconRefresh = ({ size = 15 }: { size?: number }): JSX.Element => (
+  <Svg size={size}>
+    <path d="M20 12a8 8 0 1 1-2.34-5.66L20 8.5" />
+    <path d="M20 3.5V8.5h-5" />
+  </Svg>
+)
+
+/** Card-width toggle: arrows pushing outward → "make this card wider". */
+export const IconWide = ({ size = 14 }: { size?: number }): JSX.Element => (
+  <Svg size={size}>
+    <path d="M3.5 12h17" />
+    <path d="M7 8.5L3.5 12 7 15.5" />
+    <path d="M17 8.5l3.5 3.5-3.5 3.5" />
+  </Svg>
+)
+
+/** Card-width toggle: arrows pulling inward → "back to normal width". */
+export const IconNarrow = ({ size = 14 }: { size?: number }): JSX.Element => (
+  <Svg size={size}>
+    <path d="M3.5 12H10M20.5 12H14" />
+    <path d="M6.5 8.5L10 12l-3.5 3.5" />
+    <path d="M17.5 8.5L14 12l3.5 3.5" />
+  </Svg>
+)
+
+export const IconSend = ({ size = 14 }: { size?: number }): JSX.Element => (
+  <Svg size={size}>
+    <path d="M20 4L4.5 10.5l6 2.5 2.5 6L20 4z" />
+    <path d="M10.5 13L20 4" />
+  </Svg>
+)
+
+/** Command-palette glyph: the ⌘ looped-square (recognisable on every platform). */
+export const IconCommand = (): JSX.Element => (
+  <Svg>
+    <path d="M17.5 3.5a3 3 0 0 0-3 3v11a3 3 0 1 0 3-3h-11a3 3 0 1 0 3 3v-11a3 3 0 1 0-3 3h11a3 3 0 1 0-3-3z" />
+  </Svg>
+)
+
 export const IconBell = (): JSX.Element => (
   <Svg>
     <path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z" />
