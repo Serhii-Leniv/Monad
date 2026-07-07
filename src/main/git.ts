@@ -142,6 +142,10 @@ export interface OrphanWorktree {
   path: string
   /** Short branch name (refs/heads/ stripped); null for a detached worktree. */
   branch: string | null
+  /** True when deleting this worktree could lose work: its branch isn't fully
+   *  merged into the repo's current HEAD, its working tree is dirty, or we
+   *  couldn't tell (fail-safe). Cleanup must never remove these. */
+  hasWork: boolean
 }
 
 /** Case-fold + slash-normalize for path identity checks — git prints forward
@@ -172,8 +176,8 @@ export async function findOrphanWorktrees(
   // Porcelain blocks: `worktree <path>` then `HEAD …` / `branch refs/heads/…`
   // (or `detached`) lines. Take the branch from here — the folder name only
   // encodes the short id, not what's actually checked out.
-  const entries: OrphanWorktree[] = []
-  let cur: OrphanWorktree | null = null
+  const entries: Array<{ path: string; branch: string | null }> = []
+  let cur: { path: string; branch: string | null } | null = null
   for (const line of out.split('\n')) {
     if (line.startsWith('worktree ')) {
       if (cur) entries.push(cur)
@@ -188,7 +192,7 @@ export async function findOrphanWorktrees(
   const container = normPath(worktreeInfo(repoRoot, 'probe').container) + '/'
   const namePrefix = normPath(`${basename(repoRoot)}-`)
   const owned = new Set(ownedAgentIds.map((id) => normPath(worktreeInfo(repoRoot, id).path)))
-  return entries.filter((e) => {
+  const candidates = entries.filter((e) => {
     const n = normPath(e.path)
     if (!n.startsWith(container)) return false
     const name = n.slice(container.length)
@@ -199,6 +203,49 @@ export async function findOrphanWorktrees(
     if (!/^[a-z0-9]+$/i.test(name.slice(namePrefix.length))) return false
     return !owned.has(n)
   })
+
+  // "Not owned by this canvas" is NOT the same as "safe to delete": worktrees
+  // the user chose to KEEP on close, and live agent worktrees of the SAME repo
+  // opened as a different project, both land here. Flag whether removal would
+  // lose anything so cleanup can spare them.
+  //
+  // Residual edge we can't disambiguate: with the same repo open as two
+  // projects, a just-merged, clean, still-live agent worktree of the OTHER
+  // window looks identical to a leftover. hasWork is what keeps the destructive
+  // path safe regardless — anything with unmerged commits or uncommitted edits
+  // is flagged and never auto-removed; removing a merged+clean one loses no
+  // work (worst case, the other window's terminal finds its folder gone).
+  const result: OrphanWorktree[] = []
+  for (const e of candidates) {
+    result.push({ ...e, hasWork: await orphanHasWork(repoRoot, e) })
+  }
+  return result
+}
+
+/** Would deleting this worktree (+ `branch -D`) lose anything? Every failure
+ *  answers "yes" — when in doubt, keep it. */
+async function orphanHasWork(
+  repoRoot: string,
+  o: { path: string; branch: string | null }
+): Promise<boolean> {
+  // Unmerged branch ⇒ `branch -D` would drop commits. `merge-base --is-ancestor`
+  // exits non-zero (throws here) both when the branch isn't merged into the
+  // repo's current HEAD and when the ref can't be resolved — treat either as
+  // work. A detached worktree has no branch to test — fail-safe to hasWork.
+  if (!o.branch) return true
+  try {
+    await git(repoRoot, ['merge-base', '--is-ancestor', o.branch, 'HEAD'])
+  } catch {
+    return true
+  }
+  // Dirty working tree ⇒ `worktree remove --force` would drop uncommitted
+  // edits. If status itself fails (folder unreadable?), assume dirty.
+  try {
+    const status = await git(o.path, ['status', '--porcelain'])
+    return status.trim() !== ''
+  } catch {
+    return true
+  }
 }
 
 /** Remove orphans found by findOrphanWorktrees: worktree + its canvas branch,
@@ -208,12 +255,16 @@ export async function removeOrphanWorktrees(
   repoRoot: string,
   orphans: OrphanWorktree[]
 ): Promise<number> {
-  // The list crosses IPC from the renderer — re-apply the containment check so
-  // this can never remove a path outside the repo's worktree container.
+  // Containment re-check stays even though the list is produced in-process now
+  // (cleanOrphanWorktrees) — this must never remove a path outside the repo's
+  // worktree container, no matter who calls it.
   const container = normPath(worktreeInfo(repoRoot, 'probe').container) + '/'
   let removed = 0
   for (const o of orphans) {
-    if (!o?.path || !normPath(o.path).startsWith(container)) continue
+    // hasWork orphans are filtered HERE, not just by callers: no caller mistake
+    // (or stale/forged flag from a future refactor) may reach the destructive
+    // path for a worktree whose removal could lose work.
+    if (!o?.path || o.hasWork || !normPath(o.path).startsWith(container)) continue
     let ok = false
     try {
       await git(repoRoot, ['worktree', 'remove', '--force', o.path])
@@ -237,6 +288,20 @@ export async function removeOrphanWorktrees(
     /* ignore */
   }
   return removed
+}
+
+/** One-shot list→filter→remove for the renderer's cleanup action. Detection and
+ *  removal happen inside a single main-process call, so no path list ever
+ *  round-trips through the renderer (nothing untrusted to re-validate, and no
+ *  window between listing and removing for the set to go stale in). */
+export async function cleanOrphanWorktrees(
+  repoRoot: string,
+  ownedAgentIds: string[]
+): Promise<{ removed: number; keptWithWork: number }> {
+  const orphans = await findOrphanWorktrees(repoRoot, ownedAgentIds)
+  const keptWithWork = orphans.filter((o) => o.hasWork).length
+  const removed = await removeOrphanWorktrees(repoRoot, orphans)
+  return { removed, keptWithWork }
 }
 
 export interface DiffResult {
@@ -291,10 +356,21 @@ async function synthesizeUntrackedDiff(worktree: string, files: string[]): Promi
     // Emit the path unquoted even if it has spaces — the renderer's parser reads
     // everything after " b/" as the path, which is exactly what we want here.
     const header = `diff --git a/${rel} b/${rel}\nnew file mode 100644\n--- /dev/null\n+++ b/${rel}\n`
+    // A path we can't render must still be VISIBLE: mergeAgent's `git add -A`
+    // will commit it regardless, so silently dropping it here would land
+    // unreviewed content on the base branch. Same shape as the binary
+    // placeholder, so it renders as a normal "A" entry and takes part in
+    // per-file selection.
+    const unreadable =
+      header +
+      `Unreadable or non-regular file (symlink?) — contents not shown; it WILL be included in a merge\n`
     try {
       const abs = join(worktree, rel)
-      const stat = await fsp.stat(abs)
-      if (!stat.isFile()) continue
+      const stat = await fsp.lstat(abs)
+      if (!stat.isFile()) {
+        out += unreadable
+        continue
+      }
       if (stat.size > UNTRACKED_FILE_CAP || total + stat.size > UNTRACKED_TOTAL_CAP) {
         out += header + `(file too large to display — ${Math.ceil(stat.size / 1024)} KB)\n`
         continue
@@ -317,7 +393,9 @@ async function synthesizeUntrackedDiff(worktree: string, files: string[]): Promi
       out += header + `@@ -0,0 +1,${lines.length} @@\n`
       for (const l of lines) out += '+' + l + '\n'
     } catch {
-      /* vanished mid-read or unreadable (permissions) — skip it, never fail the diff */
+      // Vanished mid-read or unreadable (permissions) — never fail the diff,
+      // but never hide the entry either (see `unreadable` above).
+      out += unreadable
     }
   }
   return out
@@ -459,6 +537,32 @@ export async function applyAgentFiles(
   const { path, branch } = worktreeInfo(repoRoot, agentId)
   const touched = [...paths, ...deletedPaths]
   if (touched.length === 0) return { ok: false, error: 'No files selected.' }
+  // `checkout <branch> -- <paths>` (and `git rm`) write straight into the
+  // user's main worktree with no safety net of their own — refuse up front if
+  // any selected path has uncommitted (staged, unstaged, or untracked) changes
+  // there, mirroring `git merge`'s refusal semantics. Checked FIRST so a
+  // refused apply changes nothing at all. This also underwrites the rollback
+  // below: after this gate, every touched path either matches HEAD or doesn't
+  // exist in the main worktree.
+  try {
+    const dirty = (
+      await git(repoRoot, ['status', '--porcelain', '-uall', '--', ...touched])
+    )
+      .split('\n')
+      .filter((l) => l.trim() !== '')
+    if (dirty.length > 0) {
+      const n = dirty.length
+      return {
+        ok: false,
+        error:
+          touched.length === 1
+            ? 'You have uncommitted changes to the selected file — commit or stash it first.'
+            : `You have uncommitted changes to ${n} of the selected files — commit or stash them first.`
+      }
+    }
+  } catch (e) {
+    return { ok: false, error: friendlyGitError(e) }
+  }
   // Same first step as mergeAgent: the branch tip must include pending work,
   // or `checkout <branch> -- <file>` would apply a stale version of the file.
   try {
@@ -489,19 +593,30 @@ export async function applyAgentFiles(
     }
     return { ok: true, mergedInto }
   } catch (e) {
-    // Best-effort rollback, scoped to the touched paths only: unstage them, then
-    // restore their working-tree contents from HEAD. Files new on the agent's
-    // branch have no HEAD version — the checkout skips them, which is the best
-    // we can do without risking the user's own files.
-    try {
-      await git(repoRoot, ['reset', '-q', 'HEAD', '--', ...touched])
-    } catch {
-      /* ignore */
-    }
-    try {
-      await git(repoRoot, ['checkout', 'HEAD', '--', ...touched])
-    } catch {
-      /* some paths may not exist in HEAD — nothing more to restore */
+    // Rollback so a failed apply (e.g. a pre-commit hook rejection) leaves the
+    // main worktree exactly as before it started. Must be per-path: one bulk
+    // `checkout HEAD -- <touched>` aborts ENTIRELY ("pathspec did not match")
+    // as soon as any touched path doesn't exist in HEAD, restoring nothing.
+    for (const p of touched) {
+      try {
+        // Restores index AND working tree from HEAD — covers files our
+        // checkout overwrote and files our `git rm` deleted.
+        await git(repoRoot, ['checkout', 'HEAD', '--', p])
+      } catch {
+        // Not in HEAD ⇒ the file was materialized by our checkout from the
+        // agent's branch. Unstage it and remove it from disk — the dirty gate
+        // above guarantees nothing of the user's lived at this path before.
+        try {
+          await git(repoRoot, ['reset', '-q', 'HEAD', '--', p])
+        } catch {
+          /* ignore */
+        }
+        try {
+          await fsp.rm(join(repoRoot, p), { force: true })
+        } catch {
+          /* ignore */
+        }
+      }
     }
     return { ok: false, error: friendlyGitError(e) }
   }

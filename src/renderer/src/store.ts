@@ -776,9 +776,21 @@ export const useStore = create<AppState>((set, get) => ({
       // move it to the top of the stack and bump `refresh` so its timer restarts.
       const dup = s.toasts.find((t) => t.text === text && t.kind === kind)
       if (dup) {
-        return {
-          toasts: [...s.toasts.filter((t) => t !== dup), { ...dup, refresh: (dup.refresh ?? 0) + 1 }]
+        // Keep the id, but take THIS call's action fields — keeping the old
+        // object would keep a stale closure (e.g. "Initialize git" still bound
+        // to a previously opened project's path). Actions are overwritten even
+        // when the new push has none: the caller's latest intent wins.
+        const fresh: Toast = {
+          id: dup.id,
+          text,
+          kind,
+          actionLabel: action?.actionLabel,
+          onAction: action?.onAction,
+          secondaryLabel: action?.secondaryLabel,
+          onSecondary: action?.onSecondary,
+          refresh: (dup.refresh ?? 0) + 1
         }
+        return { toasts: [...s.toasts.filter((t) => t !== dup), fresh] }
       }
       let toasts: Toast[] = [...s.toasts, { id: uuid(), text, kind, ...action }]
       // Cap the stack: evict the OLDEST, preferring non-sticky (sticky ones carry

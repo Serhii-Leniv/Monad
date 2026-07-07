@@ -54,6 +54,8 @@ interface OrphanWorktree {
   path: string
   /** Short branch name; null when the worktree is detached. */
   branch: string | null
+  /** Removal could lose work (unmerged branch or dirty tree) — never cleaned up. */
+  hasWork: boolean
 }
 
 interface DiffResult {
@@ -159,7 +161,10 @@ interface Window {
       init: (projectPath: string) => Promise<GitInitResult>
       prune: (projectPath: string) => Promise<boolean>
       orphans: (projectPath: string, ownedAgentIds: string[]) => Promise<OrphanWorktree[]>
-      cleanOrphans: (projectPath: string, orphans: OrphanWorktree[]) => Promise<number>
+      cleanOrphans: (
+        projectPath: string,
+        ownedAgentIds: string[]
+      ) => Promise<{ removed: number; keptWithWork: number }>
       diff: (projectPath: string, agentId: string) => Promise<DiffResult>
       merge: (projectPath: string, agentId: string, message: string) => Promise<MergeResult>
       applyFiles: (

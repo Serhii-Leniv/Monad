@@ -7,11 +7,54 @@ type FileStatus = 'added' | 'deleted' | 'renamed' | 'modified'
 
 interface FileGroup {
   path: string
+  /** For renames: the pre-rename path — applying must also REMOVE this one. */
+  oldPath?: string
   status: FileStatus
   adds: number
   dels: number
   /** Hunk + content lines only — git's index/mode/+++/--- plumbing is stripped. */
   lines: string[]
+}
+
+/** Decode a git C-quoted path (`"a\303\251.txt"` → `aé.txt`). Mirrors
+ *  unquoteGitPath in src/main/git.ts — duplicated because the renderer can't
+ *  import main-process code; octal escapes are UTF-8 BYTES, so collect bytes
+ *  and decode once at the end (TextEncoder/Decoder instead of node's Buffer). */
+function unquoteGitPath(raw: string): string {
+  if (!raw.startsWith('"') || !raw.endsWith('"')) return raw
+  const inner = raw.slice(1, -1)
+  const enc = new TextEncoder()
+  const bytes: number[] = []
+  for (let i = 0; i < inner.length; i++) {
+    const c = inner[i]
+    if (c !== '\\') {
+      for (const b of enc.encode(c)) bytes.push(b)
+      continue
+    }
+    const n = inner[++i]
+    if (n === undefined) break // malformed (trailing backslash) — stop cleanly
+    if (n >= '0' && n <= '7') {
+      bytes.push(parseInt(inner.slice(i, i + 3), 8))
+      i += 2
+    } else {
+      const esc: Record<string, string> = { n: '\n', t: '\t', r: '\r', '"': '"', '\\': '\\' }
+      for (const b of enc.encode(esc[n] ?? n)) bytes.push(b)
+    }
+  }
+  return new TextDecoder().decode(new Uint8Array(bytes))
+}
+
+/** Path from a `diff --git a/… b/…` header. Git C-quotes each side when the
+ *  path has non-ASCII/special chars — `"b/…"` must be matched and unquoted, or
+ *  the garbled quoted pair becomes the "path" (breaking both display and the
+ *  per-file apply pathspec). Plain headers keep the old everything-after-" b/"
+ *  behavior. */
+function pathFromDiffHeader(raw: string): string | null {
+  const rest = raw.slice('diff --git '.length)
+  const quoted = rest.match(/"b\/((?:[^"\\]|\\.)*)"\s*$/)
+  if (quoted) return unquoteGitPath(`"${quoted[1]}"`)
+  const plain = rest.match(/ b\/(.+)$/)
+  return plain ? plain[1] : null
 }
 
 function lineClass(l: string): string {
@@ -40,9 +83,8 @@ function parseDiff(text: string): FileGroup[] {
   for (const raw of text.split('\n')) {
     if (raw.startsWith('diff --git')) {
       if (cur) groups.push(cur)
-      const m = raw.match(/ b\/(.+)$/)
       cur = {
-        path: m ? m[1] : raw.replace(/^diff --git /, ''),
+        path: pathFromDiffHeader(raw) ?? raw.replace(/^diff --git /, ''),
         status: 'modified',
         adds: 0,
         dels: 0,
@@ -57,6 +99,20 @@ function parseDiff(text: string): FileGroup[] {
     }
     if (raw.startsWith('deleted file')) {
       cur.status = 'deleted'
+      continue
+    }
+    // Renames carry BOTH paths (quoted like the header when special). The `to`
+    // side also overrides the header path — for a rename it's the unambiguous
+    // new path. doApply needs oldPath: checking out only the new path would
+    // leave the old copy in place.
+    if (raw.startsWith('rename from ')) {
+      cur.status = 'renamed'
+      cur.oldPath = unquoteGitPath(raw.slice('rename from '.length))
+      continue
+    }
+    if (raw.startsWith('rename to ')) {
+      cur.status = 'renamed'
+      cur.path = unquoteGitPath(raw.slice('rename to '.length))
       continue
     }
     if (raw.startsWith('rename ')) cur.status = 'renamed'
@@ -196,6 +252,13 @@ export default function DiffPanel(): JSX.Element {
     if (!projectPath) return
     const paths = selectedGroups.filter((g) => g.status !== 'deleted').map((g) => g.path)
     const deletedPaths = selectedGroups.filter((g) => g.status === 'deleted').map((g) => g.path)
+    // A rename is materialize-new + remove-old: `checkout <branch> -- <new>`
+    // alone would leave BOTH copies. The old path rides in deletedPaths, so
+    // applyAgentFiles `git rm`s it — and its dirty-gate covers it too, refusing
+    // if the user has uncommitted changes at the old location.
+    for (const g of selectedGroups) {
+      if (g.status === 'renamed' && g.oldPath && g.oldPath !== g.path) deletedPaths.push(g.oldPath)
+    }
     setBusy(true)
     setError(null)
     setConflictFiles(null)

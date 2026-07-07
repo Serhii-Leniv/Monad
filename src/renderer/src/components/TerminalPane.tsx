@@ -8,7 +8,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { useStore, displayBranch, RAIL_INSET, PAD, type AgentInstance, type AgentStatus } from '../store'
 import { terminals, quotePaths, pasteIntoTerminal } from '../terminalRegistry'
-import { needsAttention, clampTail } from '../attention'
+import { needsAttention, clampTail, stripAnsi } from '../attention'
 import { AGENT_INSTALL_URLS } from '../agentInstall'
 import { playCue, type Cue } from '../sound'
 import { IconClose, IconWide, IconNarrow } from './Icons'
@@ -460,23 +460,44 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     // Missing agent binary: a pane with a startupCommand auto-runs an agent CLI,
     // and when the binary is gone the shell just prints its "command not found"
     // with zero app-level feedback. Watch the SAME raw tail onActivity already
-    // maintains (no extra subscription) during the first 20s after spawn — the
-    // error must name the binary too, so a stray "No such file or directory"
-    // about some other path can't false-positive on its own.
+    // maintains (no extra subscription) during the first 20s after spawn.
+    // Matching is LINE-scoped: the echoed startup command keeps the binary name
+    // in the tail for the whole window, so "binary somewhere in the tail AND an
+    // error phrase somewhere in the tail" false-positives on any stray "No such
+    // file or directory" (e.g. an agent noting an optional config is missing).
+    // The binary name and the error signature must sit on the SAME line, in one
+    // of the real shell formats — a bare echoed command line never matches, and
+    // neither does an error about some other file.
     const startupBin = (((agent.startupCommand ?? '').trim().split(/\s+/)[0] ?? '')
       .split(/[\\/]/)
       .pop() ?? '')
       .replace(/\.(exe|cmd|bat)$/i, '')
       .toLowerCase()
     const MISSING_BIN_WINDOW_MS = 20000
-    // bash/zsh · cmd.exe · PowerShell · POSIX exec, case-insensitive.
-    const MISSING_BIN_RE =
-      /command not found|is not recognized as an internal or external command|is not recognized as the name of a cmdlet|no such file or directory/i
+    // `claude` → matches `claude`, `claude.exe`, `/usr/local/bin/claude`, …
+    const binEsc = startupBin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const binTok = `(?:\\S*[\\\\/])?${binEsc}(?:\\.(?:exe|cmd|bat))?`
+    const MISSING_BIN_LINE_RES = startupBin
+      ? [
+          // bash/dash/POSIX exec: `bash: claude: command not found`,
+          // `claude: No such file or directory` (with optional `bash: ` prefix).
+          new RegExp(`(?:^|[:\\s])${binTok}\\s*:\\s*(?:command not found|no such file or directory)`, 'i'),
+          // zsh/fish put the name last: `zsh: command not found: claude`.
+          new RegExp(`command not found\\s*:\\s*${binTok}(?:$|[\\s'"\`])`, 'i'),
+          // PowerShell: `The term 'claude' is not recognized …`.
+          new RegExp(`term ['"‘“]?${binTok}['"’”]? is not recognized`, 'i'),
+          // cmd.exe: `'claude' is not recognized as an internal or external command …`.
+          new RegExp(`['"]${binTok}['"] is not recognized as an internal or external`, 'i')
+        ]
+      : []
     let spawnedAt = 0
     const checkMissingBin = (): void => {
       if (!startupBin || missingBinNotified.current) return
       if (!spawnedAt || Date.now() - spawnedAt > MISSING_BIN_WINDOW_MS) return
-      if (!MISSING_BIN_RE.test(tail) || !tail.toLowerCase().includes(startupBin)) return
+      // Strip ANSI per line (shells color these errors), then require a line
+      // that IS a missing-binary report about OUR binary.
+      const lines = stripAnsi(tail).split(/\r?\n/)
+      if (!lines.some((line) => MISSING_BIN_LINE_RES.some((re) => re.test(line)))) return
       missingBinNotified.current = true
       const url = AGENT_INSTALL_URLS[startupBin]
       // Sticky error toast (Toasts.tsx never auto-dismisses errors); unknown
@@ -748,7 +769,11 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       const res = projectPath ? await window.api.git.diff(projectPath, id) : null
       const untracked = res?.untracked?.length ?? 0
       const changed = res?.diff ? res.diff.match(/^diff --git/gm)?.length ?? 0 : 0
-      const count = untracked + changed
+      // Untracked files are synthesized into the diff as `diff --git` sections
+      // too, so `changed` already counts them — adding `untracked` on top would
+      // double-count every new file. The bare untracked count is only the
+      // fallback for when the diff itself couldn't be produced (error path).
+      const count = changed > 0 ? changed : untracked
       const dirty = !!res?.hasChanges || untracked > 0
       if (!dirty && !confirmClose) {
         setClosePrompt(null)

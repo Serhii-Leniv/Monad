@@ -84,18 +84,18 @@ export async function initGitForProject(path: string): Promise<void> {
   }
 }
 
-/** Remove the orphaned worktrees the open-time check found. Re-lists at click
- *  time rather than trusting the stale toast payload: agents added since the
- *  check own fresh worktrees that must never be swept. */
+/** Remove the work-free orphaned worktrees the open-time check found. The main
+ *  process re-lists at cleanup time (no path list round-trips through here) and
+ *  never removes an orphan with unmerged/uncommitted work. */
 async function cleanOrphanWorktrees(path: string): Promise<void> {
   try {
     // The toast can outlive a project switch — never sweep against another
     // project's agent list (same guard pattern as initGitForProject).
     if (useStore.getState().projectPath !== path) return
+    // Owned ids are read at CLICK time, not from the toast's closure: agents
+    // added since the toast appeared own fresh worktrees that must never sweep.
     const owned = useStore.getState().agents.map((a) => a.id)
-    const orphans = await window.api.git.orphans(path, owned)
-    if (orphans.length === 0) return
-    const removed = await window.api.git.cleanOrphans(path, orphans)
+    const { removed } = await window.api.git.cleanOrphans(path, owned)
     if (useStore.getState().projectPath !== path) return
     if (removed > 0) {
       useStore
@@ -110,7 +110,9 @@ async function cleanOrphanWorktrees(path: string): Promise<void> {
 
 /** Fire-and-forget after a git project opens: stale canvas/* worktrees from
  *  crashed/force-quit sessions are still registered (so `worktree prune` skips
- *  them) and otherwise invisible — surface them with a cleanup offer. */
+ *  them) and otherwise invisible — surface them with a cleanup offer. Orphans
+ *  with work (kept-on-close worktrees, unmerged branches, dirty trees) are only
+ *  mentioned, never offered a destructive action — "Keep" promised no loss. */
 async function checkOrphanWorktrees(path: string): Promise<void> {
   try {
     // Read the agent list NOW (post-open, post-default-agent) so every live
@@ -121,14 +123,22 @@ async function checkOrphanWorktrees(path: string): Promise<void> {
     // (and its action) belongs to that project only.
     if (useStore.getState().projectPath !== path) return
     if (orphans.length === 0) return
-    const n = orphans.length
-    useStore
-      .getState()
-      .pushToast(
-        `${n} leftover agent worktree${n === 1 ? '' : 's'} from previous sessions`,
-        'info',
-        { actionLabel: 'Clean up', onAction: () => void cleanOrphanWorktrees(path) }
-      )
+    const removable = orphans.filter((o) => !o.hasWork).length
+    const kept = orphans.length - removable
+    const keptNote =
+      kept > 0 ? `${kept} kept worktree${kept === 1 ? '' : 's'} with unmerged work left untouched` : ''
+    if (removable > 0) {
+      useStore
+        .getState()
+        .pushToast(
+          `${removable} leftover agent worktree${removable === 1 ? '' : 's'} from previous sessions` +
+            (keptNote ? ` — ${keptNote}` : ''),
+          'info',
+          { actionLabel: 'Clean up', onAction: () => void cleanOrphanWorktrees(path) }
+        )
+    } else if (kept > 0) {
+      useStore.getState().pushToast(keptNote, 'info')
+    }
   } catch {
     /* best-effort — never block or fail a project open over this */
   }
