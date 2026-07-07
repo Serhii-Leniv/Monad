@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import Logo from './Logo'
-import { IconTerminal, IconGrid, IconColumns, IconSettings, IconBell } from './Icons'
+import { IconTerminal, IconGrid, IconColumns, IconSettings, IconBell, IconCommand } from './Icons'
 import { useStore, NEEDS_ATTENTION, MAX_AGENTS } from '../store'
 import { modLabel } from '../shortcuts'
 
@@ -27,6 +27,7 @@ export default function Rail(): JSX.Element {
   const setLayoutMode = useStore((s) => s.setLayoutMode)
   const focusTerminal = useStore((s) => s.focusTerminal)
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
+  const setPaletteOpen = useStore((s) => s.setPaletteOpen)
 
   // Cycle focus through the agents that currently need you.
   const cycleRef = useRef(0)
@@ -114,6 +115,17 @@ export default function Rail(): JSX.Element {
             )}
           </>
         )}
+
+        {/* Palette is the discoverable face of ⌘K — it works with or without a
+           project (open/switch project live there too), so it sits outside the
+           projectPath-gated tools. */}
+        <button
+          className="rail-btn"
+          onClick={() => setPaletteOpen(true)}
+          title={`Command palette  (${modLabel('K')})`}
+        >
+          <IconCommand />
+        </button>
 
         <div className="rail__spacer" />
 

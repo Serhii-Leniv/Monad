@@ -20,6 +20,20 @@ export function focusActiveTerminal(): void {
   if (id) terminals.get(id)?.focus()
 }
 
+/**
+ * Write the same input to several agents' PTYs at once (the broadcast bar).
+ * Each agent's live ptyId comes from the store (TerminalPane publishes it via
+ * setAgentRuntime the moment its shell spawns); an agent whose shell hasn't
+ * spawned yet — or failed to — is skipped rather than erroring the whole send.
+ */
+export function broadcastToAgents(ids: string[], data: string): void {
+  const agents = useStore.getState().agents
+  for (const id of ids) {
+    const ptyId = agents.find((a) => a.id === id)?.ptyId
+    if (ptyId) window.api.pty.write(ptyId, data)
+  }
+}
+
 /** Paths → one shell-ready string: quoted when they contain tricky chars. */
 export function quotePaths(paths: string[]): string {
   return paths.map((p) => (/[\s"'`$&;()[\]{}]/.test(p) ? `"${p}"` : p)).join(' ')
