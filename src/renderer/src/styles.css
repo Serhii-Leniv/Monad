@@ -144,9 +144,8 @@
    Light theme — token overrides. Stamped as data-theme="light" on <html> by
    theme.ts (Settings → Appearance → Theme; 'system' follows the OS). The dark
    palette above stays the untouched base, so dark renders pixel-identical.
-   Deliberate exception: terminal interiors stay DARK in light mode (--term-bg
-   and the pane body veil are not flipped) — developers expect dark terminals,
-   and it spares re-theming xterm's ANSI palette.
+   Terminal interiors flip too: white paper with black text (--term-bg, the
+   pane veil, and the xterm ANSI palette in TerminalPane.tsx all follow).
 ---------------------------------------------------------------------------- */
 :root[data-theme='light'] {
   /* Ink scale on warm paper-white: near-black body text, secondary kept dark
@@ -188,7 +187,9 @@
 
   --card-bg: rgba(255, 255, 255, 0.7);
   --card-bg-strong: rgba(248, 249, 251, 0.85);
-  /* --term-bg deliberately NOT overridden — terminals stay dark. */
+  /* Terminal interiors follow the theme: white paper with black text (the
+     xterm palette flips in TerminalPane.tsx to match). */
+  --term-bg: #ffffff;
 
   /* Status colours darkened for contrast as text/rings on light surfaces.
      (Bright fills that need to stay vivid keep hardcoded values.) */
@@ -269,6 +270,11 @@ body {
   position: absolute;
   inset: 0;
   background: linear-gradient(180deg, rgba(6, 8, 12, 0.28), rgba(6, 8, 12, 0.46));
+}
+/* Light theme frosts the wallpaper toward paper-white instead of darkening it —
+   a dark scrim under light chrome made every card read as a grey smudge. */
+:root[data-theme='light'] .wallpaper::after {
+  background: linear-gradient(180deg, rgba(248, 249, 252, 0.55), rgba(244, 246, 250, 0.68));
 }
 
 .titlebar,
@@ -758,6 +764,108 @@ body.has-wallpaper .aurora {
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+/* ---------- Update banner (persistent "a newer version is available") ---------- */
+/* Sits in the column flow under the 40px titlebar (below the floating project
+   pill), full-width, so it's always visible while an update is pending. Tone
+   escalates with how long the release has gone un-installed (see updateReminder). */
+.updbar {
+  position: relative;
+  z-index: 20;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 8px 12px 8px 17px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.012)),
+    var(--menu-bg);
+  border-top: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--line-2);
+  backdrop-filter: var(--blur-md);
+  -webkit-backdrop-filter: var(--blur-md);
+  box-shadow: inset 3px 0 0 var(--accent);
+  animation: updbar-in 320ms var(--ease-decelerate);
+}
+.updbar--recommended {
+  background:
+    linear-gradient(180deg, rgba(var(--accent-rgb), 0.1), rgba(var(--accent-rgb), 0.03)),
+    var(--menu-bg);
+}
+.updbar--urgent {
+  background:
+    linear-gradient(180deg, rgba(255, 107, 99, 0.14), rgba(255, 107, 99, 0.04)),
+    var(--menu-bg);
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+.updbar__icon {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+.updbar--urgent .updbar__icon {
+  color: var(--danger);
+}
+.updbar__text {
+  flex: 1;
+  min-width: 0;
+}
+.updbar__btn {
+  flex: 0 0 auto;
+  padding: 5px 13px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--accent);
+  border: none;
+  border-radius: var(--r-xs);
+  cursor: pointer;
+  transition: filter var(--dur-select) var(--ease-out);
+}
+.updbar__btn:hover {
+  filter: brightness(1.13);
+}
+.updbar--urgent .updbar__btn {
+  background: var(--danger);
+}
+.updbar__dismiss {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.updbar__dismiss:hover {
+  color: var(--text);
+  background: var(--hover-bg);
+}
+.updbar__btn:active,
+.updbar__dismiss:active {
+  transform: scale(0.92);
+}
+@keyframes updbar-in {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .updbar {
+    animation: none;
   }
 }
 
@@ -1630,6 +1738,27 @@ body.has-wallpaper .vec-pane__term {
   border-radius: var(--r-xs);
   cursor: pointer;
   transition: background var(--dur-select) var(--ease-out);
+}
+
+.vec-pane__menu-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--line-1);
+}
+.vec-pane__menu-head {
+  padding: 4px 10px 2px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* Radio-style checkmark for the theme picker. */
+.vec-pane__menu-item.is-checked {
+  color: var(--accent);
+}
+.vec-pane__menu-item.is-checked::after {
+  content: ' ✓';
 }
 
 .vec-pane__menu-item:hover:not(:disabled) {
@@ -2769,6 +2898,112 @@ body.has-wallpaper .vec-pane__term {
   background: rgba(255, 107, 99, 0.14);
 }
 
+/* ---------- Feedback modal (bugs / ideas / comments) ---------- */
+.feedback {
+  width: 468px;
+  max-width: 92vw;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-xl);
+  overflow: hidden;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.025) 48%),
+    rgba(15, 21, 32, 0.66);
+  backdrop-filter: var(--blur-lg);
+  -webkit-backdrop-filter: var(--blur-lg);
+  border: 1px solid var(--line-2);
+  box-shadow:
+    var(--glass-specular),
+    var(--shadow-pop);
+}
+.feedback__body {
+  padding: 16px 20px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+.feedback__intro {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+/* The category control is a natural-width segmented control, not a full row. */
+.feedback__seg {
+  align-self: flex-start;
+}
+.feedback__text,
+.feedback__email {
+  width: 100%;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-input);
+  border: 1px solid var(--glass-border);
+  outline: none;
+  transition:
+    border-color var(--dur-select) var(--ease-out),
+    box-shadow var(--dur-select) var(--ease-out);
+}
+.feedback__text {
+  min-height: 122px;
+  resize: vertical;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  border-radius: var(--r-sm);
+}
+.feedback__email {
+  padding: 9px 12px;
+  font-size: 12.5px;
+  border-radius: var(--r-xs);
+}
+.feedback__text::placeholder,
+.feedback__email::placeholder {
+  color: var(--muted);
+}
+.feedback__text:focus,
+.feedback__email:focus {
+  border-color: rgba(var(--accent-rgb), 0.7);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.16);
+}
+.feedback__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-top: 1px solid var(--hairline);
+}
+.feedback__meta {
+  font-size: 11.5px;
+  color: var(--muted);
+  user-select: text;
+}
+.feedback__send {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--accent);
+  border: none;
+  border-radius: var(--r-xs);
+  cursor: pointer;
+  transition: filter var(--dur-select) var(--ease-out);
+}
+.feedback__send:hover:not(:disabled) {
+  filter: brightness(1.13);
+}
+.feedback__send:active:not(:disabled) {
+  transform: scale(0.94);
+}
+.feedback__send:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 /* ---------- Diff / merge review modal ---------- */
 .review {
   width: 780px;
@@ -3607,6 +3842,20 @@ body.has-wallpaper .vec-pane__term {
   color: var(--muted);
 }
 
+/* "Binary files differ" note — an editorial aside, not diff content. */
+.diff__line--binary {
+  margin: 4px 0;
+  padding: 5px 10px;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 12.5px;
+  color: var(--muted);
+  background: var(--hover-bg-soft);
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-xs);
+  width: fit-content;
+}
+
 .diff__tag {
   color: var(--muted);
 }
@@ -3878,12 +4127,22 @@ body.has-wallpaper .vec-pane__term {
 :root[data-theme='light'] .vec-pane__header {
   background: linear-gradient(180deg, rgba(250, 250, 252, 0.92), rgba(242, 243, 246, 0.86));
 }
-/* The dark veil now sits over a LIGHT canvas: at the settings slider's lower
-   alphas (default 0.55) it blends to a mid-grey that washes out the dark-palette
-   ANSI colours — clamp it near-opaque here so the well genuinely stays dark.
-   Dark mode keeps the full translucency range (its backdrop is already dark). */
+/* Light terminals: a translucent WHITE veil (black text above it, via the
+   light xterm palette). The full opacity-slider range works again — a white
+   veil blending toward the light canvas stays readable at any alpha, unlike
+   the old dark veil that had to be clamped near-opaque. */
 :root[data-theme='light'] .vec-pane__term {
-  background: rgba(10, 13, 18, max(var(--term-alpha, 0.8), 0.92));
+  background: rgba(255, 255, 255, var(--term-alpha, 0.8));
+}
+/* Per-pane theme override (context menu → Terminal theme): the pinned veil
+   must beat BOTH theme-scoped rules above, hence the doubled selectors. */
+.vec-pane__term[data-term-theme='dark'],
+:root[data-theme='light'] .vec-pane__term[data-term-theme='dark'] {
+  background: rgba(10, 13, 18, var(--term-alpha, 0.8));
+}
+.vec-pane__term[data-term-theme='light'],
+:root[data-theme='dark'] .vec-pane__term[data-term-theme='light'] {
+  background: rgba(255, 255, 255, var(--term-alpha, 0.8));
 }
 :root[data-theme='light'] .vec-pane__branch {
   background: rgba(18, 26, 44, 0.05);

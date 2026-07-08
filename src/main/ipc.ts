@@ -28,6 +28,7 @@ import {
 } from './git'
 import { detectShells, detectAgents } from './shells'
 import { checkForUpdate } from './update'
+import { sendFeedback, FEEDBACK_EMAIL, type FeedbackInput, type FeedbackCategory } from './feedback'
 
 /**
  * Registers every main-process IPC handler against a window accessor.
@@ -150,6 +151,34 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
   // Newer-release check against the vectro-site release feed (null = up to date
   // or the check failed; the renderer surfaces a toast only on a real update).
   ipcMain.handle('update:check', () => checkForUpdate())
+
+  // --- Feedback (bugs / ideas / comments) → maintainer inbox ---
+  // The POST runs here (strict renderer CSP can't reach the relay); version and
+  // platform are stamped in feedback.ts, not trusted from the renderer.
+  ipcMain.handle('feedback:send', (_e, input: FeedbackInput) => sendFeedback(input))
+
+  // Offline fallback: compose a prefilled message in the user's mail client,
+  // addressed to the fixed maintainer inbox. Built in main so the mailto target
+  // can never be redirected from the renderer.
+  ipcMain.handle('feedback:mailto', (_e, input: FeedbackInput) => {
+    const cat: FeedbackCategory =
+      input?.category === 'bug' || input?.category === 'idea' ? input.category : 'other'
+    const label = cat === 'bug' ? 'Bug' : cat === 'idea' ? 'Idea' : 'Comment'
+    const version = app.getVersion()
+    const bodyLines = [
+      (input?.message ?? '').trim(),
+      '',
+      `— app: Monad v${version}`,
+      `— platform: ${process.platform} ${process.arch}`
+    ]
+    if (input?.email) bodyLines.splice(1, 0, `— from: ${input.email}`)
+    const url =
+      `mailto:${FEEDBACK_EMAIL}` +
+      `?subject=${encodeURIComponent(`Monad feedback — ${label} (v${version})`)}` +
+      `&body=${encodeURIComponent(bodyLines.join('\n'))}`
+    void shell.openExternal(url)
+    return true
+  })
 
   // --- Wallpaper: pick an image, and read it as a data URL (CSP-safe) ---
   ipcMain.handle('wallpaper:pick', async () => {
