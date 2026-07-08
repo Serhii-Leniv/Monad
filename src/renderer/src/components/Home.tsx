@@ -29,7 +29,7 @@ export default function Home(): JSX.Element {
         <Logo size={76} />
         <h1 className="home__title">Monad</h1>
         <p className="home__tag">
-          Run your AI coding agents in parallel — each isolated in its own terminal.
+          Run your AI coding agents in parallel.
         </p>
         <button className="home__open" onClick={openProjectInteractive}>
           Open folder…

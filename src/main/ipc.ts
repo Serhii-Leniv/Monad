@@ -30,6 +30,9 @@ import { detectShells, detectAgents } from './shells'
 import { checkForUpdate } from './update'
 import { sendFeedback, FEEDBACK_EMAIL, type FeedbackInput, type FeedbackCategory } from './feedback'
 
+/** Per-project dir holding canvas.json. */
+const CANVAS_DIR = '.monad'
+
 /**
  * Registers every main-process IPC handler against a window accessor.
  * Extracted from index.ts so the same wiring can be driven by integration
@@ -275,7 +278,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
 
   ipcMain.handle('project:load', async (_e, projectPath: string) => {
     try {
-      const txt = await fs.readFile(join(projectPath, '.agent-canvas', 'canvas.json'), 'utf8')
+      const txt = await fs.readFile(join(projectPath, CANVAS_DIR, 'canvas.json'), 'utf8')
       return JSON.parse(txt)
     } catch {
       return null
@@ -288,7 +291,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
       // Read-only folder / network share / disk full must not become an
       // unhandled rejection in the renderer — report failure instead.
       try {
-        const dir = join(projectPath, '.agent-canvas')
+        const dir = join(projectPath, CANVAS_DIR)
         await fs.mkdir(dir, { recursive: true })
         await fs.writeFile(join(dir, 'canvas.json'), JSON.stringify(data, null, 2), 'utf8')
         return true
