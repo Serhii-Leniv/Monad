@@ -367,11 +367,22 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     // occurs (evaluateIdle), so a later burst is tracked from scratch.
     let steady = false
     let idleTimer: ReturnType<typeof setTimeout> | undefined
+    // True once any burst has run long enough to count as a task. Survives the
+    // short output gaps inside an agent run, so the eventual real finish still
+    // notifies even when the final burst itself was brief.
+    let taskActive = false
+    let doneConfirmTimer: ReturnType<typeof setTimeout> | undefined
     let lastNotify = 0
     const unsubs: Array<() => void> = []
     // A working burst shorter than this reads as routine shell echo (ls, cd…),
     // not a task — don't notify on those settling back to idle.
     const DONE_AFTER_MS = 8000
+    // How long a settle must stay silent before "done" is believed. Agent CLIs
+    // routinely pause output for several seconds mid-task (API thinking waits,
+    // sub-agent handoffs) — the 800ms settle alone reads each such pause as a
+    // finish and fires a false "done". Any resumed output cancels the pending
+    // notification; only sustained quiet lets it through.
+    const DONE_CONFIRM_MS = 12000
     // Continuous-output ceiling. An agent's work is bursty — tool calls, API waits
     // and message boundaries punctuate it with ≥800ms gaps that reset the burst —
     // so a burst that runs THIS long with no gap at all isn't an agent thinking,
@@ -441,19 +452,31 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       const next: AgentStatus = bellRang || needsAttention(tail) ? 'attention' : 'idle'
       bellRang = false
       setStatus(id, next)
+      if (ranFor >= DONE_AFTER_MS) taskActive = true
       if (next === 'attention') {
+        // The task ended in a question — the attention alert covers it; a later
+        // quiet spell must not ALSO announce "done".
+        taskActive = false
+        clearTimeout(doneConfirmTimer)
         maybeNotify('attention')
         maybeSound('attention')
-      } else if (ranFor >= DONE_AFTER_MS) {
-        // A real task wrapped up (worked a while, then went quiet without a prompt).
-        maybeNotify('done')
-        maybeSound('done')
-        // Quiet visual nod on the card itself (green ring sweep + ✓ in the
-        // header). The timeout slightly outlives the 1.2s animation so the
-        // class is never yanked mid-sweep.
-        setDoneFlash(true)
-        window.clearTimeout(doneFlashTimer.current)
-        doneFlashTimer.current = window.setTimeout(() => setDoneFlash(false), 1400)
+      } else if (taskActive) {
+        // Looks finished — but agents pause like this mid-task too (thinking,
+        // sub-agents). Only believe it after DONE_CONFIRM_MS of unbroken quiet;
+        // onActivity cancels this timer the moment output resumes.
+        clearTimeout(doneConfirmTimer)
+        doneConfirmTimer = setTimeout(() => {
+          if (disposed) return
+          taskActive = false
+          maybeNotify('done')
+          maybeSound('done')
+          // Quiet visual nod on the card itself (green ring sweep + ✓ in the
+          // header). The timeout slightly outlives the 1.2s animation so the
+          // class is never yanked mid-sweep.
+          setDoneFlash(true)
+          window.clearTimeout(doneFlashTimer.current)
+          doneFlashTimer.current = window.setTimeout(() => setDoneFlash(false), 1400)
+        }, DONE_CONFIRM_MS)
       }
     }
 
@@ -518,6 +541,9 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     const onActivity = (d: string): void => {
       tail = clampTail(tail + d, 1200)
       checkMissingBin()
+      // Output resumed — whatever settle preceded it was a mid-task pause, not
+      // a finish. Kill the pending "done" before it can fire.
+      clearTimeout(doneConfirmTimer)
       // Once classified steady, stop flipping to "working" on each chunk — just
       // keep the tail current (for attention detection) and let the idle timer
       // re-check whenever the stream finally pauses.
@@ -533,6 +559,7 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
           steady = true
           working = false
           workingSince = 0
+          taskActive = false
           setStatus(id, needsAttention(tail) ? 'attention' : 'idle')
         }
       }
@@ -545,9 +572,11 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     term.onBell(() => {
       bellRang = true
       clearTimeout(idleTimer)
+      clearTimeout(doneConfirmTimer)
       working = false
       workingSince = 0
       steady = false
+      taskActive = false
       setStatus(id, 'attention')
       maybeNotify('attention')
       maybeSound('attention')
@@ -607,6 +636,8 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       unsubs.push(
         window.api.pty.onExit(pid, (code) => {
           clearTimeout(idleTimer)
+          // The exit notification supersedes any pending settle-based "done".
+          clearTimeout(doneConfirmTimer)
           ptyRef.current = null
           const errored = !!code && code !== 0
           setStatus(id, errored ? 'error' : 'exited')
@@ -690,6 +721,7 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     return () => {
       disposed = true
       clearTimeout(idleTimer)
+      clearTimeout(doneConfirmTimer)
       clearTimeout(selTimer)
       host.removeEventListener('mousedown', onTermMouseDown, true)
       host.removeEventListener('mousemove', onTermMouseMove, true)
