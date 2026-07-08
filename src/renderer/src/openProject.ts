@@ -79,7 +79,7 @@ export async function initGitForProject(path: string): Promise<void> {
         'info'
       )
   } catch (e) {
-    console.error('[vectro] git init failed:', e)
+    console.error('[monad] git init failed:', e)
     useStore.getState().pushToast('Couldn’t initialize git here.', 'error')
   }
 }
@@ -103,7 +103,7 @@ async function cleanOrphanWorktrees(path: string): Promise<void> {
         .pushToast(`Removed ${removed} worktree${removed === 1 ? '' : 's'}`, 'success')
     }
   } catch (e) {
-    console.error('[vectro] worktree cleanup failed:', e)
+    console.error('[monad] worktree cleanup failed:', e)
     useStore.getState().pushToast('Couldn’t clean up the leftover worktrees.', 'error')
   }
 }
@@ -194,7 +194,7 @@ export async function openProjectByPath(ref: RecentProject): Promise<void> {
     // are in the owned set.
     if (git.isGit) void checkOrphanWorktrees(ref.path)
   } catch (e) {
-    console.error('[vectro] open project failed:', e)
+    console.error('[monad] open project failed:', e)
     useStore.getState().pushToast(`Couldn’t open “${ref.name}”`, 'error')
   } finally {
     opening = false
@@ -217,7 +217,7 @@ export async function openProjectInteractive(): Promise<void> {
     if (!ref) return
     await openProjectByPath(ref)
   } catch (e) {
-    console.error('[vectro] open folder failed:', e)
+    console.error('[monad] open folder failed:', e)
     useStore.getState().pushToast('Couldn’t open that folder', 'error')
   }
 }

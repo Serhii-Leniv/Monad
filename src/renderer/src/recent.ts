@@ -3,6 +3,8 @@ export interface RecentProject {
   name: string
 }
 
+// Legacy 'vectro.' prefix kept deliberately: the app was renamed to Monad, but
+// changing the key would orphan every user's recent-projects list.
 export const RECENT_KEY = 'vectro.recent'
 
 /** Most-recently-opened projects (newest first), persisted in localStorage. The

@@ -20,7 +20,7 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    console.error('[vectro] renderer crashed:', error, info.componentStack)
+    console.error('[monad] renderer crashed:', error, info.componentStack)
   }
 
   render(): ReactNode {
@@ -30,12 +30,12 @@ export default class ErrorBoundary extends Component<Props, State> {
         <div className="crash__card">
           <h1 className="crash__title">Something went wrong</h1>
           <p className="crash__msg">
-            Vectro hit an unexpected error. Your open terminals were interrupted, but your
+            Monad hit an unexpected error. Your open terminals were interrupted, but your
             saved canvas is safe — reloading usually fixes it.
           </p>
           <pre className="crash__detail">{this.state.error.message}</pre>
           <button className="crash__btn" onClick={() => window.location.reload()}>
-            Reload Vectro
+            Reload Monad
           </button>
         </div>
       </div>

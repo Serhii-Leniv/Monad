@@ -70,7 +70,7 @@ export default function App(): JSX.Element {
         } catch {
           /* storage unavailable — just show the toast */
         }
-        useStore.getState().pushToast(`Vectro ${u.latest} is available`, 'info', {
+        useStore.getState().pushToast(`Monad ${u.latest} is available`, 'info', {
           actionLabel: 'Download',
           onAction: () => void window.api.openExternal(u.url),
           secondaryLabel: 'Skip this version',
