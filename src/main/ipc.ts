@@ -264,7 +264,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
         await fs.writeFile(join(dir, 'canvas.json'), JSON.stringify(data, null, 2), 'utf8')
         return true
       } catch (e) {
-        console.error('[vectro] project:save failed:', e)
+        console.error('[monad] project:save failed:', e)
         return false
       }
     }
@@ -348,7 +348,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
     'notify:agent',
     (_e, { id, title, body }: { id: string; title: string; body: string }) => {
       if (!Notification.isSupported()) return false
-      const n = new Notification({ title: title || 'Vectro', body })
+      const n = new Notification({ title: title || 'Monad', body })
       n.on('click', () => {
         const w = getWindow()
         if (w && !w.isDestroyed()) {

@@ -272,6 +272,7 @@ function clampNum(n: unknown, lo: number, hi: number, dflt: number): number {
 
 function loadSettings(): AppSettings {
   try {
+    // Legacy 'vectro.' prefix kept for data continuity across the Monad rename.
     const raw = localStorage.getItem('vectro.settings')
     const merged = raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : DEFAULT_SETTINGS
     // A corrupt / hand-edited store must not be able to brick the app (zoom 8×,

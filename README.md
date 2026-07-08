@@ -1,4 +1,4 @@
-# Vectro
+# Monad
 
 A canvas for running and steering multiple AI coding agents in parallel.
 Each agent is a live-terminal card on an auto-tiling stage, isolated in its own
@@ -8,6 +8,7 @@ installed, so there's no inference cost.
 
 > Original product. Built from scratch; not affiliated with or derived from any other app.
 > Download: https://serhii-leniv.github.io/vectro-site
+> (The download site keeps the pre-rename `vectro-site` name — see `RELEASING.md`.)
 
 ## Requirements
 

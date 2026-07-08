@@ -7,7 +7,7 @@ const path = require('path')
 
 exports.default = async function afterPack(context) {
   if (context.electronPlatformName !== 'darwin') return
-  const appName = context.packager.appInfo.productFilename // "Vectro"
+  const appName = context.packager.appInfo.productFilename // "Monad"
   const appPath = path.join(context.appOutDir, `${appName}.app`)
   console.log(`  • ad-hoc signing  ${appPath}`)
   execFileSync('codesign', ['--force', '--deep', '--sign', '-', appPath], {

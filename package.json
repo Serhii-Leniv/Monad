@@ -1,7 +1,7 @@
 {
-  "name": "vectro",
-  "version": "0.1.14",
-  "description": "Vectro — a cross-platform canvas for running terminals and AI agents in parallel",
+  "name": "monad",
+  "version": "0.1.15",
+  "description": "Monad — a cross-platform canvas for running terminals and AI agents in parallel",
   "main": "./out/main/index.js",
   "author": "Serhii Leniv",
   "license": "MIT",

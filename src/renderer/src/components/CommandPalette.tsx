@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { useStore, MAX_AGENTS } from '../store'
 import { openProjectInteractive, openProjectByPath, closeCurrentProject } from '../openProject'
 import { modLabel } from '../shortcuts'
@@ -7,6 +7,8 @@ interface Cmd {
   id: string
   title: string
   hint?: string
+  /** Section header shown while browsing (no query). Search results stay flat. */
+  group?: string
   run: () => void
 }
 
@@ -70,56 +72,58 @@ export default function CommandPalette(): JSX.Element {
     const full = agents.length >= MAX_AGENTS
     if (projectPath) {
       if (!full) {
-        list.push({ id: 'new', title: 'New terminal', hint: modLabel('T'), run: () => addAgent() })
+        list.push({ id: 'new', title: 'New terminal', hint: modLabel('T'), group: 'New', run: () => addAgent() })
         agentClis.forEach((a) =>
-          list.push({ id: 'agent-' + a.id, title: `Start ${a.label}`, run: () => addAgent({ command: a.command, agentLabel: a.label, agentId: a.id }) })
+          list.push({ id: 'agent-' + a.id, title: `Start ${a.label}`, group: 'New', run: () => addAgent({ command: a.command, agentLabel: a.label, agentId: a.id }) })
         )
         shells.forEach((sh) =>
-          list.push({ id: 'new-' + sh.id, title: `New terminal · ${sh.label}`, run: () => addAgent({ shellId: sh.id }) })
+          list.push({ id: 'new-' + sh.id, title: `New terminal · ${sh.label}`, group: 'New', run: () => addAgent({ shellId: sh.id }) })
         )
         if (lastClosed) {
-          list.push({ id: 'reopen', title: `Reopen closed terminal · ${lastClosed.label}`, run: reopenLast })
+          list.push({ id: 'reopen', title: `Reopen closed terminal · ${lastClosed.label}`, group: 'New', run: reopenLast })
         }
       }
-      list.push({ id: 'grid', title: 'Layout: Grid', hint: modLabel('1'), run: () => setLayoutMode('grid') })
-      list.push({ id: 'cols', title: 'Layout: Columns', hint: modLabel('2'), run: () => setLayoutMode('columns') })
       const sel = selectedIds[0]
       if (sel) {
         const selAgent = agents.find((a) => a.id === sel)
         if (selAgent?.isolation === 'worktree') {
-          list.push({ id: 'review', title: 'Review changes & merge…', run: () => setDiffAgentId(sel) })
+          list.push({ id: 'review', title: 'Review changes & merge…', group: 'Selected terminal', run: () => setDiffAgentId(sel) })
         }
-        list.push({ id: 'focus', title: 'Maximize terminal', run: () => focusTerminal(sel) })
+        list.push({ id: 'focus', title: 'Maximize terminal', group: 'Selected terminal', run: () => focusTerminal(sel) })
         if (selectedIds.length >= 2) {
           // Mirrors ⌘W on a multi-selection: one confirm (in App.tsx) closes the batch.
           list.push({
             id: 'close-selected',
             title: `Close ${selectedIds.length} selected terminals`,
             hint: modLabel('W'),
+            group: 'Selected terminal',
             run: () => requestBulkClose(selectedIds)
           })
         } else {
-          list.push({ id: 'close', title: 'Close selected terminal', hint: modLabel('W'), run: () => requestClose(sel) })
+          list.push({ id: 'close', title: 'Close selected terminal', hint: modLabel('W'), group: 'Selected terminal', run: () => requestClose(sel) })
           // Width toggle only makes sense for a single card (it's per-tile).
           list.push({
             id: 'wide',
             title: selAgent?.wide ? 'Make card normal' : 'Make card wider',
+            group: 'Selected terminal',
             run: () => toggleWide(sel)
           })
         }
       }
+      list.push({ id: 'grid', title: 'Layout: Grid', hint: modLabel('1'), group: 'Canvas', run: () => setLayoutMode('grid') })
+      list.push({ id: 'cols', title: 'Layout: Columns', hint: modLabel('2'), group: 'Canvas', run: () => setLayoutMode('columns') })
     }
-    list.push({ id: 'open', title: 'Open project…', run: openProjectInteractive })
+    list.push({ id: 'open', title: 'Open project…', group: 'Project', run: openProjectInteractive })
     workspaces
       .filter((w) => w.path !== projectPath)
       .forEach((w) =>
-        list.push({ id: 'switch-' + w.path, title: `Switch to ${w.name}`, run: () => void openProjectByPath(w) })
+        list.push({ id: 'switch-' + w.path, title: `Switch to ${w.name}`, group: 'Project', run: () => void openProjectByPath(w) })
       )
     if (projectPath) {
-      list.push({ id: 'close-project', title: 'Close project', run: closeCurrentProject })
+      list.push({ id: 'close-project', title: 'Close project', group: 'Project', run: closeCurrentProject })
     }
-    list.push({ id: 'settings', title: 'Settings', run: () => setSettingsOpen(true) })
-    list.push({ id: 'shortcuts', title: 'Keyboard shortcuts', hint: modLabel('/'), run: () => setShortcutsOpen(true) })
+    list.push({ id: 'settings', title: 'Settings', group: 'Application', run: () => setSettingsOpen(true) })
+    list.push({ id: 'shortcuts', title: 'Keyboard shortcuts', hint: modLabel('/'), group: 'Application', run: () => setShortcutsOpen(true) })
     return list
   }, [projectPath, shells, agentClis, workspaces, selectedIds, agents, lastClosed, addAgent, setLayoutMode, focusTerminal, requestClose, requestBulkClose, toggleWide, reopenLast, setSettingsOpen, setShortcutsOpen, setDiffAgentId])
 
@@ -185,15 +189,21 @@ export default function CommandPalette(): JSX.Element {
         />
         <div className="palette__list">
           {items.map((c, i) => (
-            <button
-              key={c.id}
-              className={'palette__item' + (i === active ? ' is-active' : '')}
-              onMouseEnter={() => setIdx(i)}
-              onClick={() => run(c.run)}
-            >
-              <span className="palette__item-title">{c.title}</span>
-              {c.hint && <span className="palette__item-hint">{c.hint}</span>}
-            </button>
+            <Fragment key={c.id}>
+              {/* Section headers only while browsing — search results are a
+                 single ranked list where headers would just break the flow. */}
+              {!q && c.group && items[i - 1]?.group !== c.group && (
+                <div className="palette__head">{c.group}</div>
+              )}
+              <button
+                className={'palette__item' + (i === active ? ' is-active' : '')}
+                onMouseEnter={() => setIdx(i)}
+                onClick={() => run(c.run)}
+              >
+                <span className="palette__item-title">{c.title}</span>
+                {c.hint && <span className="palette__item-hint">{c.hint}</span>}
+              </button>
+            </Fragment>
           ))}
           {items.length === 0 && <div className="palette__empty">No matching commands</div>}
         </div>

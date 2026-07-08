@@ -3,6 +3,7 @@ import { join } from 'path'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { registerIpc } from './ipc'
 import { installMacMenu } from './menu'
+import { migrateUserDataFromVectro } from './migrate-userdata'
 import type { PtyManager } from './pty-manager'
 
 const isDev = !!process.env['ELECTRON_RENDERER_URL']
@@ -11,11 +12,15 @@ const isDev = !!process.env['ELECTRON_RENDERER_URL']
 // a quarantined .node, a flaky FS) must never take the whole app down silently.
 // Log and keep running; the worst case degrades to a single broken pane.
 process.on('uncaughtException', (err) => {
-  console.error('[vectro] uncaughtException:', err)
+  console.error('[monad] uncaughtException:', err)
 })
 process.on('unhandledRejection', (reason) => {
-  console.error('[vectro] unhandledRejection:', reason)
+  console.error('[monad] unhandledRejection:', reason)
 })
+
+// One-shot Vectro → Monad profile migration. Must precede the single-instance
+// lock and window creation (both touch the userData dir).
+migrateUserDataFromVectro()
 
 // App emblem (the liquid-glass mark). build/icon.png is also what electron-builder
 // uses to generate the packaged .icns / .ico icons.
@@ -132,11 +137,11 @@ function createWindow(): void {
   const loadRenderer = (): void => {
     if (process.env['ELECTRON_RENDERER_URL']) {
       win?.loadURL(process.env['ELECTRON_RENDERER_URL']).catch((e) =>
-        console.error('[vectro] loadURL failed:', e)
+        console.error('[monad] loadURL failed:', e)
       )
     } else {
       win?.loadFile(join(__dirname, '../renderer/index.html')).catch((e) =>
-        console.error('[vectro] loadFile failed:', e)
+        console.error('[monad] loadFile failed:', e)
       )
     }
   }
@@ -148,7 +153,7 @@ function createWindow(): void {
   const recover = (why: string): void => {
     if (recoveries >= 3 || !win || win.isDestroyed()) return
     recoveries++
-    console.error(`[vectro] renderer ${why} — reloading (attempt ${recoveries})`)
+    console.error(`[monad] renderer ${why} — reloading (attempt ${recoveries})`)
     // The reloaded renderer respawns its terminals from canvas.json, so the old
     // ptys are orphaned — a hard reload/crash never runs React's unmount cleanup.
     // Kill them here or each crash-recovery leaks a whole set of live shells.
@@ -211,7 +216,7 @@ if (!app.requestSingleInstanceLock()) {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
   }).catch((e) => {
-    console.error('[vectro] failed to start:', e)
+    console.error('[monad] failed to start:', e)
     app.quit()
   })
 
