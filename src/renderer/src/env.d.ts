@@ -84,6 +84,19 @@ interface UpdateInfo {
   url: string
 }
 
+type FeedbackCategory = 'bug' | 'idea' | 'other'
+
+interface FeedbackInput {
+  category: FeedbackCategory
+  message: string
+  email?: string
+}
+
+interface FeedbackResult {
+  ok: boolean
+  error?: 'not-configured' | 'empty' | 'network' | 'rejected'
+}
+
 /** Shape of the per-project canvas file (.agent-canvas/canvas.json). */
 interface PersistedCanvas {
   layoutMode?: 'grid' | 'columns' | 'preview' | 'free'
@@ -135,6 +148,10 @@ interface Window {
     }
     update: {
       check: () => Promise<UpdateInfo | null>
+    }
+    feedback: {
+      send: (input: FeedbackInput) => Promise<FeedbackResult>
+      mailto: (input: FeedbackInput) => Promise<boolean>
     }
     app: {
       version: () => Promise<string>

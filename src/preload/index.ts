@@ -47,6 +47,19 @@ export interface UpdateInfo {
   url: string
 }
 
+export type FeedbackCategory = 'bug' | 'idea' | 'other'
+
+export interface FeedbackInput {
+  category: FeedbackCategory
+  message: string
+  email?: string
+}
+
+export interface FeedbackResult {
+  ok: boolean
+  error?: 'not-configured' | 'empty' | 'network' | 'rejected'
+}
+
 const api = {
   pty: {
     spawn: (opts: PtySpawnOptions): Promise<string> => ipcRenderer.invoke('pty:spawn', opts),
@@ -96,6 +109,13 @@ const api = {
   },
   update: {
     check: (): Promise<UpdateInfo | null> => ipcRenderer.invoke('update:check')
+  },
+  feedback: {
+    send: (input: FeedbackInput): Promise<FeedbackResult> =>
+      ipcRenderer.invoke('feedback:send', input),
+    // Opens the user's mail client, prefilled — the offline fallback for send().
+    mailto: (input: FeedbackInput): Promise<boolean> =>
+      ipcRenderer.invoke('feedback:mailto', input)
   },
   app: {
     version: (): Promise<string> => ipcRenderer.invoke('app:version')

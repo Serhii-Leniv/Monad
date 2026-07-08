@@ -44,6 +44,7 @@ export default function CommandPalette(): JSX.Element {
   const setLayoutMode = useStore((s) => s.setLayoutMode)
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
   const setShortcutsOpen = useStore((s) => s.setShortcutsOpen)
+  const setFeedbackOpen = useStore((s) => s.setFeedbackOpen)
   const setDiffAgentId = useStore((s) => s.setDiffAgentId)
   const requestClose = useStore((s) => s.requestClose)
   const requestBulkClose = useStore((s) => s.requestBulkClose)
@@ -124,8 +125,9 @@ export default function CommandPalette(): JSX.Element {
     }
     list.push({ id: 'settings', title: 'Settings', group: 'Application', run: () => setSettingsOpen(true) })
     list.push({ id: 'shortcuts', title: 'Keyboard shortcuts', hint: modLabel('/'), group: 'Application', run: () => setShortcutsOpen(true) })
+    list.push({ id: 'feedback', title: 'Send feedback…', group: 'Application', run: () => setFeedbackOpen(true) })
     return list
-  }, [projectPath, shells, agentClis, workspaces, selectedIds, agents, lastClosed, addAgent, setLayoutMode, focusTerminal, requestClose, requestBulkClose, toggleWide, reopenLast, setSettingsOpen, setShortcutsOpen, setDiffAgentId])
+  }, [projectPath, shells, agentClis, workspaces, selectedIds, agents, lastClosed, addAgent, setLayoutMode, focusTerminal, requestClose, requestBulkClose, toggleWide, reopenLast, setSettingsOpen, setShortcutsOpen, setFeedbackOpen, setDiffAgentId])
 
   const q = query.trim().toLowerCase()
   const items = useMemo<Cmd[]>(() => {

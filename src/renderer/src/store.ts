@@ -72,6 +72,8 @@ export interface AgentInstance {
   agentId?: string
   /** Double-weight tile: takes 2 shares of its row's width instead of 1. */
   wide?: boolean
+  /** Terminal interior theme: follow the app ('auto'/undefined) or pin it. */
+  termTheme?: 'auto' | 'dark' | 'light'
   // --- runtime only (never persisted) ---
   ptyId?: string
   branch?: string | null
@@ -104,6 +106,7 @@ export interface PersistedAgent {
   agentLabel?: string
   agentId?: string
   wide?: boolean
+  termTheme?: 'auto' | 'dark' | 'light'
 }
 
 interface AppState {
@@ -145,6 +148,12 @@ interface AppState {
   paletteOpen: boolean
   /** Keyboard-shortcuts help overlay (⌘/ / Ctrl+Shift+/). */
   shortcutsOpen: boolean
+  /** Feedback (bugs / ideas / comments) modal. */
+  feedbackOpen: boolean
+  /** A newer release, once detected — drives the persistent update banner. */
+  update: UpdateInfo | null
+  /** True once the user hides the update banner this session (returns next launch). */
+  updateDismissed: boolean
   /** Agent whose worktree changes are open in the diff/merge review modal. */
   diffAgentId: string | null
   /** Agent the user asked to close from outside its pane (⌘W / palette) — the
@@ -170,6 +179,11 @@ interface AppState {
   setSettingsOpen: (open: boolean) => void
   setPaletteOpen: (open: boolean) => void
   setShortcutsOpen: (open: boolean) => void
+  setFeedbackOpen: (open: boolean) => void
+  /** Record a detected release (or clear it); resets the session dismiss. */
+  setUpdate: (update: UpdateInfo | null) => void
+  /** Hide the update banner for this session (it returns on next launch). */
+  dismissUpdate: () => void
   setDiffAgentId: (id: string | null) => void
   requestClose: (id: string) => void
   clearPendingClose: () => void
@@ -426,7 +440,8 @@ export function toPersisted(agents: AgentInstance[]): PersistedAgent[] {
     startupCommand: a.startupCommand,
     agentLabel: a.agentLabel,
     agentId: a.agentId,
-    wide: a.wide
+    wide: a.wide,
+    termTheme: a.termTheme
   }))
 }
 
@@ -452,6 +467,9 @@ export const useStore = create<AppState>((set, get) => ({
   settingsOpen: false,
   paletteOpen: false,
   shortcutsOpen: false,
+  feedbackOpen: false,
+  update: null,
+  updateDismissed: false,
   diffAgentId: null,
   pendingCloseId: null,
   bulkCloseIds: null,
@@ -565,6 +583,19 @@ export const useStore = create<AppState>((set, get) => ({
   setPaletteOpen: (open) => set({ paletteOpen: open }),
 
   setShortcutsOpen: (open) => set({ shortcutsOpen: open }),
+
+  setFeedbackOpen: (open) => set({ feedbackOpen: open }),
+
+  // A fresh detection re-shows the banner even if a prior version was dismissed
+  // this session — clearing updateDismissed on a real change is the "continuous"
+  // guarantee. Re-detecting the SAME version keeps the current dismiss state.
+  setUpdate: (update) =>
+    set((s) => {
+      if (update && s.update && update.latest === s.update.latest) return { update }
+      return { update, updateDismissed: false }
+    }),
+
+  dismissUpdate: () => set({ updateDismissed: true }),
 
   setDiffAgentId: (id) => set({ diffAgentId: id }),
 

@@ -5,6 +5,7 @@ import Stage from './components/Stage'
 import Toasts from './components/Toasts'
 import Home from './components/Home'
 import ProjectBar from './components/ProjectBar'
+import UpdateBanner from './components/UpdateBanner'
 
 // On-demand overlays — split out of the initial chunk. They're never the first
 // view, and fallback={null} means no visible loading state.
@@ -12,7 +13,9 @@ const Settings = lazy(() => import('./components/Settings'))
 const CommandPalette = lazy(() => import('./components/CommandPalette'))
 const DiffPanel = lazy(() => import('./components/DiffPanel'))
 const ShortcutsHelp = lazy(() => import('./components/ShortcutsHelp'))
+const Feedback = lazy(() => import('./components/Feedback'))
 import { useStore, toPersisted, NEEDS_ATTENTION } from './store'
+import { reminderTone, reminderHeadline } from './updateReminder'
 import { openProjectByPath, restoreLastProject, saveCanvas } from './openProject'
 import { applyAccent } from './accent'
 import { applyTheme } from './theme'
@@ -26,6 +29,7 @@ export default function App(): JSX.Element {
   const settingsOpen = useStore((s) => s.settingsOpen)
   const paletteOpen = useStore((s) => s.paletteOpen)
   const shortcutsOpen = useStore((s) => s.shortcutsOpen)
+  const feedbackOpen = useStore((s) => s.feedbackOpen)
   const diffAgentId = useStore((s) => s.diffAgentId)
   const zoomFactor = useStore((s) => s.settings.zoomFactor)
   const theme = useStore((s) => s.settings.theme)
@@ -56,35 +60,40 @@ export default function App(): JSX.Element {
     void restoreLastProject()
   }, [])
 
-  // One-shot update check (main process reads the vectro-site release feed).
-  // Delayed so it never competes with startup; on a newer release a sticky
-  // toast offers the download page. Silent on failure and when up to date.
+  // Persistent update reminder. The main process reads the vectro-site release
+  // feed; we re-check on a delay after launch and then periodically, stashing
+  // the result so the sticky UpdateBanner nags until the user actually updates
+  // (the "continuous notification" the feature is about). On the first sighting
+  // of a given version this session, a louder toast also fires — its tone (and
+  // the banner's) escalates the longer the release has gone un-installed. Silent
+  // on failure and when up to date.
+  const toastedVersion = useRef<string | null>(null)
   useEffect(() => {
-    const t = window.setTimeout(() => {
+    const runCheck = (): void => {
       void window.api.update.check().then((u) => {
-        if (!u) return
-        // "Skip this version" mutes exactly that release — a later release has a
-        // different version string, so it prompts again. No expiry needed.
-        try {
-          if (localStorage.getItem('vectro.skipVersion') === u.latest) return
-        } catch {
-          /* storage unavailable — just show the toast */
-        }
-        useStore.getState().pushToast(`Monad ${u.latest} is available`, 'info', {
-          actionLabel: 'Download',
+        const st = useStore.getState()
+        st.setUpdate(u)
+        if (!u || toastedVersion.current === u.latest) return
+        toastedVersion.current = u.latest
+        const tone = reminderTone(u.latest)
+        st.pushToast(reminderHeadline(u, tone), tone.level === 'urgent' ? 'error' : 'info', {
+          actionLabel: 'Update now',
           onAction: () => void window.api.openExternal(u.url),
-          secondaryLabel: 'Skip this version',
+          secondaryLabel: 'Later',
           onSecondary: () => {
-            try {
-              localStorage.setItem('vectro.skipVersion', u.latest)
-            } catch {
-              /* storage unavailable — skip won't persist, worst case it re-toasts */
-            }
+            /* just closes the toast — the banner keeps the reminder alive */
           }
         })
       })
-    }, 5000)
-    return () => window.clearTimeout(t)
+    }
+    // Delay the first check so it never competes with startup, then re-check
+    // every 6h to catch releases cut while a long session stays open.
+    const first = window.setTimeout(runCheck, 5000)
+    const interval = window.setInterval(runCheck, 6 * 60 * 60 * 1000)
+    return () => {
+      window.clearTimeout(first)
+      window.clearInterval(interval)
+    }
   }, [])
 
   // Apply the interface zoom (scales the whole app for high-DPI displays).
@@ -163,7 +172,7 @@ export default function App(): JSX.Element {
   // React drops focus to <body>; since selectedIds doesn't change, TerminalPane's
   // selection-driven focus effect never re-fires, so typing would dead-end until
   // the user clicks a pane. rAF lets the overlay finish unmounting first.
-  const overlayOpen = settingsOpen || paletteOpen || shortcutsOpen || !!diffAgentId
+  const overlayOpen = settingsOpen || paletteOpen || shortcutsOpen || feedbackOpen || !!diffAgentId
   const prevOverlayOpen = useRef(false)
   useEffect(() => {
     if (prevOverlayOpen.current && !overlayOpen) requestAnimationFrame(focusActiveTerminal)
@@ -209,7 +218,8 @@ export default function App(): JSX.Element {
       rescanAgents()
       requestAnimationFrame(() => {
         const st = useStore.getState()
-        if (st.settingsOpen || st.paletteOpen || st.shortcutsOpen || st.diffAgentId) return
+        if (st.settingsOpen || st.paletteOpen || st.shortcutsOpen || st.feedbackOpen || st.diffAgentId)
+          return
         const el = document.activeElement
         if (el && el !== document.body) return
         // A multi-select has no single active terminal; focusing selectedIds[0] would
@@ -277,6 +287,7 @@ export default function App(): JSX.Element {
         if (st.shortcutsOpen) st.setShortcutsOpen(false)
         else if (st.diffAgentId) st.setDiffAgentId(null)
         else if (st.paletteOpen) st.setPaletteOpen(false)
+        else if (st.feedbackOpen) st.setFeedbackOpen(false)
         else if (st.settingsOpen) st.setSettingsOpen(false)
         else if (st.focusedId) {
           // Never steal Esc from a focused terminal — vim and Claude Code use
@@ -350,7 +361,8 @@ export default function App(): JSX.Element {
       // With an overlay up, the canvas is hidden — don't let ⌘T/⌘1/⌘2/⌘W/cycle
       // fire actions the user can't see (spawning panes behind Settings, silently
       // swapping layout, stealing selection). Only Escape / ⌘K / ⌘/ operate above.
-      if (st.settingsOpen || st.paletteOpen || st.shortcutsOpen || st.diffAgentId) return
+      if (st.settingsOpen || st.paletteOpen || st.shortcutsOpen || st.feedbackOpen || st.diffAgentId)
+        return
       if (!st.projectPath) return
       if (k === 't') {
         e.preventDefault()
@@ -507,6 +519,7 @@ export default function App(): JSX.Element {
       <div className="grain" aria-hidden="true" />
       <Titlebar />
       <ProjectBar />
+      <UpdateBanner />
       <div className="app__main">
         <Rail />
         <div className="app__canvas">{projectPath ? <Stage /> : <Home />}</div>
@@ -516,6 +529,7 @@ export default function App(): JSX.Element {
            diff → palette → settings), bottom to top: ⌘K over Settings must paint
            the palette ON TOP, not open it hidden underneath with focus stolen. */}
         {settingsOpen && <Settings />}
+        {feedbackOpen && <Feedback />}
         {paletteOpen && <CommandPalette />}
         {diffAgentId && <DiffPanel />}
         {/* Last: shortcuts help can be summoned over another overlay and must paint on top. */}

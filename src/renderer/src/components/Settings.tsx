@@ -27,6 +27,7 @@ export default function Settings(): JSX.Element {
   const setSetting = useStore((s) => s.setSetting)
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
   const setShortcutsOpen = useStore((s) => s.setShortcutsOpen)
+  const setFeedbackOpen = useStore((s) => s.setFeedbackOpen)
   const shells = useStore((s) => s.shells)
   const [tab, setTab] = useState<Tab>('terminal')
   // Fetched once per open — cheap IPC, and it can't change mid-session.
@@ -342,6 +343,15 @@ export default function Settings(): JSX.Element {
         {/* Footer: a subtle text link, not another nav tab — the reference is a
            one-shot overlay, not a settings category. Swaps this modal for it. */}
         <div className="settings__foot">
+          <button
+            className="settings__link"
+            onClick={() => {
+              setSettingsOpen(false)
+              setFeedbackOpen(true)
+            }}
+          >
+            Send feedback
+          </button>
           <button
             className="settings__link"
             onClick={() => {

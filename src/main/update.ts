@@ -39,6 +39,12 @@ function isNewer(latest: string, current: string): boolean {
  * surface an error). Dev runs report null; set MONAD_UPDATE_CHECK=1 to test.
  */
 export async function checkForUpdate(): Promise<UpdateInfo | null> {
+  // Dev-only harness for the update UI: `MONAD_FAKE_UPDATE=9.9.9 npm run dev`
+  // reports a synthetic newer release so the reminder banner/toast can be seen
+  // without cutting a real release. Ignored in packaged builds.
+  if (!app.isPackaged && process.env.MONAD_FAKE_UPDATE) {
+    return { current: app.getVersion(), latest: process.env.MONAD_FAKE_UPDATE, url: DOWNLOAD_URL }
+  }
   if (!app.isPackaged && process.env.MONAD_UPDATE_CHECK !== '1') return null
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), 8000)
