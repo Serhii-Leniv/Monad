@@ -13,7 +13,7 @@ const { registerIpc } = require(join(__dirname, '..', 'out', 'main', 'ipc.js'))
 
 app.disableHardwareAcceleration()
 
-const REPO = join(os.tmpdir(), 'agent-canvas-p3-' + process.pid)
+const REPO = join(os.tmpdir(), 'monad-p3-' + process.pid)
 const AGENT_ID = 'agent-bbbbbbbb'
 const errors = []
 
@@ -32,7 +32,7 @@ function setupRepo() {
 }
 
 function cleanup() {
-  for (const p of [REPO, join(os.tmpdir(), '.agent-canvas-worktrees')]) {
+  for (const p of [REPO, join(os.tmpdir(), '.monad-worktrees')]) {
     try {
       fs.rmSync(p, { recursive: true, force: true })
     } catch {

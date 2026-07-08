@@ -4,6 +4,9 @@ import { sanitizeTheme, type ThemePreference } from './theme'
 
 export type Isolation = 'worktree' | 'shared'
 export type LayoutMode = 'grid' | 'columns'
+export type SettingsTab = 'terminal' | 'appearance' | 'workspace' | 'notifications' | 'shortcuts'
+/** The one dropdown menu allowed open at a time (rail "new", project switcher). */
+export type MenuId = 'rail-new' | 'project'
 
 /** An opened project folder, surfaced as a switchable workspace in the dock. */
 export interface Workspace {
@@ -90,7 +93,7 @@ export interface AgentInstance {
   dropH?: number
 }
 
-/** Fields written to .agent-canvas/canvas.json (runtime fields stripped). */
+/** Fields written to .monad/canvas.json (runtime fields stripped). */
 export interface PersistedAgent {
   id: string
   label: string
@@ -145,9 +148,11 @@ interface AppState {
   zoom: number
   settings: AppSettings
   settingsOpen: boolean
+  /** Which Settings tab to show — also how ⌘/ deep-links to the Shortcuts tab. */
+  settingsTab: SettingsTab
+  /** Which single dropdown menu is open, if any — enforces one-popup-at-a-time. */
+  openMenu: MenuId | null
   paletteOpen: boolean
-  /** Keyboard-shortcuts help overlay (⌘/ / Ctrl+Shift+/). */
-  shortcutsOpen: boolean
   /** Feedback (bugs / ideas / comments) modal. */
   feedbackOpen: boolean
   /** A newer release, once detected — drives the persistent update banner. */
@@ -177,8 +182,10 @@ interface AppState {
   setSelected: (ids: string[]) => void
   setSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => void
   setSettingsOpen: (open: boolean) => void
+  setSettingsTab: (tab: SettingsTab) => void
+  /** Open a dropdown menu (closing any other), or pass null to close. */
+  setOpenMenu: (menu: MenuId | null) => void
   setPaletteOpen: (open: boolean) => void
-  setShortcutsOpen: (open: boolean) => void
   setFeedbackOpen: (open: boolean) => void
   /** Record a detected release (or clear it); resets the session dismiss. */
   setUpdate: (update: UpdateInfo | null) => void
@@ -269,7 +276,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   scrollback: 2000,
   copyOnSelect: true,
   confirmClose: true,
-  zoomFactor: 1.1,
+  zoomFactor: 1.0,
   theme: 'dark', // dark is the app's native look — existing users see zero change
   accent: '#ff453a',
   notifications: true,
@@ -465,8 +472,9 @@ export const useStore = create<AppState>((set, get) => ({
   draggingId: null,
   settings: loadSettings(),
   settingsOpen: false,
+  settingsTab: 'terminal',
+  openMenu: null,
   paletteOpen: false,
-  shortcutsOpen: false,
   feedbackOpen: false,
   update: null,
   updateDismissed: false,
@@ -578,13 +586,14 @@ export const useStore = create<AppState>((set, get) => ({
       return { settings }
     }),
 
-  setSettingsOpen: (open) => set({ settingsOpen: open }),
+  // Opening any overlay also closes an open dropdown menu — one popup at a time.
+  setSettingsOpen: (open) => set(open ? { settingsOpen: true, openMenu: null } : { settingsOpen: false }),
+  setSettingsTab: (tab) => set({ settingsTab: tab }),
+  setOpenMenu: (menu) => set({ openMenu: menu }),
 
-  setPaletteOpen: (open) => set({ paletteOpen: open }),
+  setPaletteOpen: (open) => set(open ? { paletteOpen: true, openMenu: null } : { paletteOpen: false }),
 
-  setShortcutsOpen: (open) => set({ shortcutsOpen: open }),
-
-  setFeedbackOpen: (open) => set({ feedbackOpen: open }),
+  setFeedbackOpen: (open) => set(open ? { feedbackOpen: true, openMenu: null } : { feedbackOpen: false }),
 
   // A fresh detection re-shows the banner even if a prior version was dismissed
   // this session — clearing updateDismissed on a real change is the "continuous"

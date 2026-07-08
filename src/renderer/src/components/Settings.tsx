@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import { useStore, FONT_FAMILIES } from '../store'
+import { useStore, FONT_FAMILIES, type SettingsTab } from '../store'
 import { ACCENT_PRESETS } from '../accent'
 import { THEME_OPTIONS } from '../theme'
 import { IconClose, IconTerminal, IconFolder, IconBell } from './Icons'
-import { modLabel } from '../shortcuts'
+import { modLabel, altModLabel, plainModLabel, shiftModLabel } from '../shortcuts'
 import { previewCue } from '../sound'
 
-type Tab = 'terminal' | 'appearance' | 'workspace' | 'notifications'
+type Tab = SettingsTab
 
 const IconAppearance = (): JSX.Element => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7}>
@@ -15,21 +15,74 @@ const IconAppearance = (): JSX.Element => (
   </svg>
 )
 
+const IconKeyboard = (): JSX.Element => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="6" width="20" height="12" rx="2" />
+    <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8" />
+  </svg>
+)
+
 const TABS: { id: Tab; label: string; icon: JSX.Element }[] = [
   { id: 'terminal', label: 'Terminal', icon: <IconTerminal /> },
   { id: 'appearance', label: 'Appearance', icon: <IconAppearance /> },
   { id: 'workspace', label: 'Workspace', icon: <IconFolder /> },
-  { id: 'notifications', label: 'Notifications', icon: <IconBell /> }
+  { id: 'notifications', label: 'Notifications', icon: <IconBell /> },
+  { id: 'shortcuts', label: 'Shortcuts', icon: <IconKeyboard /> }
+]
+
+/** Static keyboard-shortcuts reference, shown as a Settings tab. Labels come
+ *  from the shortcuts.ts helpers so they always match the real platform chords. */
+const SHORTCUT_SECTIONS: { title: string; rows: { label: string; keys?: string; note?: string }[] }[] = [
+  {
+    title: 'Terminals',
+    rows: [
+      { label: 'New terminal', keys: modLabel('T') },
+      { label: 'Close terminal', keys: modLabel('W') },
+      { label: 'Cycle next / previous', keys: shiftModLabel(']') + ' / ' + shiftModLabel('[') },
+      { label: 'Maximize / restore', keys: shiftModLabel('Enter') },
+      { label: 'Move selection spatially', keys: modLabel('Arrows') },
+      { label: 'Find in terminal', keys: plainModLabel('F') },
+      { label: 'Copy selection', keys: plainModLabel('C') },
+      { label: 'Paste', keys: plainModLabel('V') }
+    ]
+  },
+  {
+    title: 'Canvas',
+    rows: [
+      { label: 'Layout: Grid', keys: modLabel('1') },
+      { label: 'Layout: Columns', keys: modLabel('2') },
+      { label: 'Wide card on / off', note: 'card header button' },
+      { label: 'Broadcast to terminals', note: 'select 2+ cards' }
+    ]
+  },
+  {
+    title: 'Workspaces',
+    rows: [
+      { label: 'Switch workspace 1–9', keys: altModLabel('1…9') },
+      { label: 'Open project', note: 'command palette' }
+    ]
+  },
+  {
+    title: 'App',
+    rows: [
+      { label: 'Command palette', keys: modLabel('K') },
+      { label: 'Keyboard shortcuts', keys: modLabel('/') },
+      { label: 'Zoom interface in / out', keys: plainModLabel('+') + ' / ' + plainModLabel('−') },
+      { label: 'Reset interface zoom', keys: plainModLabel('0') }
+    ]
+  }
 ]
 
 export default function Settings(): JSX.Element {
   const settings = useStore((s) => s.settings)
   const setSetting = useStore((s) => s.setSetting)
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
-  const setShortcutsOpen = useStore((s) => s.setShortcutsOpen)
+  const setPaletteOpen = useStore((s) => s.setPaletteOpen)
   const setFeedbackOpen = useStore((s) => s.setFeedbackOpen)
   const shells = useStore((s) => s.shells)
-  const [tab, setTab] = useState<Tab>('terminal')
+  // Seed once at mount from the store so ⌘/ and the palette can deep-link to
+  // the Shortcuts tab; after that the nav drives it locally.
+  const [tab, setTab] = useState<Tab>(() => useStore.getState().settingsTab)
   // Fetched once per open — cheap IPC, and it can't change mid-session.
   const [version, setVersion] = useState('')
   useEffect(() => {
@@ -337,11 +390,30 @@ export default function Settings(): JSX.Element {
                 </label>
               </>
             )}
+
+            {tab === 'shortcuts' && (
+              <div className="shortcuts__grid">
+                {SHORTCUT_SECTIONS.map((sec) => (
+                  <section key={sec.title} className="shortcuts__section">
+                    <h3 className="shortcuts__heading">{sec.title}</h3>
+                    {sec.rows.map((row) => (
+                      <div key={row.label} className="shortcuts__row">
+                        <span className="shortcuts__label">{row.label}</span>
+                        <span className="shortcuts__dots" aria-hidden="true" />
+                        {row.keys ? (
+                          <kbd className="kbd">{row.keys}</kbd>
+                        ) : (
+                          <span className="shortcuts__note">{row.note}</span>
+                        )}
+                      </div>
+                    ))}
+                  </section>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Footer: a subtle text link, not another nav tab — the reference is a
-           one-shot overlay, not a settings category. Swaps this modal for it. */}
         <div className="settings__foot">
           <button
             className="settings__link"
@@ -356,11 +428,11 @@ export default function Settings(): JSX.Element {
             className="settings__link"
             onClick={() => {
               setSettingsOpen(false)
-              setShortcutsOpen(true)
+              setPaletteOpen(true)
             }}
           >
-            Keyboard shortcuts
-            <kbd className="kbd">{modLabel('/')}</kbd>
+            Command palette
+            <kbd className="kbd">{modLabel('K')}</kbd>
           </button>
           {version && <span className="settings__version">Monad v{version}</span>}
         </div>

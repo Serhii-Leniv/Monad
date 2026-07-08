@@ -13,5 +13,5 @@ dist/
 b.out
 
 # Per-project runtime data (terminal layout) + agent worktrees
-.agent-canvas/
-.agent-canvas-worktrees/
+.monad/
+.monad-worktrees/

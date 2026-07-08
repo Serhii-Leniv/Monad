@@ -71,7 +71,7 @@ export function worktreeInfo(
   agentId: string
 ): { path: string; branch: string; container: string } {
   const short = shortId(agentId)
-  const container = join(dirname(repoRoot), '.agent-canvas-worktrees')
+  const container = join(dirname(repoRoot), '.monad-worktrees')
   return {
     container,
     path: join(container, `${basename(repoRoot)}-${short}`),
@@ -159,7 +159,7 @@ function normPath(p: string): string {
  * Worktrees left behind by crashed / force-quit sessions. `worktree prune` at
  * project open can't help — these are still registered, with live folders and
  * branches. Detection is deliberately narrow: only entries inside THIS repo's
- * `.agent-canvas-worktrees` container that follow this repo's `<repoName>-<short>`
+ * `.monad-worktrees` container that follow this repo's `<repoName>-<short>`
  * naming, minus the ones owned by current agents (derived via the exact same
  * worktreeInfo the app creates worktrees with, so a live agent can never match).
  */

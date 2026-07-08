@@ -29,6 +29,11 @@
 }
 
 :root {
+  /* Render native controls (textarea/input/select popups, scrollbars, the form
+     UA base) in the app's scheme. Without this, on a light-mode OS the dark
+     app's TRANSLUCENT --surface-input lets the UA's white base leak through, so
+     the feedback/settings inputs look white inside the dark UI. */
+  color-scheme: dark;
   /* Professional dark palette (Apple dark-mode + dev tools) */
   /* Off-white with the palette's cool cast — softer on the eyes than pure
      white on dark glass, while staying comfortably above AA contrast. */
@@ -148,6 +153,7 @@
    pane veil, and the xterm ANSI palette in TerminalPane.tsx all follow).
 ---------------------------------------------------------------------------- */
 :root[data-theme='light'] {
+  color-scheme: light;
   /* Ink scale on warm paper-white: near-black body text, secondary kept dark
      enough (~#5a5f6b when blended) to hold ≥4.5:1 on the light surfaces. */
   --text: rgba(26, 29, 36, 0.95);
@@ -1109,6 +1115,10 @@ body.has-wallpaper .aurora {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* overflow:hidden (for the ellipsis) clips to the line box, so the tight
+     1.05 line-height inherited from .projbar__text would cut off descenders
+     like the "g" in a display serif. Give the name room for them. */
+  line-height: 1.3;
 }
 .projbar__name--muted {
   color: var(--text-2);
@@ -1168,6 +1178,49 @@ body.has-wallpaper .aurora {
   border-color: rgba(255, 159, 10, 0.7);
   box-shadow: 0 0 0 2px rgba(255, 159, 10, 0.45);
 }
+/* Command-palette launcher chip beside the project pill — neutral glass so it
+   reads as a quiet utility, not a status like the amber isolation chip. */
+.projbar__cmdk {
+  align-self: center;
+  margin-left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px 5px 8px;
+  color: var(--muted);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.015) 58%),
+    rgba(15, 21, 32, 0.4);
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  cursor: pointer;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 6px 18px rgba(0, 0, 0, 0.32);
+  transition:
+    color var(--dur-select) var(--ease-out),
+    border-color var(--dur-select) var(--ease-out),
+    background var(--dur-select) var(--ease-out);
+}
+.projbar__cmdk:hover {
+  color: var(--text-2);
+  border-color: var(--line-1);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03) 58%),
+    rgba(15, 21, 32, 0.5);
+}
+.projbar__cmdk:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.projbar__cmdk-key {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
 .projbar__backdrop {
   position: fixed;
   inset: 0;
@@ -1517,16 +1570,6 @@ body.has-wallpaper .vec-pane__term {
 
 .stage.is-dragging-any .vec-pane__term,
 .stage.is-dragging-any .vec-pane__header {
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
-
-/* Text selection inside a terminal: drop the blur on JUST that pane so drag-
-   selecting stays smooth over a wallpaper. The node-drag rule above only covers
-   moving panes; a selection drag (the pane's own .is-selecting, set by TerminalPane
-   once a drag actually starts) repaints the blurred translucent layer every frame
-   otherwise. Scoped to the dragged pane so other terminals never flicker. */
-.vec-pane__term.is-selecting {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
@@ -2784,6 +2827,22 @@ body.has-wallpaper .vec-pane__term {
 
 .shortcuts__col {
   min-width: 0;
+}
+
+/* Shortcuts rendered inside the Settings body (the "Shortcuts" tab). The body
+   is only ~380px wide, so a single full-width column — two columns would be too
+   narrow and the label would collide with wide keycaps like "⇧⌘] / ⇧⌘[". */
+.shortcuts__grid {
+  display: flex;
+  flex-direction: column;
+}
+/* Keep the label from ever pushing over the keycap: the label shrinks (min-width
+   0) and the keycap holds its size. */
+.shortcuts__grid .shortcuts__label {
+  min-width: 0;
+}
+.shortcuts__grid .kbd {
+  flex: 0 0 auto;
 }
 
 .shortcuts__section {

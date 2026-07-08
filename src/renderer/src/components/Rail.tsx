@@ -1,5 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
-import Logo from './Logo'
+import { useMemo, useRef } from 'react'
 import { IconTerminal, IconGrid, IconColumns, IconSettings, IconBell } from './Icons'
 import { useStore, NEEDS_ATTENTION, MAX_AGENTS } from '../store'
 import { modLabel } from '../shortcuts'
@@ -15,8 +14,10 @@ export default function Rail(): JSX.Element {
   const agents = useStore((s) => s.agents)
   const agentClis = useStore((s) => s.agentClis)
   const full = agents.length >= MAX_AGENTS
-  const [newOpen, setNewOpen] = useState(false)
-  const [utilOpen, setUtilOpen] = useState(false)
+  // Single shared menu state — opening this closes the project switcher, etc.
+  const newOpen = useStore((s) => s.openMenu === 'rail-new')
+  const setOpenMenu = useStore((s) => s.setOpenMenu)
+  const setNewOpen = (open: boolean): void => setOpenMenu(open ? 'rail-new' : null)
   const layoutMode = useStore((s) => s.layoutMode)
   // Derive with useMemo — a selector that returns a fresh array on every call
   // breaks React 18's useSyncExternalStore (unstable snapshot → render crash).
@@ -28,8 +29,6 @@ export default function Rail(): JSX.Element {
   const setLayoutMode = useStore((s) => s.setLayoutMode)
   const focusTerminal = useStore((s) => s.focusTerminal)
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
-  const setPaletteOpen = useStore((s) => s.setPaletteOpen)
-  const setShortcutsOpen = useStore((s) => s.setShortcutsOpen)
 
   // Cycle focus through the agents that currently need you.
   const cycleRef = useRef(0)
@@ -43,18 +42,12 @@ export default function Rail(): JSX.Element {
   return (
     <div className="rail-dock">
       <div className="rail">
-        <div className="rail__logo" data-tip="Monad">
-          <Logo size={34} />
-        </div>
-
         {projectPath && (
           <>
-            <div className="rail__divider" />
-
             <div className="rail__new">
               <button
                 className="rail-btn rail-btn--primary"
-                onClick={() => (agentClis.length ? setNewOpen((v) => !v) : addAgent())}
+                onClick={() => (agentClis.length ? setNewOpen(!newOpen) : addAgent())}
                 disabled={full}
                 aria-label="New terminal"
                 data-tip={
@@ -136,55 +129,17 @@ export default function Rail(): JSX.Element {
           </button>
         )}
 
-        {/* One quiet utility button instead of palette + gear: the gear opens a
-           compact menu (palette, shortcuts, settings) so the dock stays short. */}
-        <div className="rail__util">
-          <button
-            className="rail-btn"
-            onClick={() => setUtilOpen((v) => !v)}
-            aria-label="Settings and more"
-            data-tip={utilOpen ? undefined : 'Settings & more'}
-          >
-            <IconSettings />
-          </button>
-          {utilOpen && (
-            <>
-              <div className="rail__backdrop" onClick={() => setUtilOpen(false)} />
-              <div className="rail__menu rail__utilmenu">
-                <button
-                  className="rail__menu-item"
-                  onClick={() => {
-                    setUtilOpen(false)
-                    setPaletteOpen(true)
-                  }}
-                >
-                  Command palette
-                  <span className="rail__menu-hint">{modLabel('K')}</span>
-                </button>
-                <button
-                  className="rail__menu-item"
-                  onClick={() => {
-                    setUtilOpen(false)
-                    setShortcutsOpen(true)
-                  }}
-                >
-                  Keyboard shortcuts
-                  <span className="rail__menu-hint">{modLabel('/')}</span>
-                </button>
-                <div className="rail__menu-sep" />
-                <button
-                  className="rail__menu-item"
-                  onClick={() => {
-                    setUtilOpen(false)
-                    setSettingsOpen(true)
-                  }}
-                >
-                  Settings…
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+        {/* The gear opens Settings directly — the dock stays minimal. Command
+           palette and keyboard shortcuts live inside Settings (and keep their
+           own hotkeys), so they don't need a spot on the rail. */}
+        <button
+          className="rail-btn"
+          onClick={() => setSettingsOpen(true)}
+          aria-label="Settings"
+          data-tip="Settings"
+        >
+          <IconSettings />
+        </button>
       </div>
     </div>
   )

@@ -97,7 +97,7 @@ interface FeedbackResult {
   error?: 'not-configured' | 'empty' | 'network' | 'rejected'
 }
 
-/** Shape of the per-project canvas file (.agent-canvas/canvas.json). */
+/** Shape of the per-project canvas file (.monad/canvas.json). */
 interface PersistedCanvas {
   layoutMode?: 'grid' | 'columns' | 'preview' | 'free'
   previewUrl?: string

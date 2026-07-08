@@ -12,7 +12,6 @@ import UpdateBanner from './components/UpdateBanner'
 const Settings = lazy(() => import('./components/Settings'))
 const CommandPalette = lazy(() => import('./components/CommandPalette'))
 const DiffPanel = lazy(() => import('./components/DiffPanel'))
-const ShortcutsHelp = lazy(() => import('./components/ShortcutsHelp'))
 const Feedback = lazy(() => import('./components/Feedback'))
 import { useStore, toPersisted, NEEDS_ATTENTION } from './store'
 import { reminderTone, reminderHeadline } from './updateReminder'
@@ -28,7 +27,6 @@ export default function App(): JSX.Element {
   const setAgentClis = useStore((s) => s.setAgentClis)
   const settingsOpen = useStore((s) => s.settingsOpen)
   const paletteOpen = useStore((s) => s.paletteOpen)
-  const shortcutsOpen = useStore((s) => s.shortcutsOpen)
   const feedbackOpen = useStore((s) => s.feedbackOpen)
   const diffAgentId = useStore((s) => s.diffAgentId)
   const zoomFactor = useStore((s) => s.settings.zoomFactor)
@@ -172,7 +170,7 @@ export default function App(): JSX.Element {
   // React drops focus to <body>; since selectedIds doesn't change, TerminalPane's
   // selection-driven focus effect never re-fires, so typing would dead-end until
   // the user clicks a pane. rAF lets the overlay finish unmounting first.
-  const overlayOpen = settingsOpen || paletteOpen || shortcutsOpen || feedbackOpen || !!diffAgentId
+  const overlayOpen = settingsOpen || paletteOpen || feedbackOpen || !!diffAgentId
   const prevOverlayOpen = useRef(false)
   useEffect(() => {
     if (prevOverlayOpen.current && !overlayOpen) requestAnimationFrame(focusActiveTerminal)
@@ -218,8 +216,7 @@ export default function App(): JSX.Element {
       rescanAgents()
       requestAnimationFrame(() => {
         const st = useStore.getState()
-        if (st.settingsOpen || st.paletteOpen || st.shortcutsOpen || st.feedbackOpen || st.diffAgentId)
-          return
+        if (st.settingsOpen || st.paletteOpen || st.feedbackOpen || st.diffAgentId) return
         const el = document.activeElement
         if (el && el !== document.body) return
         // A multi-select has no single active terminal; focusing selectedIds[0] would
@@ -284,8 +281,7 @@ export default function App(): JSX.Element {
     const onKey = (e: KeyboardEvent): void => {
       const st = useStore.getState()
       if (e.key === 'Escape') {
-        if (st.shortcutsOpen) st.setShortcutsOpen(false)
-        else if (st.diffAgentId) st.setDiffAgentId(null)
+        if (st.diffAgentId) st.setDiffAgentId(null)
         else if (st.paletteOpen) st.setPaletteOpen(false)
         else if (st.feedbackOpen) st.setFeedbackOpen(false)
         else if (st.settingsOpen) st.setSettingsOpen(false)
@@ -350,19 +346,22 @@ export default function App(): JSX.Element {
         st.setPaletteOpen(!st.paletteOpen)
         return
       }
-      // ⌘/ (Ctrl+Shift+/): keyboard-shortcuts help. On layouts where Shift+/
-      // types '?', the Windows chord reports key === '?' — match both. Like ⌘K
-      // this toggles even over another overlay (it renders on top).
+      // ⌘/ (Ctrl+Shift+/): deep-link to the Shortcuts tab in Settings. On
+      // layouts where Shift+/ types '?', the Windows chord reports key === '?' —
+      // match both. Toggles: press again while it's showing to close.
       if (e.key === '/' || e.key === '?') {
         e.preventDefault()
-        st.setShortcutsOpen(!st.shortcutsOpen)
+        if (st.settingsOpen && st.settingsTab === 'shortcuts') st.setSettingsOpen(false)
+        else {
+          st.setSettingsTab('shortcuts')
+          st.setSettingsOpen(true)
+        }
         return
       }
       // With an overlay up, the canvas is hidden — don't let ⌘T/⌘1/⌘2/⌘W/cycle
       // fire actions the user can't see (spawning panes behind Settings, silently
       // swapping layout, stealing selection). Only Escape / ⌘K / ⌘/ operate above.
-      if (st.settingsOpen || st.paletteOpen || st.shortcutsOpen || st.feedbackOpen || st.diffAgentId)
-        return
+      if (st.settingsOpen || st.paletteOpen || st.feedbackOpen || st.diffAgentId) return
       if (!st.projectPath) return
       if (k === 't') {
         e.preventDefault()
@@ -525,15 +524,13 @@ export default function App(): JSX.Element {
         <div className="app__canvas">{projectPath ? <Stage /> : <Home />}</div>
       </div>
       <Suspense fallback={null}>
-        {/* Stacking order mirrors the Escape handler's close order (shortcuts →
-           diff → palette → settings), bottom to top: ⌘K over Settings must paint
-           the palette ON TOP, not open it hidden underneath with focus stolen. */}
+        {/* Stacking order mirrors the Escape handler's close order (diff →
+           palette → settings), bottom to top: ⌘K over Settings must paint the
+           palette ON TOP, not open it hidden underneath with focus stolen. */}
         {settingsOpen && <Settings />}
         {feedbackOpen && <Feedback />}
         {paletteOpen && <CommandPalette />}
         {diffAgentId && <DiffPanel />}
-        {/* Last: shortcuts help can be summoned over another overlay and must paint on top. */}
-        {shortcutsOpen && <ShortcutsHelp />}
       </Suspense>
       {bulkCloseIds && (
         <div className="modal" onPointerDown={clearBulkClose}>

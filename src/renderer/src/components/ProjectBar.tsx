@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useStore } from '../store'
 import {
   openProjectInteractive,
@@ -7,7 +7,7 @@ import {
   initGitForProject
 } from '../openProject'
 import { emblemStyle } from '../projectColor'
-import { altModLabel } from '../shortcuts'
+import { altModLabel, modLabel } from '../shortcuts'
 
 function initial(name: string): string {
   const m = name.match(/[a-z0-9]/i)
@@ -26,10 +26,13 @@ function prettyPath(p: string): string {
 export default function ProjectBar(): JSX.Element {
   const projectPath = useStore((s) => s.projectPath)
   const projectName = useStore((s) => s.projectName)
+  const setPaletteOpen = useStore((s) => s.setPaletteOpen)
   const isGit = useStore((s) => s.isGit)
   const workspaces = useStore((s) => s.workspaces)
-  const [open, setOpen] = useState(false)
-  const closeMenu = (): void => setOpen(false)
+  // Single shared menu state — opening this closes the rail's "new" menu, etc.
+  const open = useStore((s) => s.openMenu === 'project')
+  const setOpenMenu = useStore((s) => s.setOpenMenu)
+  const closeMenu = (): void => setOpenMenu(null)
 
   // Esc closes the switcher — parity with every other overlay, and the only
   // keyboard dismiss (the backdrop is mouse-only).
@@ -38,7 +41,7 @@ export default function ProjectBar(): JSX.Element {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
         e.stopPropagation()
-        setOpen(false)
+        setOpenMenu(null)
       }
     }
     window.addEventListener('keydown', onKey, true)
@@ -49,7 +52,7 @@ export default function ProjectBar(): JSX.Element {
     <div className="projbar">
       <button
         className={'projbar__btn' + (open ? ' is-open' : '')}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpenMenu(open ? null : 'project')}
         aria-haspopup="menu"
         aria-expanded={open}
         title={projectPath ? `${projectName} — switch project` : 'Open a project'}
@@ -86,6 +89,22 @@ export default function ProjectBar(): JSX.Element {
             strokeLinejoin="round"
           />
         </svg>
+      </button>
+
+      {/* Quick-launcher affordance — the palette is otherwise invisible (⌘K
+          only). Sits by the centered pill because the top corners are taken by
+          the window controls (mac traffic lights / Windows caption buttons). */}
+      <button
+        className="projbar__cmdk"
+        onClick={() => setPaletteOpen(true)}
+        title="Command palette — run a command or jump to a terminal"
+        aria-label="Open command palette"
+      >
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" />
+          <path d="M21 21l-4.3-4.3" />
+        </svg>
+        <span className="projbar__cmdk-key">{modLabel('K')}</span>
       </button>
 
       {/* Persistent shared-mode indicator: unlike the one-shot open toast, this

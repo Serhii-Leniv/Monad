@@ -53,9 +53,9 @@ src/
 
 - **Terminals:** xterm.js ↔ `node-pty` (prebuilt) over IPC.
 - **Isolation:** `git worktree add` per agent (branch `canvas/<id>`), kept in a sibling
-  `.agent-canvas-worktrees/` folder. Agents are cwd-pinned via `Set-Location` after spawn so a
+  `.monad-worktrees/` folder. Agents are cwd-pinned via `Set-Location` after spawn so a
   shell profile can't move them out of their worktree.
-- **Persistence:** one canvas per project in `<project>/.agent-canvas/canvas.json`.
+- **Persistence:** one canvas per project in `<project>/.monad/canvas.json`.
 - **Updates:** on launch the main process checks the
   [vectro-site](https://github.com/Serhii-Leniv/vectro-site) release feed and, on a newer
   version, shows an in-app toast linking to the download site. No auto-download, no
