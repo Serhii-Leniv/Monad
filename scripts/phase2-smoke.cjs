@@ -13,7 +13,7 @@ const { registerIpc } = require(join(__dirname, '..', 'out', 'main', 'ipc.js'))
 
 app.disableHardwareAcceleration()
 
-const REPO = join(os.tmpdir(), 'agent-canvas-p2-' + process.pid)
+const REPO = join(os.tmpdir(), 'monad-p2-' + process.pid)
 const errors = []
 
 function git(args) {
@@ -159,7 +159,7 @@ function cleanup() {
     /* ignore */
   }
   try {
-    fs.rmSync(join(os.tmpdir(), '.agent-canvas-worktrees'), { recursive: true, force: true })
+    fs.rmSync(join(os.tmpdir(), '.monad-worktrees'), { recursive: true, force: true })
   } catch {
     /* ignore */
   }

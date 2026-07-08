@@ -19,6 +19,65 @@ import AgentBadge from './AgentBadge'
 // eslint-disable-next-line no-control-regex
 const CURSOR_STYLE_SEQ = /\x1b\[[0-9]* q/g
 
+/** Shell command that pins the agent to its worktree dir, per shell. Returns
+ *  null when there's no cwd to pin or the shell is unknown (spawn cwd stands). */
+function buildCd(sid: string | undefined, win: boolean, cwd: string): string | null {
+  if (!cwd) return null
+  if (sid === 'powershell' || sid === 'pwsh' || (win && !sid))
+    return `Set-Location -LiteralPath '${cwd.replace(/'/g, "''")}'`
+  if (sid === 'cmd') return `cd /d "${cwd}"`
+  if (sid === 'gitbash') {
+    const posix = cwd.replace(/\\/g, '/')
+    return `cd '${posix.replace(/'/g, "'\\''")}'`
+  }
+  if (!win) return `cd '${cwd.replace(/'/g, "'\\''")}'`
+  return null
+}
+
+/** Find `token` in `raw`, tolerating ANSI/control sequences interspersed between
+ *  its characters (ConPTY + PSReadLine render output with cursor/SGR codes mixed
+ *  in, so a plain indexOf on the raw stream misses it). Returns the raw index
+ *  just AFTER the token's last character, or -1 if not (yet) present. */
+function rawIndexAfterToken(raw: string, token: string): number {
+  let clean = ''
+  const map: number[] = [] // clean char index -> raw index
+  for (let i = 0; i < raw.length; ) {
+    if (raw[i] === '\x1b') {
+      i++
+      if (raw[i] === '[') {
+        i++
+        while (i < raw.length && (raw.charCodeAt(i) < 0x40 || raw.charCodeAt(i) > 0x7e)) i++
+        i++ // the final byte
+      } else if (raw[i] === ']') {
+        i++
+        while (i < raw.length && raw[i] !== '\x07' && !(raw[i] === '\x1b' && raw[i + 1] === '\\')) i++
+        i += raw[i] === '\x1b' ? 2 : 1
+      } else {
+        i++
+      }
+      continue
+    }
+    clean += raw[i]
+    map.push(i)
+    i++
+  }
+  const idx = clean.indexOf(token)
+  if (idx === -1) return -1
+  return map[idx + token.length - 1] + 1
+}
+
+/** A command that prints `mark` to stdout so it lands (ANSI-strippable) in the
+ *  output only — the echoed command splits the token across a concat/two vars, so
+ *  the quiet-boot watcher can match the whole token without false-firing on echo. */
+function buildMarkerCmd(sid: string | undefined, win: boolean, mark: string): string {
+  const a = mark.slice(0, 3)
+  const b = mark.slice(3)
+  if (sid === 'powershell' || sid === 'pwsh' || (win && !sid))
+    return `Write-Host -NoNewline ('${a}'+'${b}')`
+  if (sid === 'cmd') return `set _m1=${a}&&set _m2=${b}&&<nul set /p=%_m1%%_m2%`
+  return `printf %s '${a}''${b}'`
+}
+
 /** Floor for the maximized pane before the canvas has reported its size. */
 const MIN_FOCUS_SIZE = 200
 
@@ -130,6 +189,9 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
   const confirmClose = useStore((s) => s.settings.confirmClose)
   const renameAgent = useStore((s) => s.renameAgent)
   const toggleWide = useStore((s) => s.toggleWide)
+  // With a single pane there's nothing to weigh a "wider" card against — it
+  // already fills the row — so the toggle would be inert. Hide it below 2.
+  const agentCount = useStore((s) => s.agents.length)
   const focusTerminal = useStore((s) => s.focusTerminal)
   const clearFocus = useStore((s) => s.clearFocus)
   const focused = useStore((s) => s.focusedId === id)
@@ -320,32 +382,17 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     // All, keyboard) never produce a mouseup, so a short-debounced onSelectionChange
     // still covers them — but it skips while a mouse drag is in flight so the two
     // paths never double-copy.
-    //
-    // While an actual drag is in flight we add `.is-selecting` to THIS pane's term
-    // host (not a global class) so CSS drops just this terminal's backdrop blur and
-    // selecting stays smooth over a wallpaper — added on first move, so a plain click
-    // never flickers the blur.
     let selecting = false
-    let dragging = false
     const onTermMouseDown = (e: MouseEvent): void => {
       if (e.button !== 0) return
       selecting = true
-      dragging = false
-    }
-    const onTermMouseMove = (): void => {
-      if (selecting && !dragging) {
-        dragging = true
-        host.classList.add('is-selecting')
-      }
     }
     // `copy=false` (window blur) just tears the gesture down without touching the
     // clipboard — the button was released outside the OS window (mouseup swallowed),
-    // so we must not leave `selecting`/`.is-selecting` stuck nor clobber the clipboard.
+    // so we must not leave `selecting` stuck nor clobber the clipboard.
     const endSelect = (copy: boolean): void => {
       if (!selecting) return
       selecting = false
-      dragging = false
-      host.classList.remove('is-selecting')
       if (!copy) return
       if (!useStore.getState().settings.copyOnSelect) return
       if (!term.hasSelection()) return
@@ -369,7 +416,6 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     // Capture phase: xterm handles mouse events on its inner screen element, so
     // listen on the way DOWN to reliably catch the press/move/release regardless.
     host.addEventListener('mousedown', onTermMouseDown, true)
-    host.addEventListener('mousemove', onTermMouseMove, true)
     window.addEventListener('mouseup', onWinMouseUp, true)
     window.addEventListener('blur', onWinBlur)
 
@@ -660,6 +706,77 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       setAgentRuntime(id, { ptyId: pid })
       setStatus(id, 'idle')
 
+      // --- Quiet boot -----------------------------------------------------
+      // The injected cwd-pin (and a known agent's launch command) would echo —
+      // flashing `Set-Location …` and the raw command before the agent paints.
+      // Hold the VISIBLE render back until the shell signals the cwd-pin is done
+      // (a printed sentinel) and the agent takes over the alternate screen, then
+      // reveal a clean start. Output still reaches onActivity (status + the
+      // missing-bin watch) — only rendering waits. A hard timeout always reveals,
+      // so an unexpected shell can never leave the pane blank.
+      const sid = shell?.id
+      const winPlat = window.api.platform === 'win32'
+      const cdCmd = buildCd(sid, winPlat, wt.cwd)
+      const hideAgent = !!agent.agentId && !!agent.startupCommand
+      const MARK = 'M0nadRdy' // contiguous only in the sentinel's OUTPUT, not its echo
+      let booting = !!cdCmd || hideAgent
+      let bootPhase: 'cwd' | 'agent' = cdCmd ? 'cwd' : 'agent'
+      let bootAccum = ''
+      let bootTimer = 0
+      let startupSent = false
+      const stripSeq = (x: string): string => x.replace(CURSOR_STYLE_SEQ, '')
+      const sendStartup = (): void => {
+        if (startupSent || !agent.startupCommand) return
+        startupSent = true
+        // Arm the missing-binary watch from when the command is sent.
+        spawnedAt = Date.now()
+        window.api.pty.write(pid, agent.startupCommand + '\r')
+      }
+      const endBoot = (tail: string): void => {
+        booting = false
+        window.clearTimeout(bootTimer)
+        if (disposed) return
+        term.reset()
+        if (tail) term.write(stripSeq(tail))
+      }
+      const armBootTimeout = (): void => {
+        window.clearTimeout(bootTimer)
+        // Safety net: if the sentinel / alt-screen never shows (an exotic shell,
+        // a non-TUI agent), reveal what we have and make sure the agent launched.
+        bootTimer = window.setTimeout(() => {
+          if (disposed) return
+          const tail = bootAccum
+          bootAccum = ''
+          endBoot(tail)
+          sendStartup()
+        }, 2500)
+      }
+      const onBootData = (s: string): void => {
+        if (disposed) return
+        bootAccum += s
+        if (bootPhase === 'cwd') {
+          const j = rawIndexAfterToken(bootAccum, MARK)
+          if (j === -1) return
+          const tail = bootAccum.slice(j)
+          bootAccum = ''
+          if (hideAgent) {
+            // cwd pinned & hidden; launch the agent, still hidden, and reveal
+            // when its TUI takes over the alternate screen.
+            bootPhase = 'agent'
+            term.reset()
+            sendStartup()
+            armBootTimeout()
+          } else {
+            endBoot(tail) // clean prompt; a non-agent command (if any) shows normally
+            sendStartup()
+          }
+        } else {
+          // Agent phase: reveal the moment the TUI enters the alternate screen.
+          const i = bootAccum.indexOf('\x1b[?1049h')
+          if (i !== -1) endBoot(bootAccum.slice(i))
+        }
+      }
+
       // The DECSCUSR strip is chunk-boundary safe: a sequence split across two
       // PTY chunks is held back (carry) and stripped once complete — otherwise
       // the leaked half re-enabled the fast-blink cursor it exists to suppress.
@@ -672,7 +789,10 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
           seqCarry = partial[0]
           s = s.slice(0, s.length - partial[0].length)
         }
-        if (s) term.write(s.replace(CURSOR_STYLE_SEQ, ''))
+        if (s) {
+          if (booting) onBootData(s)
+          else term.write(stripSeq(s))
+        }
         onActivity(d)
       }))
       unsubs.push(
@@ -724,31 +844,22 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
         }
       })
 
-      if (wt.cwd) {
-        const sid = shell?.id
-        const win = window.api.platform === 'win32'
-        let cd: string | null = null
-        if (sid === 'powershell' || sid === 'pwsh' || (win && !sid)) {
-          cd = `Set-Location -LiteralPath '${wt.cwd.replace(/'/g, "''")}'`
-        } else if (sid === 'cmd') {
-          cd = `cd /d "${wt.cwd}"`
-        } else if (sid === 'gitbash') {
-          // MSYS bash: forward-slash drive path in POSIX single quotes. Previously
-          // NO branch matched git-bash on Windows, so an "isolated" git-bash relied
-          // solely on the spawn cwd — a profile that cd's on login dropped the agent
-          // out of its worktree with nothing re-asserting it.
-          const posix = wt.cwd.replace(/\\/g, '/')
-          cd = `cd '${posix.replace(/'/g, "'\\''")}'`
-        } else if (!win) {
-          cd = `cd '${wt.cwd.replace(/'/g, "'\\''")}'`
-        }
-        if (cd) window.api.pty.write(pid, cd + '\r')
-      }
-      if (agent.startupCommand) {
-        // Arm the missing-binary watch from the moment the command is sent (not
-        // shell spawn — a slow profile could eat most of the window otherwise).
-        spawnedAt = Date.now()
-        window.api.pty.write(pid, agent.startupCommand + '\r')
+      // Kick off the (quiet) bootstrap. With nothing to hide it behaves exactly
+      // as before: pin the cwd, then run the startup command.
+      if (!booting) {
+        if (cdCmd) window.api.pty.write(pid, cdCmd + '\r')
+        sendStartup()
+      } else if (cdCmd) {
+        // Pin the cwd, then print the sentinel so we know when its echo/output is
+        // done and can reveal a clean screen (see onBootData).
+        window.api.pty.write(pid, cdCmd + '\r')
+        window.api.pty.write(pid, buildMarkerCmd(sid, winPlat, MARK) + '\r')
+        armBootTimeout()
+      } else {
+        // No cwd to pin but a known agent to hide: launch it straight away,
+        // hidden, and reveal when its TUI takes over the screen.
+        sendStartup()
+        armBootTimeout()
       }
     }
     void start().catch((e) => {
@@ -779,10 +890,8 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       clearTimeout(selTimer)
       themeObserver.disconnect()
       host.removeEventListener('mousedown', onTermMouseDown, true)
-      host.removeEventListener('mousemove', onTermMouseMove, true)
       window.removeEventListener('mouseup', onWinMouseUp, true)
       window.removeEventListener('blur', onWinBlur)
-      host.classList.remove('is-selecting')
       cancelAnimationFrame(raf)
       ro.disconnect()
       unsubs.forEach((u) => u())
@@ -1060,9 +1169,10 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
             </button>
           )
         )}
-        {!focused && (
+        {!focused && agentCount > 1 && (
           // Hidden while maximized: the tiled geometry it changes isn't visible
-          // there, so the toggle would read as a broken button.
+          // there, so the toggle would read as a broken button. Also hidden with
+          // a single pane, where "wider" has nothing to expand against.
           <button
             className="vec-pane__wide"
             title={agent.wide ? 'Normal width' : 'Wider card'}

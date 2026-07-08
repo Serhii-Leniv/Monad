@@ -41,14 +41,6 @@ function fuzzyScore(query: string, title: string): number | null {
 export default function CommandPalette(): JSX.Element {
   const setPaletteOpen = useStore((s) => s.setPaletteOpen)
   const addAgent = useStore((s) => s.addAgent)
-  const setLayoutMode = useStore((s) => s.setLayoutMode)
-  const setSettingsOpen = useStore((s) => s.setSettingsOpen)
-  const setShortcutsOpen = useStore((s) => s.setShortcutsOpen)
-  const setFeedbackOpen = useStore((s) => s.setFeedbackOpen)
-  const setDiffAgentId = useStore((s) => s.setDiffAgentId)
-  const requestClose = useStore((s) => s.requestClose)
-  const requestBulkClose = useStore((s) => s.requestBulkClose)
-  const toggleWide = useStore((s) => s.toggleWide)
   const reopenLast = useStore((s) => s.reopenLast)
   const lastClosed = useStore((s) => s.lastClosed)
   const focusTerminal = useStore((s) => s.focusTerminal)
@@ -56,7 +48,6 @@ export default function CommandPalette(): JSX.Element {
   const agentClis = useStore((s) => s.agentClis)
   const workspaces = useStore((s) => s.workspaces)
   const agents = useStore((s) => s.agents)
-  const selectedIds = useStore((s) => s.selectedIds)
   const projectPath = useStore((s) => s.projectPath)
 
   const [query, setQuery] = useState('')
@@ -68,6 +59,10 @@ export default function CommandPalette(): JSX.Element {
     close()
   }
 
+  // A quick launcher, not a mirror of the menus: the things keyboard-launch
+  // uniquely wins at — spin up terminals/agents, switch projects, and jump to a
+  // pane by name. Actions that already sit one click away (layout, settings,
+  // close/wide/maximize, feedback) live on the rail/cards/gear, not here.
   const base = useMemo<Cmd[]>(() => {
     const list: Cmd[] = []
     const full = agents.length >= MAX_AGENTS
@@ -84,35 +79,11 @@ export default function CommandPalette(): JSX.Element {
           list.push({ id: 'reopen', title: `Reopen closed terminal · ${lastClosed.label}`, group: 'New', run: reopenLast })
         }
       }
-      const sel = selectedIds[0]
-      if (sel) {
-        const selAgent = agents.find((a) => a.id === sel)
-        if (selAgent?.isolation === 'worktree') {
-          list.push({ id: 'review', title: 'Review changes & merge…', group: 'Selected terminal', run: () => setDiffAgentId(sel) })
-        }
-        list.push({ id: 'focus', title: 'Maximize terminal', group: 'Selected terminal', run: () => focusTerminal(sel) })
-        if (selectedIds.length >= 2) {
-          // Mirrors ⌘W on a multi-selection: one confirm (in App.tsx) closes the batch.
-          list.push({
-            id: 'close-selected',
-            title: `Close ${selectedIds.length} selected terminals`,
-            hint: modLabel('W'),
-            group: 'Selected terminal',
-            run: () => requestBulkClose(selectedIds)
-          })
-        } else {
-          list.push({ id: 'close', title: 'Close selected terminal', hint: modLabel('W'), group: 'Selected terminal', run: () => requestClose(sel) })
-          // Width toggle only makes sense for a single card (it's per-tile).
-          list.push({
-            id: 'wide',
-            title: selAgent?.wide ? 'Make card normal' : 'Make card wider',
-            group: 'Selected terminal',
-            run: () => toggleWide(sel)
-          })
-        }
-      }
-      list.push({ id: 'grid', title: 'Layout: Grid', hint: modLabel('1'), group: 'Canvas', run: () => setLayoutMode('grid') })
-      list.push({ id: 'cols', title: 'Layout: Columns', hint: modLabel('2'), group: 'Canvas', run: () => setLayoutMode('columns') })
+      // Jump to any open terminal by name — the palette's fast-navigation power,
+      // shown while browsing (not just on a query) so the capability is visible.
+      agents.forEach((a) =>
+        list.push({ id: 'jump-' + a.id, title: `Jump to ${a.label}`, group: 'Jump to', run: () => focusTerminal(a.id) })
+      )
     }
     list.push({ id: 'open', title: 'Open project…', group: 'Project', run: openProjectInteractive })
     workspaces
@@ -123,11 +94,8 @@ export default function CommandPalette(): JSX.Element {
     if (projectPath) {
       list.push({ id: 'close-project', title: 'Close project', group: 'Project', run: closeCurrentProject })
     }
-    list.push({ id: 'settings', title: 'Settings', group: 'Application', run: () => setSettingsOpen(true) })
-    list.push({ id: 'shortcuts', title: 'Keyboard shortcuts', hint: modLabel('/'), group: 'Application', run: () => setShortcutsOpen(true) })
-    list.push({ id: 'feedback', title: 'Send feedback…', group: 'Application', run: () => setFeedbackOpen(true) })
     return list
-  }, [projectPath, shells, agentClis, workspaces, selectedIds, agents, lastClosed, addAgent, setLayoutMode, focusTerminal, requestClose, requestBulkClose, toggleWide, reopenLast, setSettingsOpen, setShortcutsOpen, setFeedbackOpen, setDiffAgentId])
+  }, [projectPath, shells, agentClis, workspaces, agents, lastClosed, addAgent, focusTerminal, reopenLast])
 
   const q = query.trim().toLowerCase()
   const items = useMemo<Cmd[]>(() => {
@@ -149,13 +117,8 @@ export default function CommandPalette(): JSX.Element {
     } else {
       out.push(...base)
     }
-    if (q && projectPath) {
-      agents
-        .filter((a) => fuzzyScore(q, a.label) !== null)
-        .forEach((a) => out.push({ id: 'focus-' + a.id, title: `Focus: ${a.label}`, run: () => focusTerminal(a.id) }))
-    }
     return out
-  }, [q, query, base, agents, projectPath, addAgent, focusTerminal])
+  }, [q, query, base, agents, projectPath, addAgent])
 
   const active = Math.min(idx, Math.max(0, items.length - 1))
 
@@ -165,7 +128,7 @@ export default function CommandPalette(): JSX.Element {
         <input
           className="palette__input"
           autoFocus
-          placeholder="Type a command, or anything to run in a new terminal…"
+          placeholder="Run a command, or jump to a terminal…"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value)

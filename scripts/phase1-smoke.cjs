@@ -1,7 +1,7 @@
 // Phase 1 integration smoke test. Loads the BUILT renderer in a hidden window
 // and drives the real preload bridge:
 //   1. window.api.{pty,project} exist and React mounted (#root has children)
-//   2. project.save -> project.load roundtrip writes/reads .agent-canvas/canvas.json
+//   2. project.save -> project.load roundtrip writes/reads .monad/canvas.json
 //   3. a PTY spawned from the renderer echoes through a real shell
 const { app, BrowserWindow } = require('electron')
 const { join } = require('path')
@@ -11,7 +11,7 @@ const { registerIpc } = require(join(__dirname, '..', 'out', 'main', 'ipc.js'))
 
 app.disableHardwareAcceleration()
 
-const TMP = join(os.tmpdir(), 'agent-canvas-smoke-' + process.pid)
+const TMP = join(os.tmpdir(), 'monad-smoke-' + process.pid)
 fs.mkdirSync(TMP, { recursive: true })
 
 const errors = []
@@ -68,7 +68,7 @@ app.whenReady().then(async () => {
   }
 
   // Confirm the file actually exists on disk where we expect it.
-  const fileExists = fs.existsSync(join(TMP, '.agent-canvas', 'canvas.json'))
+  const fileExists = fs.existsSync(join(TMP, '.monad', 'canvas.json'))
 
   console.log('[p1] preload api present : ' + result.hasApi)
   console.log('[p1] react mounted (#root): ' + (result.rootChildren > 0) + ' (' + result.rootChildren + ' children)')
