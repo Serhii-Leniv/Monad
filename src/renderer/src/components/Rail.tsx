@@ -4,6 +4,10 @@ import { IconTerminal, IconGrid, IconColumns, IconSettings, IconBell } from './I
 import { useStore, NEEDS_ATTENTION, MAX_AGENTS } from '../store'
 import { modLabel } from '../shortcuts'
 
+/** Below this many terminals, grid and columns produce the same layout, so the
+ *  layout toggle is hidden to keep the dock uncluttered. */
+const LAYOUT_TOGGLE_MIN = 3
+
 /** Minimal floating dock — icons only, refined liquid glass. Project switching
  *  lives in the top bar; the rail is just identity + per-canvas tools. */
 export default function Rail(): JSX.Element {
@@ -93,8 +97,9 @@ export default function Rail(): JSX.Element {
             </div>
 
             {/* Layout is one choice → one segmented control, not two buttons.
-               Always present while a project is open: chrome that pops in and
-               out as the terminal count changes is itself a comfort problem. */}
+               Grid and columns only diverge at 3+ panes, so the toggle stays
+               hidden below that — it would be an inert control. */}
+            {agents.length >= LAYOUT_TOGGLE_MIN && (
             <div className="rail__seg" role="group" aria-label="Layout" data-mode={layoutMode}>
               <button
                 className={'rail__seg-btn' + (layoutMode === 'grid' ? ' is-active' : '')}
@@ -113,6 +118,7 @@ export default function Rail(): JSX.Element {
                 <IconColumns />
               </button>
             </div>
+            )}
           </>
         )}
 

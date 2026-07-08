@@ -59,6 +59,9 @@ function pathFromDiffHeader(raw: string): string | null {
 
 function lineClass(l: string): string {
   if (l.startsWith('@@')) return 'diff__line diff__line--hunk'
+  // git's "Binary files a/x and b/x differ" + our synthesized "Binary file x
+  // added" (git.ts) — a note about the file, not content; styled as such.
+  if (l.startsWith('Binary file')) return 'diff__line diff__line--binary'
   if (l.startsWith('+')) return 'diff__line diff__line--add'
   if (l.startsWith('-')) return 'diff__line diff__line--del'
   return 'diff__line'

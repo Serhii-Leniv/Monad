@@ -53,6 +53,52 @@ const STATUS_COLOR: Record<AgentStatus, string> = {
   error: 'var(--status-error)'
 }
 
+/* Theme-matched xterm palettes. The background stays transparent in both — the
+   pane veil (.vec-pane__term, driven by the opacity slider) paints the actual
+   surface. Explicit selection colours because xterm's default was nearly
+   invisible on the translucent glass. */
+const TERM_THEME_DARK = {
+  background: 'rgba(0,0,0,0)',
+  foreground: '#cdd6e4',
+  cursor: '#cdd6e4',
+  selectionBackground: 'rgba(138, 170, 255, 0.36)',
+  selectionInactiveBackground: 'rgba(138, 170, 255, 0.18)'
+}
+/* Light terminals are white with near-black text. The ANSI 16 are the GitHub
+   Light set — the default xterm colours (picked for dark) wash out on white. */
+const TERM_THEME_LIGHT = {
+  background: 'rgba(0,0,0,0)',
+  foreground: '#1f2328',
+  cursor: '#1f2328',
+  cursorAccent: '#ffffff',
+  selectionBackground: 'rgba(9, 105, 218, 0.22)',
+  selectionInactiveBackground: 'rgba(9, 105, 218, 0.11)',
+  black: '#24292f',
+  red: '#cf222e',
+  green: '#116329',
+  yellow: '#7d4e00',
+  blue: '#0969da',
+  magenta: '#8250df',
+  cyan: '#1b7c83',
+  white: '#6e7781',
+  brightBlack: '#57606a',
+  brightRed: '#a40e26',
+  brightGreen: '#1a7f37',
+  brightYellow: '#633c01',
+  brightBlue: '#218bff',
+  brightMagenta: '#a475f9',
+  brightCyan: '#3192aa',
+  brightWhite: '#8c959f'
+}
+/** Pick the xterm palette: the pane's own override wins, 'auto' follows the app. */
+const resolvedTermTheme = (
+  override?: 'auto' | 'dark' | 'light'
+): typeof TERM_THEME_LIGHT | typeof TERM_THEME_DARK => {
+  const mode =
+    override && override !== 'auto' ? override : document.documentElement.dataset.theme
+  return mode === 'light' ? TERM_THEME_LIGHT : TERM_THEME_DARK
+}
+
 /**
  * One terminal window. The SAME instance is reused across every layout mode, so
  * switching Grid/Columns/Free never kills the PTY. In free mode it's absolutely
@@ -103,6 +149,10 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
+  // The pane's terminal-theme override, readable from inside the mount effect's
+  // observer without re-creating the Terminal when it changes.
+  const termThemeRef = useRef(agent.termTheme)
+  termThemeRef.current = agent.termTheme
   const [closePrompt, setClosePrompt] = useState<{
     checking: boolean
     dirty: boolean
@@ -145,15 +195,7 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       // under a right-click silently replaced the user's selection before the
       // menu's Copy could read it.
       rightClickSelectsWord: false,
-      theme: {
-        background: 'rgba(0,0,0,0)',
-        foreground: '#cdd6e4',
-        cursor: '#cdd6e4',
-        // Explicit selection colours: on the translucent glass background,
-        // xterm's default selection was nearly invisible.
-        selectionBackground: 'rgba(138, 170, 255, 0.36)',
-        selectionInactiveBackground: 'rgba(138, 170, 255, 0.18)'
-      }
+      theme: resolvedTermTheme(termThemeRef.current)
     })
     termRef.current = term
     // Expose to the macOS Edit-menu handler (routes ⌘C/⌘V/⌘A by focus).
@@ -718,11 +760,24 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     const ro = new ResizeObserver(doFit)
     ro.observe(host)
 
+    // Terminal interior follows the app theme (white/black text in light mode),
+    // unless this pane pinned its own via the context menu (termThemeRef).
+    // theme.ts stamps data-theme on <html> — including live OS switches in
+    // 'system' mode — so watching that attribute covers every path.
+    const themeObserver = new MutationObserver(() => {
+      term.options.theme = resolvedTermTheme(termThemeRef.current)
+    })
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme']
+    })
+
     return () => {
       disposed = true
       clearTimeout(idleTimer)
       clearTimeout(doneConfirmTimer)
       clearTimeout(selTimer)
+      themeObserver.disconnect()
       host.removeEventListener('mousedown', onTermMouseDown, true)
       host.removeEventListener('mousemove', onTermMouseMove, true)
       window.removeEventListener('mouseup', onWinMouseUp, true)
@@ -785,6 +840,14 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     t.options.scrollback = scrollback
     fitRef.current?.()
   }, [fontSize, fontFamily, scrollback])
+
+  // Re-palette in place when this pane's theme override changes (app-theme
+  // changes are handled by the MutationObserver in the mount effect).
+  useEffect(() => {
+    const t = termRef.current
+    if (!t) return
+    t.options.theme = resolvedTermTheme(agent.termTheme)
+  }, [agent.termTheme])
 
   const beginClose = async (): Promise<void> => {
     // Shared dir (or downgraded): nothing is deleted on disk. Confirmed via
@@ -1049,6 +1112,7 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
         <div className="vec-pane__body">
           <div
             className="vec-pane__term"
+            data-term-theme={agent.termTheme ?? 'auto'}
             ref={termHostRef}
             // Focusing/typing in a terminal selects it (React onFocus fires when
             // xterm's hidden textarea gains focus). Guarded so it only updates
@@ -1161,6 +1225,30 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
                 >
                   Clear
                 </button>
+                <div className="vec-pane__menu-sep" />
+                <div className="vec-pane__menu-head">Terminal theme</div>
+                {(
+                  [
+                    ['auto', 'Match app'],
+                    ['dark', 'Always dark'],
+                    ['light', 'Always light']
+                  ] as const
+                ).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    className={
+                      'vec-pane__menu-item' +
+                      ((agent.termTheme ?? 'auto') === mode ? ' is-checked' : '')
+                    }
+                    onClick={() => {
+                      useStore.getState().setAgentRuntime(id, { termTheme: mode })
+                      setMenu(null)
+                      termRef.current?.focus()
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
             </>
           )}
