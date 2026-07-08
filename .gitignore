@@ -5,6 +5,9 @@ dist/
 *.log
 *.tsbuildinfo
 
+# Local Claude Code tooling config (permissions, local settings)
+.claude/
+
 # Debug shell-redirect leftovers (e.g. cmd 1>b.out 2>b.err)
 *.err
 b.out
