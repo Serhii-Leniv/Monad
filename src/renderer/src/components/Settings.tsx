@@ -352,7 +352,7 @@ export default function Settings(): JSX.Element {
             Keyboard shortcuts
             <kbd className="kbd">{modLabel('/')}</kbd>
           </button>
-          {version && <span className="settings__version">Vectro v{version}</span>}
+          {version && <span className="settings__version">Monad v{version}</span>}
         </div>
       </div>
     </div>

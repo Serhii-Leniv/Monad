@@ -62,7 +62,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: ${{ github.ref_name }}
-          name: Vectro ${{ github.ref_name }}
+          name: Monad ${{ github.ref_name }}
           draft: false
           prerelease: false
           fail_on_unmatched_files: false

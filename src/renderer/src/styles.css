@@ -1,30 +1,40 @@
 ﻿/* ----------------------------------------------------------------------------
-   Vectro type system — the app's own typefaces, self-hosted (no network at run).
-   • "Vectro Sans"    → Inter, the workhorse UI face (controls, menus, body).
-   • "Vectro Display" → Space Grotesk, the brand face (wordmark, project name,
-     section heads) — a geometric grotesk that matches the glassy, technical look.
-   Both are variable woff2 (latin subset) so one file covers every weight.
+   Monad type system — the app's own typefaces, self-hosted (no network at run).
+   • "Monad Sans"  → Inter, the workhorse UI face (controls, menus, body).
+   • "Monad Serif" → Lora, the brand face (wordmark, project name, headings) —
+     a warm contemporary serif that gives the glassy chrome a calm, bookish
+     counterpoint. True italics included for the tagline.
+   All are variable woff2 (latin subset) so one file covers every weight.
 ---------------------------------------------------------------------------- */
 @font-face {
-  font-family: 'Vectro Sans';
+  font-family: 'Monad Sans';
   src: url('./assets/fonts/inter-var.woff2') format('woff2');
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
-  font-family: 'Vectro Display';
-  src: url('./assets/fonts/space-grotesk-var.woff2') format('woff2');
-  font-weight: 300 700;
+  font-family: 'Monad Serif';
+  src: url('./assets/fonts/lora-var.woff2') format('woff2');
+  font-weight: 400 700;
   font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Monad Serif';
+  src: url('./assets/fonts/lora-var-italic.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: italic;
   font-display: swap;
 }
 
 :root {
   /* Professional dark palette (Apple dark-mode + dev tools) */
-  --text: rgba(255, 255, 255, 0.95);
-  --text-2: rgba(235, 235, 245, 0.6);
-  --muted: rgba(235, 235, 245, 0.45);
+  /* Off-white with the palette's cool cast — softer on the eyes than pure
+     white on dark glass, while staying comfortably above AA contrast. */
+  --text: rgba(237, 241, 248, 0.92);
+  --text-2: rgba(235, 235, 245, 0.66);
+  --muted: rgba(235, 235, 245, 0.52);
   /* Brand red accent. One RGB triple drives every translucent tint so the
      whole UI stays in the same family. */
   --accent-rgb: 255, 69, 58;
@@ -39,8 +49,11 @@
 
   /* --- Type system (see @font-face above). System faces are the fallback so
      the UI still renders cleanly before the woff2 swaps in. --- */
-  --font-ui: 'Vectro Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
-  --font-display: 'Vectro Display', 'Vectro Sans', 'Segoe UI', system-ui, sans-serif;
+  /* Serif everywhere: Lora is the whole UI voice (terminals/code stay mono).
+     'Monad Sans' (Inter) remains bundled as the glyph-coverage fallback. */
+  --font-serif: 'Monad Serif', 'Monad Sans', Georgia, 'Times New Roman', serif;
+  --font-ui: var(--font-serif);
+  --font-display: var(--font-serif);
   --font-mono: 'Cascadia Code', 'JetBrains Mono', Consolas, ui-monospace, monospace;
 
   /* --- One coherent radius scale --- */
@@ -88,8 +101,8 @@
   --hover-bg-strong: rgba(255, 255, 255, 0.12);
   /* Recessed input/select surface (sits INSIDE glass panels). */
   --surface-input: rgba(10, 16, 26, 0.5);
-  /* Strongest ink — headings/titles that were plain #fff on dark. */
-  --ink-strong: #fff;
+  /* Strongest ink — headings/titles; a hair off pure white to cut glare. */
+  --ink-strong: #eef1f7;
   /* One shadow scale: cards (resting / ringed / hover / dragged) and the
      floating chrome (modals, menus, small floats). Light softens these. */
   --shadow-card: 0 14px 40px rgba(0, 0, 0, 0.42), 0 1px 2px rgba(0, 0, 0, 0.3);
@@ -199,6 +212,16 @@
   box-sizing: border-box;
 }
 
+/* Form controls don't inherit the page font by default — without this, every
+   <button>/<select>/<input> silently renders in the UA font (Segoe UI) instead
+   of the app face. */
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
 html,
 body,
 #root {
@@ -206,6 +229,7 @@ body,
   height: 100%;
   color: var(--text);
   font-family: var(--font-ui);
+  line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
@@ -973,7 +997,7 @@ body.has-wallpaper .aurora {
   font-family: var(--font-display);
   font-size: 14px;
   font-weight: 600;
-  letter-spacing: -0.005em;
+  letter-spacing: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1731,64 +1755,8 @@ body.has-wallpaper .vec-pane__term {
   height: calc(var(--dock) * 0.72);
 }
 
-/* ---------- Project switcher (replaces the cryptic letter tiles) ---------- */
-.rail__switcher {
-  position: relative;
-  margin-bottom: calc(var(--dock) * 0.16);
-}
-.rail__switcher-btn {
-  display: grid;
-  place-items: center;
-  width: var(--dock);
-  height: var(--dock);
-  border: none;
-  background: transparent;
-  border-radius: calc(var(--dock) * 0.28);
-  cursor: pointer;
-  transition: background var(--dur-select) var(--ease-out), transform var(--dur-select) var(--ease-out);
-}
-.rail__switcher-btn:hover {
-  background: var(--hover-bg-soft);
-}
-.rail__switcher-btn:active {
-  transform: scale(0.94);
-}
-.rail__switcher-btn.is-open {
-  background: var(--hover-bg);
-}
-.rail__switcher-btn svg,
-.rail__switcher-btn img {
-  width: calc(var(--dock) * 0.72);
-  height: calc(var(--dock) * 0.72);
-}
-.rail__switcher-emblem {
-  width: calc(var(--dock) * 0.78);
-  height: calc(var(--dock) * 0.78);
-  display: grid;
-  place-items: center;
-  border-radius: calc(var(--dock) * 0.26);
-  font-size: calc(var(--dock) * 0.38);
-  font-weight: 700;
-  color: #fff;
-  background: linear-gradient(180deg, var(--accent-2), var(--accent));
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  box-shadow:
-    0 0 16px rgba(var(--accent-rgb), 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-}
-
-/* Full-window click-catcher so the popover closes on outside click. */
-.rail__backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-}
-
-.rail__menu--switcher {
-  min-width: 244px;
-  max-height: 70vh;
-  overflow-y: auto;
-}
+/* The .rail__menu-* and .rail__proj* rules below are shared with the
+   ProjectBar's switcher dropdown (ProjectBar.tsx) — keep them here. */
 .rail__menu-head {
   padding: 4px 8px 6px;
   font-size: 10.5px;
@@ -1871,65 +1839,6 @@ body.has-wallpaper .vec-pane__term {
   margin: 5px 0;
 }
 
-/* Workspace switcher — a vertical strip of folder tiles (Slack/VS-Code style). */
-.rail__ws {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-}
-
-.rail__ws-tile {
-  position: relative;
-  width: calc(var(--dock) * 0.82);
-  height: calc(var(--dock) * 0.82);
-  display: grid;
-  place-items: center;
-  border-radius: calc(var(--dock) * 0.26);
-  color: var(--muted);
-  font-weight: 650;
-  font-size: calc(var(--dock) * 0.36);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--line-2);
-  cursor: pointer;
-  transition: color var(--dur-select) var(--ease-out),
-    background var(--dur-select) var(--ease-out),
-    border-color var(--dur-select) var(--ease-out),
-    box-shadow var(--dur-select) var(--ease-out),
-    transform var(--dur-select) var(--ease-out);
-}
-
-.rail__ws-tile:hover {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.09);
-  transform: translateY(-1px);
-}
-
-.rail__ws-tile:active {
-  transform: scale(0.92);
-}
-
-.rail__ws-tile.is-active {
-  color: #fff;
-  background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.92), rgba(var(--accent-rgb), 0.62));
-  border-color: rgba(255, 255, 255, 0.25);
-  box-shadow:
-    0 0 16px rgba(var(--accent-rgb), 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-}
-
-.rail__ws-dot {
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--status-attention);
-  box-shadow: 0 0 0 2px rgba(13, 16, 23, 0.92);
-}
-
 .rail__spacer {
   flex: 1;
 }
@@ -1948,7 +1857,8 @@ body.has-wallpaper .vec-pane__term {
   transition: color var(--dur-select) var(--ease-out),
     background var(--dur-select) var(--ease-out),
     border-color var(--dur-select) var(--ease-out),
-    box-shadow var(--dur-select) var(--ease-out);
+    box-shadow var(--dur-select) var(--ease-out),
+    transform var(--dur-select) var(--ease-out);
 }
 
 .rail-btn svg {
@@ -1959,11 +1869,52 @@ body.has-wallpaper .vec-pane__term {
 .rail-btn:hover:not(:disabled) {
   color: var(--text);
   background: var(--hover-bg-soft);
+  transform: translateY(-1px);
+}
+
+.rail-btn:active:not(:disabled) {
+  transform: scale(0.94);
 }
 
 .rail-btn:disabled {
   opacity: 0.3;
   cursor: default;
+}
+
+/* ---------- Dock tooltips — CSS-only, opening rightward off each control.
+   position: absolute (NOT fixed: .rail's backdrop-filter makes it the
+   containing block for fixed descendants, which would mis-anchor them).
+   The dock has no overflow clipping, so the bubble escapes the pill freely,
+   same as the count badge does. ---------- */
+.rail [data-tip] {
+  position: relative;
+}
+.rail [data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: calc(100% + 14px);
+  top: 50%;
+  translate: 0 -50%;
+  white-space: nowrap;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--text);
+  background: var(--menu-bg);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-float);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 5;
+  transition: opacity 120ms var(--ease-out);
+}
+.rail [data-tip]:hover::after,
+.rail [data-tip]:focus-visible::after {
+  opacity: 1;
+  /* Show after a beat; hide instantly (delay only applies on the way in). */
+  transition-delay: 350ms;
 }
 
 /* Keyboard focus — a crisp accent ring on the dock controls (mouse clicks stay
@@ -2100,6 +2051,29 @@ body.has-wallpaper .vec-pane__term {
   min-width: 168px;
 }
 
+/* Utility menu on the gear (palette / shortcuts / settings) — opens beside the
+   bottom of the dock and grows upward. */
+.rail__util {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+.rail__utilmenu {
+  left: calc(100% + 12px);
+  bottom: 0;
+  min-width: 196px;
+}
+.rail__menu-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.rail__menu-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+}
+
 .rail__menu-sep {
   height: 1px;
   margin: 4px 6px;
@@ -2147,7 +2121,8 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .settings__title {
-  font-size: 15px;
+  font-family: var(--font-serif);
+  font-size: 16px;
   font-weight: 600;
   color: var(--ink-strong);
 }
@@ -2188,7 +2163,8 @@ body.has-wallpaper .vec-pane__term {
   align-items: center;
   gap: 11px;
   padding: 9px 11px;
-  font-size: 13px;
+  font-family: var(--font-serif);
+  font-size: 13.5px;
   font-weight: 500;
   text-align: left;
   color: var(--muted);
@@ -2323,7 +2299,8 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .settings__label {
-  font-size: 13px;
+  font-family: var(--font-serif);
+  font-size: 13.5px;
   color: var(--text);
   display: flex;
   flex-direction: column;
@@ -2331,7 +2308,7 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .settings__hint {
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--muted);
 }
 
@@ -2577,6 +2554,19 @@ body.has-wallpaper .vec-pane__term {
   padding: 6px;
 }
 
+/* Section header between command groups (browse mode only). */
+.palette__head {
+  padding: 10px 12px 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.palette__head:first-child {
+  padding-top: 4px;
+}
+
 .palette__item {
   display: flex;
   align-items: center;
@@ -2610,7 +2600,9 @@ body.has-wallpaper .vec-pane__term {
 .palette__empty {
   padding: 16px;
   color: var(--muted);
-  font-size: 13px;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 13.5px;
 }
 
 /* ---------- Keycap (shortcut chords in the help overlay & settings) ---------- */
@@ -2722,7 +2714,8 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .confirm__title {
-  font-size: 15px;
+  font-family: var(--font-serif);
+  font-size: 16px;
   font-weight: 600;
   color: var(--ink-strong);
   margin-bottom: 8px;
@@ -2813,7 +2806,8 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .review__name {
-  font-size: 15px;
+  font-family: var(--font-serif);
+  font-size: 16px;
   font-weight: 600;
   color: var(--ink-strong);
 }
@@ -2954,8 +2948,9 @@ body.has-wallpaper .vec-pane__term {
   padding: 36px 18px;
   text-align: center;
   color: var(--muted);
-  font-family: var(--font-ui);
-  font-size: 13px;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 13.5px;
 }
 
 .review__empty--ok {
@@ -3211,7 +3206,7 @@ body.has-wallpaper .vec-pane__term {
   font-family: var(--font-display);
   font-size: clamp(34px, 5vw, 48px);
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
   /* Gradient wordmark with a slow light sheen drifting across it. */
   background: linear-gradient(
     100deg,
@@ -3242,7 +3237,9 @@ body.has-wallpaper .vec-pane__term {
   /* The one line that explains what the app is — keep it legible over a bright
      wallpaper (was --muted at 45% white, which could drop below AA). */
   color: var(--text-2);
-  font-size: 15px;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 16px;
   line-height: 1.5;
 }
 .home__open {
@@ -3338,10 +3335,10 @@ body.has-wallpaper .vec-pane__term {
   animation: home-rise 620ms var(--ease-decelerate) 80ms both;
 }
 .home__recents-head {
-  font-size: 12px;
+  font-family: var(--font-serif);
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: var(--muted);
   margin: 0 4px 12px;
 }
@@ -3639,7 +3636,7 @@ body.has-wallpaper .vec-pane__term {
   box-shadow: var(--glass-shadow);
 }
 .crash__title {
-  font-family: 'Vectro Display', system-ui, sans-serif;
+  font-family: var(--font-display);
   font-size: 22px;
   margin: 0 0 10px;
   color: var(--text);
@@ -3866,16 +3863,6 @@ body.has-wallpaper .vec-pane__term {
 }
 :root[data-theme='light'] .rail__seg {
   background: rgba(18, 22, 32, 0.06);
-}
-:root[data-theme='light'] .rail__ws-tile {
-  background: rgba(18, 22, 32, 0.05);
-}
-:root[data-theme='light'] .rail__ws-tile:hover {
-  background: rgba(18, 22, 32, 0.09);
-}
-/* The attention dot's punch-out ring must match the light dock body. */
-:root[data-theme='light'] .rail__ws-dot {
-  box-shadow: 0 0 0 2px rgba(248, 248, 250, 0.92);
 }
 :root[data-theme='light'] .rail__menu-item--danger:hover {
   background: rgba(208, 69, 60, 0.1);

@@ -36,10 +36,10 @@ function isNewer(latest: string, current: string): boolean {
 /**
  * One-shot update check: resolves to the newer version if there is one, else
  * null (including on any network/API failure — an update check must never
- * surface an error). Dev runs report null; set VECTRO_UPDATE_CHECK=1 to test.
+ * surface an error). Dev runs report null; set MONAD_UPDATE_CHECK=1 to test.
  */
 export async function checkForUpdate(): Promise<UpdateInfo | null> {
-  if (!app.isPackaged && process.env.VECTRO_UPDATE_CHECK !== '1') return null
+  if (!app.isPackaged && process.env.MONAD_UPDATE_CHECK !== '1') return null
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), 8000)
   try {
