@@ -8,16 +8,11 @@ import {
   type WorkspaceSession
 } from '../store'
 import { openProjectInteractive, closeWorkspaceById, initGitForProject } from '../openProject'
-import { emblemStyle } from '../projectColor'
 import { modLabel } from '../shortcuts'
 
-function initial(name: string): string {
-  const m = name.match(/[a-z0-9]/i)
-  return (m ? m[0] : name.charAt(0) || '?').toUpperCase()
-}
-
 /** A live workspace's at-a-glance state, worst-first: any agent waiting on you
- *  beats any agent working beats quiet. Drives the tab's status dot. */
+ *  beats any agent working beats quiet. Drives the tab's status dot — always
+ *  shown: gray when idle, green while an agent works, amber when one needs you. */
 function tabStatus(ws: WorkspaceSession | undefined): 'attention' | 'working' | 'idle' {
   if (!ws) return 'idle'
   if (ws.agents.some((a) => NEEDS_ATTENTION.includes(a.status ?? 'starting'))) return 'attention'
@@ -52,11 +47,8 @@ function WorkspaceTab({ id }: { id: string }): JSX.Element {
       title={path}
       onClick={() => setActiveWorkspace(id)}
     >
-      <span className="tab__emblem" style={emblemStyle(path)}>
-        {initial(name)}
-      </span>
+      <span className={'tab__dot tab__dot--' + status} aria-hidden="true" />
       <span className="tab__name">{name}</span>
-      {status !== 'idle' && <span className={'tab__dot tab__dot--' + status} aria-hidden="true" />}
       <button
         className="tab__close"
         aria-label={`Close ${name}`}
@@ -66,12 +58,12 @@ function WorkspaceTab({ id }: { id: string }): JSX.Element {
           closeWorkspaceById(id)
         }}
       >
-        <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true">
           <path
-            d="M6 6l12 12M18 6L6 18"
+            d="M7 7l10 10M17 7L7 17"
             fill="none"
             stroke="currentColor"
-            strokeWidth="2.4"
+            strokeWidth="2.2"
             strokeLinecap="round"
           />
         </svg>
