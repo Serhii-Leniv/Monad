@@ -11,7 +11,7 @@ import { app } from 'electron'
 // destination set to leniv.tech@gmail.com, then paste it below. The key is a
 // public, send-only token (it can only deliver to that one preconfigured
 // inbox), so it's safe to ship in the client — it is not a secret.
-const WEB3FORMS_ACCESS_KEY = 'PASTE_YOUR_WEB3FORMS_ACCESS_KEY_HERE'
+const WEB3FORMS_ACCESS_KEY = 'a0716458-59c5-441c-8305-30aaaf40339b'
 const WEB3FORMS_ENDPOINT = 'https://api.web3forms.com/submit'
 
 export type FeedbackCategory = 'bug' | 'idea' | 'other'
@@ -82,7 +82,18 @@ export async function sendFeedback(input: FeedbackInput): Promise<FeedbackResult
   try {
     const res = await fetch(WEB3FORMS_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        // Web3Forms' free plan rejects "server-side" requests (Pro-only) by
+        // sniffing the User-Agent — a non-browser UA (Electron main's default
+        // fetch sends none / a Node UA) comes back as "This method is not
+        // allowed ... Pro plan is required". A browser-like UA is accepted, so
+        // this header is what makes the POST succeed from the main process.
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+          '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      },
       body: JSON.stringify(payload),
       signal: ctrl.signal
     })
