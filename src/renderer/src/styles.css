@@ -1249,6 +1249,181 @@ body.has-wallpaper .aurora {
     var(--shadow-menu);
 }
 
+/* ---------- Workspace tabs (live-workspace switcher) ----------
+   A glass strip of open workspaces; the active one is accent-lit. Switching is
+   instant and non-destructive — background workspaces keep their agents running,
+   surfaced by each tab's status dot. */
+.projbar__tabs {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  max-width: min(74vw, 780px);
+  padding: 4px;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02) 58%),
+    rgba(16, 22, 34, 0.82);
+  border: 1px solid var(--line-3);
+  border-radius: 999px;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow:
+    var(--glass-specular),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.06),
+    0 12px 30px rgba(0, 0, 0, 0.5);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.projbar__tabs::-webkit-scrollbar {
+  display: none;
+}
+.wstab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  transition:
+    background var(--dur-select) var(--ease-out),
+    border-color var(--dur-select) var(--ease-out),
+    box-shadow var(--dur-select) var(--ease-out);
+}
+.wstab:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.wstab.is-active {
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.03) 58%),
+    rgba(var(--accent-rgb), 0.14);
+  border-color: rgba(var(--accent-rgb), 0.5);
+  box-shadow:
+    0 0 0 1px rgba(var(--accent-rgb), 0.1),
+    0 0 18px rgba(var(--accent-rgb), 0.18);
+}
+.wstab__main {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 100%;
+  max-width: 210px;
+  padding: 0 3px 0 5px;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.wstab.is-active .wstab__main {
+  color: var(--text);
+}
+.wstab__emblem {
+  flex: 0 0 auto;
+  width: 21px;
+  height: 21px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 600;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+.wstab__name {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 158px;
+}
+/* Status dot: quiet ring when idle, a soft pulse while any agent works, a firm
+   blink when one needs you. Reuses the pane status palette. */
+.wstab__dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-left: 1px;
+}
+.wstab__dot--idle {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--line-1);
+}
+.wstab__dot--working {
+  background: var(--status-working);
+  box-shadow: 0 0 7px var(--status-working);
+  animation: wstab-pulse 1.4s ease-in-out infinite;
+}
+.wstab__dot--attention {
+  background: var(--status-attention);
+  box-shadow: 0 0 8px var(--status-attention);
+  animation: wstab-blink 1s steps(1, end) infinite;
+}
+@keyframes wstab-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes wstab-blink {
+  0%,
+  60% {
+    opacity: 1;
+  }
+  61%,
+  100% {
+    opacity: 0.35;
+  }
+}
+.wstab__close {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-right: 3px;
+  border-radius: 50%;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity var(--dur-select) var(--ease-out),
+    background var(--dur-select) var(--ease-out),
+    color var(--dur-select) var(--ease-out);
+}
+.wstab:hover .wstab__close,
+.wstab.is-active .wstab__close {
+  opacity: 1;
+}
+.wstab__close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+}
+.wstab__add {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color var(--dur-select) var(--ease-out),
+    background var(--dur-select) var(--ease-out);
+}
+.wstab__add:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.07);
+}
+.wstab__add.is-open {
+  color: var(--accent-2);
+  background: rgba(var(--accent-rgb), 0.12);
+}
+
 .app__main {
   position: relative;
   flex: 1;
@@ -1258,6 +1433,18 @@ body.has-wallpaper .aurora {
 .app__canvas {
   position: absolute;
   inset: 0;
+}
+
+/* One Stage per live workspace; only the active one is visible. Hidden layers
+   stay laid out (visibility, NOT display) so xterm can measure them and their
+   PTYs keep streaming — switching tabs is instant with no relayout/respawn. */
+.workspace-layer {
+  position: absolute;
+  inset: 0;
+}
+.workspace-layer:not(.is-active) {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .canvas-wrap {
@@ -4161,6 +4348,26 @@ body.has-wallpaper .vec-pane__term {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.4),
     0 6px 18px rgba(31, 38, 54, 0.12);
+}
+/* Workspace tab strip: light glass so the dark-tuned defaults don't invert. The
+   accent-lit active tab already works in both themes. */
+:root[data-theme='light'] .projbar__tabs {
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.45) 58%),
+    rgba(250, 250, 252, 0.72);
+  box-shadow:
+    var(--glass-specular),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.5),
+    0 1px 0 rgba(255, 255, 255, 0.4),
+    0 12px 30px rgba(31, 38, 54, 0.16);
+}
+:root[data-theme='light'] .wstab:hover {
+  background: rgba(18, 22, 32, 0.05);
+}
+:root[data-theme='light'] .wstab__close:hover {
+  background: rgba(18, 22, 32, 0.08);
+}
+:root[data-theme='light'] .wstab__add:hover {
+  background: rgba(18, 22, 32, 0.06);
 }
 
 /* ---- Dock / rail ---- */

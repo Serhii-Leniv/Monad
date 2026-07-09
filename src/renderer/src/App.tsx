@@ -13,22 +13,30 @@ const Settings = lazy(() => import('./components/Settings'))
 const CommandPalette = lazy(() => import('./components/CommandPalette'))
 const DiffPanel = lazy(() => import('./components/DiffPanel'))
 const Feedback = lazy(() => import('./components/Feedback'))
-import { useStore, toPersisted, NEEDS_ATTENTION } from './store'
+import { useStore, toPersisted, activeWs, wsOfAgent, useActiveAgents, NEEDS_ATTENTION } from './store'
 import { reminderTone, reminderHeadline } from './updateReminder'
-import { openProjectByPath, restoreLastProject, saveCanvas } from './openProject'
+import { restoreWorkspaces, saveCanvas } from './openProject'
 import { applyAccent } from './accent'
 import { applyTheme } from './theme'
-import { handleMenuEdit, terminals, focusActiveTerminal, pasteIntoTerminal } from './terminalRegistry'
+import {
+  handleMenuEdit,
+  terminals,
+  focusActiveTerminal,
+  refitAgents,
+  pasteIntoTerminal
+} from './terminalRegistry'
 
 export default function App(): JSX.Element {
-  const projectPath = useStore((s) => s.projectPath)
-  const agents = useStore((s) => s.agents)
+  const liveWorkspaces = useStore((s) => s.liveWorkspaces)
+  const activeWorkspaceId = useStore((s) => s.activeWorkspaceId)
+  const activeAgents = useActiveAgents()
   const setShells = useStore((s) => s.setShells)
   const setAgentClis = useStore((s) => s.setAgentClis)
+  const setCanvasSize = useStore((s) => s.setCanvasSize)
   const settingsOpen = useStore((s) => s.settingsOpen)
   const paletteOpen = useStore((s) => s.paletteOpen)
   const feedbackOpen = useStore((s) => s.feedbackOpen)
-  const diffAgentId = useStore((s) => s.diffAgentId)
+  const diffAgentId = useStore((s) => activeWs(s)?.diffAgentId ?? null)
   const zoomFactor = useStore((s) => s.settings.zoomFactor)
   const theme = useStore((s) => s.settings.theme)
   const accent = useStore((s) => s.settings.accent)
@@ -36,11 +44,12 @@ export default function App(): JSX.Element {
   const terminalOpacity = useStore((s) => s.settings.terminalOpacity)
   const [wallpaperUrl, setWallpaperUrl] = useState<string | null>(null)
   // Ids snapshotted when a bulk close is requested (⌘W on a multi-selection, or
-  // the palette command) — one confirm closes all. Store-held so the palette can
-  // raise it too; this component owns the confirm UI.
-  const bulkCloseIds = useStore((s) => s.bulkCloseIds)
+  // the palette command) — one confirm closes all. Store-held (on the active
+  // workspace) so the palette can raise it too; this component owns the confirm UI.
+  const bulkCloseIds = useStore((s) => activeWs(s)?.bulkCloseIds ?? null)
   const clearBulkClose = useStore((s) => s.clearBulkClose)
   const saveTimer = useRef<number>()
+  const canvasRef = useRef<HTMLDivElement>(null)
 
   // Detect the shells + agent CLIs installed on this machine, once on launch.
   useEffect(() => {
@@ -53,10 +62,43 @@ export default function App(): JSX.Element {
     document.body.classList.toggle('is-mac', window.api.platform === 'darwin')
   }, [])
 
-  // Reopen the last project on launch (if its folder still exists).
+  // Reopen every live workspace from last session (spawning all their agents) and
+  // restore which one was in front. Falls back to the last recent project.
   useEffect(() => {
-    void restoreLastProject()
+    void restoreWorkspaces()
   }, [])
+
+  // Measure the shared canvas box (one per window) and feed it to the store,
+  // which re-tiles EVERY live workspace. Deliberately here, not per-Stage: a
+  // background workspace's Stage is visibility-hidden and must never report 0.
+  useEffect(() => {
+    const el = canvasRef.current
+    if (!el) return
+    let raf = 0
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => setCanvasSize(el.clientWidth, el.clientHeight))
+    })
+    ro.observe(el)
+    return () => {
+      cancelAnimationFrame(raf)
+      ro.disconnect()
+    }
+  }, [setCanvasSize])
+
+  // Bringing a workspace to the foreground: refit its terminals (they were laid
+  // out while hidden) and hand keyboard focus to its active pane, so switching
+  // tabs lands you typing immediately. rAF lets the visibility flip paint first.
+  useEffect(() => {
+    if (!activeWorkspaceId) return
+    const raf = requestAnimationFrame(() => {
+      const ws = useStore.getState().liveWorkspaces.find((w) => w.id === activeWorkspaceId)
+      if (!ws) return
+      refitAgents(ws.agents.map((a) => a.id))
+      focusActiveTerminal()
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [activeWorkspaceId])
 
   // Persistent update reminder. The main process reads the vectro-site release
   // feed; we re-check on a delay after launch and then periodically, stashing
@@ -99,32 +141,35 @@ export default function App(): JSX.Element {
     window.api.zoom.set(zoomFactor)
   }, [zoomFactor])
 
-  // Mirror the "needs you" count to the OS (taskbar flash / dock badge), so a
-  // backgrounded window still signals waiting agents. The memo derives a plain
-  // number, so the effect — and the IPC send — only fires when it changes,
-  // not on every agents-array churn.
+  // Mirror the active workspace's "needs you" count to the OS (taskbar flash /
+  // dock badge), so a backgrounded window still signals waiting agents. The memo
+  // derives a plain number, so the effect — and the IPC send — only fires when it
+  // changes, not on every agents-array churn. (Cross-workspace attention is
+  // surfaced by the tab badges, not the taskbar, in this version.)
   const attentionCount = useMemo(
-    () => agents.filter((a) => NEEDS_ATTENTION.includes(a.status ?? 'starting')).length,
-    [agents]
+    () => activeAgents.filter((a) => NEEDS_ATTENTION.includes(a.status ?? 'starting')).length,
+    [activeAgents]
   )
   useEffect(() => {
     window.api.attention.set(attentionCount)
   }, [attentionCount])
 
-  // Clicking a desktop notification lands on the agent that raised it. With a
-  // DIFFERENT card maximized, that card would hide the one you came for — so
-  // retarget the maximize. With nothing maximized, selecting is enough (the
-  // sole-selection effect hands over keyboard focus); never force-maximize.
+  // Clicking a desktop notification lands on the agent that raised it — bringing
+  // its workspace forward if it's a background one. With a DIFFERENT card
+  // maximized, retarget the maximize; with nothing maximized, selecting is enough
+  // (the sole-selection effect hands over keyboard focus); never force-maximize.
   useEffect(() => {
     return window.api.notify.onClick((agentId) => {
       const st = useStore.getState()
-      // The pane may have been closed between the notification and the click —
-      // don't select a ghost id (focusTerminal has its own existence guard).
-      if (!st.agents.some((a) => a.id === agentId)) return
-      if (st.focusedId) {
-        if (st.focusedId !== agentId) st.focusTerminal(agentId)
+      const ws = wsOfAgent(st, agentId)
+      // The pane may have been closed between the notification and the click.
+      if (!ws) return
+      if (ws.focusedId) {
+        if (ws.focusedId !== agentId) st.focusTerminal(agentId)
+        else st.setActiveWorkspace(ws.id)
       } else {
-        st.setSelected([agentId])
+        st.setActiveWorkspace(ws.id)
+        useStore.getState().setSelected([agentId])
       }
     })
   }, [])
@@ -149,12 +194,12 @@ export default function App(): JSX.Element {
       const el = document.activeElement as HTMLElement | null
       if (el?.closest?.('.vec-pane__term')) return // xterm handles it itself
       if (el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA') return // native input
-      const st = useStore.getState()
+      const ws = activeWs(useStore.getState())
       // Only an UNAMBIGUOUS target: the maximized pane, or the sole selection.
       // Under a multi-select there's no single active terminal, so pasting into
       // selectedIds[0] could auto-run a clipboard command in a pane the user didn't
       // mean — keep suppressing it there (paste dead-ends, which is the safe choice).
-      const id = st.focusedId ?? (st.selectedIds.length === 1 ? st.selectedIds[0] : null)
+      const id = ws?.focusedId ?? (ws?.selectedIds.length === 1 ? ws.selectedIds[0] : null)
       const term = id ? terminals.get(id) : null
       if (!term) return
       e.preventDefault()
@@ -216,13 +261,14 @@ export default function App(): JSX.Element {
       rescanAgents()
       requestAnimationFrame(() => {
         const st = useStore.getState()
-        if (st.settingsOpen || st.paletteOpen || st.feedbackOpen || st.diffAgentId) return
+        const ws = activeWs(st)
+        if (st.settingsOpen || st.paletteOpen || st.feedbackOpen || ws?.diffAgentId) return
         const el = document.activeElement
         if (el && el !== document.body) return
         // A multi-select has no single active terminal; focusing selectedIds[0] would
         // fire its onFocus → setSelected([id]) and silently collapse the selection.
         // Leave focus on <body> in that case (typing already has no single target).
-        if (!st.focusedId && st.selectedIds.length > 1) return
+        if (!ws?.focusedId && (ws?.selectedIds.length ?? 0) > 1) return
         // If a pane's search box is open, its input is the intended target — restore
         // focus there instead of stealing it into the terminal.
         const search = document.querySelector('.vec-pane__search-input') as HTMLElement | null
@@ -280,12 +326,13 @@ export default function App(): JSX.Element {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       const st = useStore.getState()
+      const ws = activeWs(st)
       if (e.key === 'Escape') {
-        if (st.diffAgentId) st.setDiffAgentId(null)
+        if (ws?.diffAgentId) st.setDiffAgentId(null)
         else if (st.paletteOpen) st.setPaletteOpen(false)
         else if (st.feedbackOpen) st.setFeedbackOpen(false)
         else if (st.settingsOpen) st.setSettingsOpen(false)
-        else if (st.focusedId) {
+        else if (ws?.focusedId) {
           // Never steal Esc from a focused terminal — vim and Claude Code use
           // it constantly. Exit focus with ⌘/Ctrl⇧Enter, double-click, or Esc
           // when the terminal doesn't have keyboard focus.
@@ -300,21 +347,21 @@ export default function App(): JSX.Element {
       // the bar (it handles Enter/Escape itself) — never an app chord. Only the
       // Escape handling above may act; ⌘W/⌘T/arrows must not fire from typing.
       if ((document.activeElement as HTMLElement | null)?.closest?.('.broadcast')) return
-      // Switch workspace — ⌘⌥1…9 (Ctrl+Alt on Win/Linux). Saves the current
-      // canvas first; no-op if that slot is already open or empty. Exclude AltGr
-      // (which reports as Ctrl+Alt): on EU layouts it types digits/brackets, and
-      // swallowing those would stop the user entering them into the terminal. Only
-      // preventDefault when we actually switch, so an unhandled combo falls through.
+      // Switch workspace — ⌘⌥1…9 (Ctrl+Alt on Win/Linux). Brings that live tab to
+      // the foreground; no-op if that slot is empty. Exclude AltGr (which reports
+      // as Ctrl+Alt): on EU layouts it types digits/brackets, and swallowing those
+      // would stop the user entering them into the terminal. Only preventDefault
+      // when we actually switch, so an unhandled combo falls through.
       if (
         (e.metaKey || e.ctrlKey) &&
         e.altKey &&
         !e.getModifierState('AltGraph') &&
         /^[1-9]$/.test(e.key)
       ) {
-        const ws = st.workspaces[Number(e.key) - 1]
-        if (ws && ws.path !== st.projectPath) {
+        const target = st.liveWorkspaces[Number(e.key) - 1]
+        if (target && target.id !== st.activeWorkspaceId) {
           e.preventDefault()
-          void openProjectByPath(ws)
+          st.setActiveWorkspace(target.id)
         }
         return
       }
@@ -361,8 +408,8 @@ export default function App(): JSX.Element {
       // With an overlay up, the canvas is hidden — don't let ⌘T/⌘1/⌘2/⌘W/cycle
       // fire actions the user can't see (spawning panes behind Settings, silently
       // swapping layout, stealing selection). Only Escape / ⌘K / ⌘/ operate above.
-      if (st.settingsOpen || st.paletteOpen || st.feedbackOpen || st.diffAgentId) return
-      if (!st.projectPath) return
+      if (st.settingsOpen || st.paletteOpen || st.feedbackOpen || ws?.diffAgentId) return
+      if (!ws) return
       if (k === 't') {
         e.preventDefault()
         st.addAgent()
@@ -373,13 +420,13 @@ export default function App(): JSX.Element {
         e.preventDefault()
         st.setLayoutMode('columns')
       } else if (k === 'w') {
-        if (st.selectedIds.length >= 2) {
+        if (ws.selectedIds.length >= 2) {
           // Multi-selection: ONE confirm for the whole batch (the per-pane flow
           // would stack N dialogs). Safe default — worktrees are kept.
           e.preventDefault()
-          st.requestBulkClose(st.selectedIds)
+          st.requestBulkClose(ws.selectedIds)
         } else {
-          const sel = st.selectedIds[0]
+          const sel = ws.selectedIds[0]
           if (sel) {
             e.preventDefault()
             // Guarded close (worktree dirty-check + confirm) — never force-delete.
@@ -389,22 +436,22 @@ export default function App(): JSX.Element {
       } else if (e.code === 'Enter' && e.shiftKey) {
         // ⌘⇧Enter (Ctrl+Shift+Enter): toggle maximize on the current terminal.
         e.preventDefault()
-        if (st.focusedId) st.clearFocus()
+        if (ws.focusedId) st.clearFocus()
         else {
-          const target = st.selectedIds[0] ?? st.agents[0]?.id
+          const target = ws.selectedIds[0] ?? ws.agents[0]?.id
           if (target) st.focusTerminal(target)
         }
       } else if ((e.code === 'BracketRight' || e.code === 'BracketLeft') && e.shiftKey) {
         // ⌘⇧]/[ (Ctrl+Shift+]/[): cycle terminals — follows maximize if active.
         e.preventDefault()
-        const list = st.agents
+        const list = ws.agents
         if (!list.length) return
         const dir = e.code === 'BracketRight' ? 1 : -1
-        const curId = st.focusedId ?? st.selectedIds[0]
+        const curId = ws.focusedId ?? ws.selectedIds[0]
         const cur = list.findIndex((a) => a.id === curId)
         const base = cur === -1 ? (dir === 1 ? -1 : 0) : cur
         const next = list[(base + dir + list.length) % list.length]
-        if (st.focusedId) st.focusTerminal(next.id)
+        if (ws.focusedId) st.focusTerminal(next.id)
         else st.setSelected([next.id])
         terminals.get(next.id)?.focus()
       } else if (
@@ -417,8 +464,8 @@ export default function App(): JSX.Element {
         // card in that direction, using the tiled rect centres. No wrap-around —
         // pressing into an edge is a no-op, which is what "spatial" implies.
         e.preventDefault()
-        const list = st.agents
-        const curId = st.focusedId ?? st.selectedIds[0]
+        const list = ws.agents
+        const curId = ws.focusedId ?? ws.selectedIds[0]
         const cur = list.find((a) => a.id === curId)
         if (!cur) return
         const cx = cur.x + cur.w / 2
@@ -448,7 +495,7 @@ export default function App(): JSX.Element {
         if (!best) return
         // Follows maximize like the cycle chord: retarget the maximized pane to
         // the destination instead of dropping back to the grid.
-        if (st.focusedId) st.focusTerminal(best.id)
+        if (ws.focusedId) st.focusTerminal(best.id)
         else st.setSelected([best.id])
         terminals.get(best.id)?.focus()
       }
@@ -472,38 +519,46 @@ export default function App(): JSX.Element {
     return () => window.removeEventListener('keydown', onKey, true)
   }, [bulkCloseIds, clearBulkClose])
 
-  // Only the persisted fields drive autosave, so runtime churn (status/pty id)
-  // doesn't trigger disk writes. The compact key gates the effect (a flat join of
-  // just the persisted fields — no JSON pass on every status flip); the object is
-  // passed straight to save.
-  const persisted = useMemo(() => toPersisted(agents), [agents])
+  // Autosave every live workspace's canvas, debounced. Only the persisted fields
+  // gate it (a flat join per workspace — no JSON pass on every status flip), so
+  // runtime churn (status/pty id) doesn't trigger disk writes. Background
+  // workspaces autosave too, so their edits survive a close/restart.
+  const persistedByWs = useMemo(
+    () =>
+      liveWorkspaces.map((w) => ({
+        path: w.path,
+        layoutMode: w.layoutMode,
+        persisted: toPersisted(w.agents)
+      })),
+    [liveWorkspaces]
+  )
   const persistedKey = useMemo(
     () =>
-      persisted
+      persistedByWs
         .map(
-          (p) =>
-            // Include the agent tags: detecting an agent from a typed command
-            // (startupCommand/agentId/agentLabel) changes none of the geometry
-            // fields, so without them here the autosave never fires and the agent
-            // comes back as a bare shell on reopen.
-            // `wide` is included for the same reason: toggling it back off can
-            // restore the exact previous geometry, so the flag alone must fire.
-            `${p.id}:${p.x},${p.y},${p.w},${p.h}:${p.isolation}:${p.shellId ?? ''}:${p.label}:${p.startupCommand ?? ''}:${p.agentId ?? ''}:${p.agentLabel ?? ''}:${p.wide ? 1 : 0}`
+          (w) =>
+            w.path +
+            '#' +
+            w.layoutMode +
+            '#' +
+            w.persisted
+              .map(
+                (p) =>
+                  `${p.id}:${p.x},${p.y},${p.w},${p.h}:${p.isolation}:${p.shellId ?? ''}:${p.label}:${p.startupCommand ?? ''}:${p.agentId ?? ''}:${p.agentLabel ?? ''}:${p.wide ? 1 : 0}`
+              )
+              .join('|')
         )
-        .join('|'),
-    [persisted]
+        .join('~~'),
+    [persistedByWs]
   )
-  const layoutMode = useStore((s) => s.layoutMode)
-
   useEffect(() => {
-    if (!projectPath) return
     window.clearTimeout(saveTimer.current)
     saveTimer.current = window.setTimeout(() => {
-      saveCanvas(projectPath, persisted, layoutMode)
+      for (const w of persistedByWs) saveCanvas(w.path, w.persisted, w.layoutMode)
     }, 400)
     return () => window.clearTimeout(saveTimer.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectPath, persistedKey, layoutMode])
+  }, [persistedKey])
 
   return (
     <div className="app">
@@ -521,7 +576,24 @@ export default function App(): JSX.Element {
       <UpdateBanner />
       <div className="app__main">
         <Rail />
-        <div className="app__canvas">{projectPath ? <Stage /> : <Home />}</div>
+        <div className="app__canvas" ref={canvasRef}>
+          {/* One persistently-mounted Stage per live workspace — only the active
+             one is visible (the rest are visibility-hidden but laid out, so their
+             PTYs keep streaming and show crisp on switch). Home when none open. */}
+          {liveWorkspaces.length === 0 ? (
+            <Home />
+          ) : (
+            liveWorkspaces.map((w) => (
+              <div
+                key={w.id}
+                className={'workspace-layer' + (w.id === activeWorkspaceId ? ' is-active' : '')}
+                aria-hidden={w.id !== activeWorkspaceId}
+              >
+                <Stage workspaceId={w.id} />
+              </div>
+            ))
+          )}
+        </div>
       </div>
       <Suspense fallback={null}>
         {/* Stacking order mirrors the Escape handler's close order (diff →

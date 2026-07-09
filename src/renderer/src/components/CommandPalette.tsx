@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState } from 'react'
-import { useStore, MAX_AGENTS } from '../store'
+import { useStore, activeWs, useActiveAgents, useActiveProjectPath, MAX_AGENTS } from '../store'
 import { openProjectInteractive, openProjectByPath, closeCurrentProject } from '../openProject'
 import { modLabel } from '../shortcuts'
 
@@ -42,13 +42,16 @@ export default function CommandPalette(): JSX.Element {
   const setPaletteOpen = useStore((s) => s.setPaletteOpen)
   const addAgent = useStore((s) => s.addAgent)
   const reopenLast = useStore((s) => s.reopenLast)
-  const lastClosed = useStore((s) => s.lastClosed)
+  const lastClosed = useStore((s) => activeWs(s)?.lastClosed ?? null)
   const focusTerminal = useStore((s) => s.focusTerminal)
+  const setActiveWorkspace = useStore((s) => s.setActiveWorkspace)
   const shells = useStore((s) => s.shells)
   const agentClis = useStore((s) => s.agentClis)
-  const workspaces = useStore((s) => s.workspaces)
-  const agents = useStore((s) => s.agents)
-  const projectPath = useStore((s) => s.projectPath)
+  const workspaces = useStore((s) => s.workspaces) // recents
+  const liveWorkspaces = useStore((s) => s.liveWorkspaces)
+  const activeWorkspaceId = useStore((s) => s.activeWorkspaceId)
+  const agents = useActiveAgents()
+  const projectPath = useActiveProjectPath()
 
   const [query, setQuery] = useState('')
   const [idx, setIdx] = useState(0)
@@ -85,17 +88,25 @@ export default function CommandPalette(): JSX.Element {
         list.push({ id: 'jump-' + a.id, title: `Jump to ${a.label}`, group: 'Jump to', run: () => focusTerminal(a.id) })
       )
     }
-    list.push({ id: 'open', title: 'Open project…', group: 'Project', run: openProjectInteractive })
-    workspaces
-      .filter((w) => w.path !== projectPath)
+    // Switch between already-open workspaces — instant and non-destructive
+    // (their agents keep running in the background either way).
+    liveWorkspaces
+      .filter((w) => w.id !== activeWorkspaceId)
       .forEach((w) =>
-        list.push({ id: 'switch-' + w.path, title: `Switch to ${w.name}`, group: 'Project', run: () => void openProjectByPath(w) })
+        list.push({ id: 'switch-' + w.id, title: `Switch to ${w.name}`, group: 'Workspace', run: () => setActiveWorkspace(w.id) })
+      )
+    list.push({ id: 'open', title: 'Open project…', group: 'Workspace', run: openProjectInteractive })
+    // Recents not already open → open as a new live tab.
+    workspaces
+      .filter((w) => !liveWorkspaces.some((lw) => lw.path === w.path))
+      .forEach((w) =>
+        list.push({ id: 'open-' + w.path, title: `Open ${w.name}`, group: 'Workspace', run: () => void openProjectByPath(w) })
       )
     if (projectPath) {
-      list.push({ id: 'close-project', title: 'Close project', group: 'Project', run: closeCurrentProject })
+      list.push({ id: 'close-workspace', title: 'Close workspace', group: 'Workspace', run: closeCurrentProject })
     }
     return list
-  }, [projectPath, shells, agentClis, workspaces, agents, lastClosed, addAgent, focusTerminal, reopenLast])
+  }, [projectPath, shells, agentClis, workspaces, liveWorkspaces, activeWorkspaceId, agents, lastClosed, addAgent, focusTerminal, reopenLast, setActiveWorkspace])
 
   const q = query.trim().toLowerCase()
   const items = useMemo<Cmd[]>(() => {
