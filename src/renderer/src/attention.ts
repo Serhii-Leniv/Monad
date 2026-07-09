@@ -37,10 +37,32 @@ export const ATTENTION_PATTERNS: RegExp[] = [
   /\ballow this (?:command|tool|action|edit)\b/i,
 ]
 
-/** True when the tail of recent output looks like a blocking prompt. */
+/** How many trailing non-empty lines of output a blocking prompt is allowed to
+ *  span. A boxed CLI menu (title + question + a few options + box borders) is
+ *  the widest real case; beyond that we're looking at earlier output, not the
+ *  live prompt. */
+const ATTENTION_LINE_WINDOW = 8
+
+/** True when the tail of recent output looks like a blocking prompt.
+ *
+ *  A program that is actually waiting on you printed its prompt and then STOPPED
+ *  — so the prompt is the last thing in the buffer. We therefore match only the
+ *  final few non-empty lines, not the whole 1200-char tail. This is what keeps
+ *  the attention alert honest: it won't fire on a prompt-like phrase buried in
+ *  earlier narration (agents write "Do you want to…" in prose all the time), nor
+ *  on a STALE prompt that was already answered but still lingers in the tail
+ *  while the next, shorter burst settles. A prompt can't scroll above this
+ *  window while still blocking — nothing prints after it — so nothing real is
+ *  missed. */
 export function needsAttention(tail: string): boolean {
   const text = stripAnsi(tail)
-  return ATTENTION_PATTERNS.some((re) => re.test(text))
+  const recent = text
+    .split(/\r?\n/)
+    .map((l) => l.trimEnd())
+    .filter((l) => l.trim() !== '')
+    .slice(-ATTENTION_LINE_WINDOW)
+    .join('\n')
+  return ATTENTION_PATTERNS.some((re) => re.test(recent))
 }
 
 /** Keep only the last `max` chars of a growing buffer (cheap ring buffer). */
