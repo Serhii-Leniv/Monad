@@ -1,24 +1,31 @@
 import { useMemo, useRef } from 'react'
 import { IconTerminal, IconGrid, IconColumns, IconSettings, IconBell } from './Icons'
-import { useStore, NEEDS_ATTENTION, MAX_AGENTS } from '../store'
+import {
+  useStore,
+  useActiveAgents,
+  useActiveLayoutMode,
+  useActiveProjectPath,
+  NEEDS_ATTENTION,
+  MAX_AGENTS
+} from '../store'
 import { modLabel } from '../shortcuts'
 
 /** Below this many terminals, grid and columns produce the same layout, so the
  *  layout toggle is hidden to keep the dock uncluttered. */
 const LAYOUT_TOGGLE_MIN = 3
 
-/** Minimal floating dock — icons only, refined liquid glass. Project switching
- *  lives in the top bar; the rail is just identity + per-canvas tools. */
+/** Minimal floating dock — icons only, refined liquid glass. Workspace switching
+ *  lives in the top bar; the rail is just identity + the active canvas's tools. */
 export default function Rail(): JSX.Element {
-  const projectPath = useStore((s) => s.projectPath)
-  const agents = useStore((s) => s.agents)
+  const projectPath = useActiveProjectPath()
+  const agents = useActiveAgents()
   const agentClis = useStore((s) => s.agentClis)
   const full = agents.length >= MAX_AGENTS
   // Single shared menu state — opening this closes the project switcher, etc.
   const newOpen = useStore((s) => s.openMenu === 'rail-new')
   const setOpenMenu = useStore((s) => s.setOpenMenu)
   const setNewOpen = (open: boolean): void => setOpenMenu(open ? 'rail-new' : null)
-  const layoutMode = useStore((s) => s.layoutMode)
+  const layoutMode = useActiveLayoutMode()
   // Derive with useMemo — a selector that returns a fresh array on every call
   // breaks React 18's useSyncExternalStore (unstable snapshot → render crash).
   const attentionIds = useMemo(
