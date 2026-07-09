@@ -345,20 +345,32 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       }
       const k = e.key.toLowerCase()
       if (mod && k === 'c' && term.hasSelection()) {
-        e.preventDefault()
-        window.api.clipboard.write(term.getSelection())
-        // Explicit confirmation: Ctrl+C is ambiguous (copy vs. SIGINT), so without
-        // feedback the user can't tell it copied and re-hits it — which, after the
-        // clear below, sends SIGINT instead. A brief toast breaks that loop.
-        useStore.getState().pushToast('Copied', 'success')
-        // On Windows/Linux `mod` IS Ctrl, so a lingering selection would make
-        // every Ctrl+C copy instead of sending SIGINT — you couldn't interrupt a
-        // runaway process without first clicking to clear the selection. Clear it
-        // so the next Ctrl+C falls through to the interrupt. (On macOS copy is ⌘C,
-        // separate from Ctrl+C, so there's no collision — but clearing after copy
-        // is still the conventional behaviour.)
-        if (!isMac) term.clearSelection()
-        return false
+        // macOS copy is ⌘C — a separate key from the Ctrl+C interrupt — so it
+        // always copies. On Windows/Linux Ctrl+C is BOTH copy and SIGINT, and
+        // copy-on-select leaves a selection highlighted after every drag: if that
+        // lingering selection made Ctrl+C copy, you could never interrupt a running
+        // process (it'd copy instead of sending SIGINT). So only treat Ctrl+C as
+        // copy when copy-on-select is OFF — i.e. when an explicit copy gesture is
+        // actually needed. With it ON the text is already on the clipboard, so we
+        // fall through to SIGINT (matching Windows Terminal).
+        if (isMac || !useStore.getState().settings.copyOnSelect) {
+          e.preventDefault()
+          window.api.clipboard.write(term.getSelection())
+          // Explicit confirmation: Ctrl+C is ambiguous (copy vs. SIGINT), so without
+          // feedback the user can't tell it copied and re-hits it — which, after the
+          // clear below, sends SIGINT instead. A brief toast breaks that loop.
+          useStore.getState().pushToast('Copied', 'success')
+          // On Windows/Linux `mod` IS Ctrl, so a lingering selection would make
+          // every Ctrl+C copy instead of sending SIGINT — clear it so the next
+          // Ctrl+C falls through to the interrupt. (On macOS copy is ⌘C, separate
+          // from Ctrl+C, so there's no collision — but clearing is still conventional.)
+          if (!isMac) term.clearSelection()
+          return false
+        }
+        // Windows/Linux with copy-on-select on: the drag already copied this text,
+        // so Ctrl+C is purely the interrupt. Drop the stale highlight and fall
+        // through so xterm sends SIGINT (\x03) to the running process.
+        term.clearSelection()
       }
       if (mod && k === 'v') {
         e.preventDefault()
