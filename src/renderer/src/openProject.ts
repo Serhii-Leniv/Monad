@@ -218,7 +218,15 @@ export async function openProjectByPath(ref: RecentProject): Promise<void> {
       return
     }
 
-    const before = useStore.getState().liveWorkspaces.length
+    // Hard cap so the tab strip always fits the screen — refuse rather than
+    // overflow. (An already-open folder was focused above; this only blocks NEW ones.)
+    if (useStore.getState().liveWorkspaces.length >= MAX_LIVE_WORKSPACES) {
+      store.pushToast(
+        `Up to ${MAX_LIVE_WORKSPACES} workspaces can be open at once — close one first.`,
+        'info'
+      )
+      return
+    }
     const [saved, git] = await Promise.all([
       window.api.project.load(ref.path),
       window.api.git.info(ref.path)
@@ -226,16 +234,6 @@ export async function openProjectByPath(ref: RecentProject): Promise<void> {
     void window.api.git.prune(ref.path)
     pushRecent(ref)
     useStore.getState().openWorkspace(ref, saved, git)
-    // Soft cap: warn once we go past it, but still open (a nudge, not a wall).
-    const after = useStore.getState().liveWorkspaces.length
-    if (after > before && after > MAX_LIVE_WORKSPACES) {
-      useStore
-        .getState()
-        .pushToast(
-          `${after} live workspaces open — each keeps its agents running in the background.`,
-          'info'
-        )
-    }
     // A non-git folder silently loses the headline feature (per-agent worktree
     // isolation) — say so instead of quietly downgrading to a shared dir, and
     // offer the fix in place. The action makes this toast sticky (Toasts.tsx),
@@ -301,8 +299,9 @@ export async function restoreWorkspaces(): Promise<void> {
   const openSet = getOpenSet()
   const recent = getRecent()
   const names = new Map(recent.map((r) => [r.path, r.name]))
-  const paths =
+  const paths = (
     openSet && openSet.paths.length > 0 ? openSet.paths : recent[0] ? [recent[0].path] : []
+  ).slice(0, MAX_LIVE_WORKSPACES)
   if (paths.length === 0) {
     persistEnabled = true
     return

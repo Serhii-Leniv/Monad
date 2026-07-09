@@ -41,9 +41,10 @@ export function toastIsSticky(t: Pick<Toast, 'kind' | 'actionLabel' | 'secondary
 /** Hard cap — more than this on one canvas is unreadable. */
 export const MAX_AGENTS = 9
 
-/** Soft cap on simultaneously-live workspaces (each keeps its agents running).
- *  Opening past it warns but is still allowed — a resource nudge, not a wall. */
-export const MAX_LIVE_WORKSPACES = 5
+/** Hard cap on simultaneously-live workspaces — kept low so the top-bar tabs
+ *  always fit without scrolling (and to bound the live agent-process count).
+ *  Opening past it is refused with a nudge to close a tab first. */
+export const MAX_LIVE_WORKSPACES = 6
 
 /**
  * Lifecycle of a terminal's agent, surfaced at a glance across the canvas:
