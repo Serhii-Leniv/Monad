@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { getRecent } from './recent'
+import { getRecent, type RecentProject } from './recent'
 import { sanitizeTheme, type ThemePreference } from './theme'
 
 export type Isolation = 'worktree' | 'shared'
@@ -8,11 +8,9 @@ export type SettingsTab = 'terminal' | 'appearance' | 'workspace' | 'notificatio
 /** The one dropdown menu allowed open at a time (rail "new", project switcher). */
 export type MenuId = 'rail-new' | 'project'
 
-/** An opened project folder, surfaced as a switchable workspace in the dock. */
-export interface Workspace {
-  path: string
-  name: string
-}
+/** A recently-opened project folder — the switcher's recents list.
+ *  (Was `Workspace`; "workspace" now means a *live* session — see WorkspaceSession.) */
+export type Workspace = RecentProject
 
 export interface Toast {
   id: string
@@ -42,6 +40,10 @@ export function toastIsSticky(t: Pick<Toast, 'kind' | 'actionLabel' | 'secondary
 
 /** Hard cap — more than this on one canvas is unreadable. */
 export const MAX_AGENTS = 9
+
+/** Soft cap on simultaneously-live workspaces (each keeps its agents running).
+ *  Opening past it warns but is still allowed — a resource nudge, not a wall. */
+export const MAX_LIVE_WORKSPACES = 5
 
 /**
  * Lifecycle of a terminal's agent, surfaced at a glance across the canvas:
@@ -93,6 +95,44 @@ export interface AgentInstance {
   dropH?: number
 }
 
+/** Snapshot of the most recently closed terminal, for reopen. */
+export interface LastClosed {
+  label: string
+  shellId?: string
+  isolation: Isolation
+  startupCommand?: string
+  agentLabel?: string
+  agentId?: string
+}
+
+/**
+ * A live workspace — one open project folder with its own canvas of agents,
+ * kept running in the background even when another workspace is on screen. This
+ * is what the top-bar tabs switch between. Everything that used to be a single
+ * global "the open project" now lives per-session here; exactly one session is
+ * `activeWorkspaceId` at a time (visible + interactive), the rest stay mounted
+ * but hidden so their PTYs keep streaming.
+ */
+export interface WorkspaceSession {
+  /** Stable per live tab (not the folder path — lets the same folder theory be
+   *  guarded against, and survives renames). */
+  id: string
+  path: string
+  name: string
+  isGit: boolean
+  baseBranch: string | null
+  agents: AgentInstance[]
+  layoutMode: LayoutMode
+  selectedIds: string[]
+  focusedId: string | null
+  closingIds: string[]
+  draggingId: string | null
+  pendingCloseId: string | null
+  bulkCloseIds: string[] | null
+  diffAgentId: string | null
+  lastClosed: LastClosed | null
+}
+
 /** Fields written to .monad/canvas.json (runtime fields stripped). */
 export interface PersistedAgent {
   id: string
@@ -113,14 +153,12 @@ export interface PersistedAgent {
 }
 
 interface AppState {
-  projectPath: string | null
-  projectName: string | null
-  isGit: boolean
-  baseBranch: string | null
-  /** Recently-opened folders, newest first — the dock's workspace switcher. */
+  /** Live workspaces (open tabs), in tab order. Each keeps its agents running. */
+  liveWorkspaces: WorkspaceSession[]
+  /** The workspace currently on screen (visible + interactive), or null (Home). */
+  activeWorkspaceId: string | null
+  /** Recently-opened folders, newest first — the +/dropdown's recents list. */
   workspaces: Workspace[]
-  agents: AgentInstance[]
-  layoutMode: LayoutMode
   canvasW: number
   canvasH: number
   /** True once the stage has been measured at least once (real viewport size). */
@@ -130,22 +168,6 @@ interface AppState {
   /** True once detectAgents has returned — gates the "no CLIs" first-run hint so
    *  it never flashes during the initial async detect. */
   agentClisLoaded: boolean
-  /** Snapshot of the most recently closed terminal, for reopen. */
-  lastClosed: {
-    label: string
-    shellId?: string
-    isolation: Isolation
-    startupCommand?: string
-    agentLabel?: string
-    agentId?: string
-  } | null
-  selectedIds: string[]
-  /** Agents mid close-animation — still rendered, removed for real once it ends. */
-  closingIds: string[]
-  draggingId: string | null
-  panX: number
-  panY: number
-  zoom: number
   settings: AppSettings
   settingsOpen: boolean
   /** Which Settings tab to show — also how ⌘/ deep-links to the Shortcuts tab. */
@@ -159,20 +181,18 @@ interface AppState {
   update: UpdateInfo | null
   /** True once the user hides the update banner this session (returns next launch). */
   updateDismissed: boolean
-  /** Agent whose worktree changes are open in the diff/merge review modal. */
-  diffAgentId: string | null
-  /** Agent the user asked to close from outside its pane (⌘W / palette) — the
-   *  matching TerminalPane picks this up and runs its guarded close flow. */
-  pendingCloseId: string | null
-  /** Ids snapshotted when a bulk close was requested (⌘W on a multi-selection,
-   *  or the palette command) — one confirm in App.tsx closes them all. */
-  bulkCloseIds: string[] | null
-  focusedId: string | null
+  panX: number
+  panY: number
+  zoom: number
   toasts: Toast[]
 
-  openProject: (ref: ProjectRef, saved: PersistedCanvas | null, git: GitInfo) => void
-  closeProject: () => void
-  /** Refresh the open project's git state in place (e.g. after "Initialize git")
+  /** Open a folder as a new live workspace tab (or focus it if already open). */
+  openWorkspace: (ref: ProjectRef, saved: PersistedCanvas | null, git: GitInfo) => void
+  /** Close a live workspace tab (detach: kills its PTYs, keeps worktrees on disk). */
+  closeWorkspace: (id: string) => void
+  /** Bring a live workspace to the foreground. */
+  setActiveWorkspace: (id: string) => void
+  /** Refresh the active workspace's git state in place (e.g. after "Initialize git")
    *  without re-opening — keeps the shared-mode chip and isolation default live. */
   setGitInfo: (git: GitInfo) => void
   setWorkspaces: (workspaces: Workspace[]) => void
@@ -452,24 +472,61 @@ export function toPersisted(agents: AgentInstance[]): PersistedAgent[] {
   }))
 }
 
+// --- workspace selectors -------------------------------------------------
+// The scoped state (agents/selection/layout/…) lives per live workspace. These
+// resolve "the active one" and "the one owning agent X" so components and the
+// id-addressed mutators don't each re-implement the lookup. Stable EMPTY refs so
+// a `?? EMPTY` fallback never returns a fresh array (which would thrash React).
+
+const EMPTY_AGENTS: AgentInstance[] = []
+const EMPTY_IDS: string[] = []
+
+/** The workspace currently on screen, or undefined (Home / none open). */
+export function activeWs(s: AppState): WorkspaceSession | undefined {
+  return s.activeWorkspaceId ? s.liveWorkspaces.find((w) => w.id === s.activeWorkspaceId) : undefined
+}
+/** A live workspace by its id. */
+export function wsById(s: AppState, id: string): WorkspaceSession | undefined {
+  return s.liveWorkspaces.find((w) => w.id === id)
+}
+/** The live workspace that owns a given agent id (agent ids are globally unique). */
+export function wsOfAgent(s: AppState, agentId: string): WorkspaceSession | undefined {
+  return s.liveWorkspaces.find((w) => w.agents.some((a) => a.id === agentId))
+}
+
+/** Convenience hooks for components that only care about the active workspace. */
+export const useActiveAgents = (): AgentInstance[] =>
+  useStore((s) => activeWs(s)?.agents ?? EMPTY_AGENTS)
+export const useActiveSelectedIds = (): string[] =>
+  useStore((s) => activeWs(s)?.selectedIds ?? EMPTY_IDS)
+export const useActiveLayoutMode = (): LayoutMode =>
+  useStore((s) => activeWs(s)?.layoutMode ?? 'grid')
+export const useActiveProjectPath = (): string | null =>
+  useStore((s) => activeWs(s)?.path ?? null)
+export const useActiveProjectName = (): string | null =>
+  useStore((s) => activeWs(s)?.name ?? null)
+export const useActiveIsGit = (): boolean => useStore((s) => activeWs(s)?.isGit ?? false)
+
+/** Replace one live workspace immutably, leaving every other session's object
+ *  reference intact (so only that workspace's Stage/panes re-render). */
+function mapWs(
+  list: WorkspaceSession[],
+  id: string,
+  fn: (w: WorkspaceSession) => WorkspaceSession
+): WorkspaceSession[] {
+  return list.map((w) => (w.id === id ? fn(w) : w))
+}
+
 export const useStore = create<AppState>((set, get) => ({
-  projectPath: null,
-  projectName: null,
-  isGit: false,
-  baseBranch: null,
+  liveWorkspaces: [],
+  activeWorkspaceId: null,
   workspaces: getRecent(),
-  agents: [],
-  layoutMode: 'grid',
   canvasW: 1200,
   canvasH: 800,
   canvasReady: false,
   shells: [],
   agentClis: [],
   agentClisLoaded: false,
-  lastClosed: null,
-  selectedIds: [],
-  closingIds: [],
-  draggingId: null,
   settings: loadSettings(),
   settingsOpen: false,
   settingsTab: 'terminal',
@@ -478,17 +535,17 @@ export const useStore = create<AppState>((set, get) => ({
   feedbackOpen: false,
   update: null,
   updateDismissed: false,
-  diffAgentId: null,
-  pendingCloseId: null,
-  bulkCloseIds: null,
-  focusedId: null,
   toasts: [],
   panX: 0,
   panY: 0,
   zoom: 1,
 
-  openProject: (ref, saved, git) =>
+  openWorkspace: (ref, saved, git) =>
     set((s) => {
+      // Same folder already live → just bring its tab forward (never duplicate).
+      const existing = s.liveWorkspaces.find((w) => w.path === ref.path)
+      if (existing) return { activeWorkspaceId: existing.id }
+
       const loaded: AgentInstance[] = []
       for (const p of (saved?.agents ?? []).slice(0, MAX_AGENTS)) {
         // Migrate old numeric auto-names (and blanks) to short random names;
@@ -497,53 +554,77 @@ export const useStore = create<AppState>((set, get) => ({
         loaded.push({ ...p, label, isolation: p.isolation ?? 'shared' })
       }
       const mode: LayoutMode = saved?.layoutMode === 'columns' ? 'columns' : 'grid'
-      return {
-        projectPath: ref.path,
-        projectName: ref.name,
+      const session: WorkspaceSession = {
+        id: uuid(),
+        path: ref.path,
+        name: ref.name,
         isGit: git.isGit,
         baseBranch: git.branch,
         // Start with the first terminal active so you can type immediately.
+        agents: laidOut(loaded, mode, s.canvasW, s.canvasH),
+        layoutMode: mode,
         selectedIds: loaded[0] ? [loaded[0].id] : [],
         focusedId: null,
-        // Clear transient lifecycle state so nothing leaks across projects (a stale
-        // diff target, a "reopen" from the old project, a half-closed pane).
         closingIds: [],
         draggingId: null,
         pendingCloseId: null,
         bulkCloseIds: null,
         diffAgentId: null,
-        lastClosed: null,
-        layoutMode: mode,
-        agents: laidOut(loaded, mode, s.canvasW, s.canvasH),
-        panX: 0,
-        panY: 0,
-        zoom: 1
+        lastClosed: null
+      }
+      return {
+        liveWorkspaces: [...s.liveWorkspaces, session],
+        activeWorkspaceId: session.id
       }
     }),
 
-  closeProject: () =>
-    set({
-      projectPath: null,
-      projectName: null,
-      isGit: false,
-      baseBranch: null,
-      agents: [],
-      selectedIds: [],
-      // Drop transient lifecycle state so it can't leak into the next project.
-      closingIds: [],
-      draggingId: null,
-      pendingCloseId: null,
-      bulkCloseIds: null,
-      diffAgentId: null,
-      lastClosed: null,
-      focusedId: null
+  closeWorkspace: (id) =>
+    set((s) => {
+      const idx = s.liveWorkspaces.findIndex((w) => w.id === id)
+      if (idx === -1) return {}
+      // Detach only: dropping the session unmounts its Stage → panes unmount →
+      // PTYs die. Worktrees/branches survive (worktree.remove lives in
+      // removeAgent, which we deliberately do NOT call here).
+      const liveWorkspaces = s.liveWorkspaces.filter((w) => w.id !== id)
+      let activeWorkspaceId = s.activeWorkspaceId
+      if (s.activeWorkspaceId === id) {
+        // Hand the foreground to the neighbour that slid into this slot (else the
+        // previous one, else nothing → Home).
+        const neighbour = liveWorkspaces[idx] ?? liveWorkspaces[idx - 1] ?? null
+        activeWorkspaceId = neighbour ? neighbour.id : null
+      }
+      return { liveWorkspaces, activeWorkspaceId }
     }),
 
-  setGitInfo: (git) => set({ isGit: git.isGit, baseBranch: git.branch }),
+  setActiveWorkspace: (id) =>
+    set((s) => {
+      if (id === s.activeWorkspaceId || !s.liveWorkspaces.some((w) => w.id === id)) return {}
+      // Re-tile the incoming workspace to the current viewport (the window may
+      // have resized while it was hidden) and make sure it has a live selection
+      // so keyboard input lands the instant it shows.
+      const liveWorkspaces = mapWs(s.liveWorkspaces, id, (w) => {
+        const agents = laidOut(w.agents, w.layoutMode, s.canvasW, s.canvasH)
+        const selectedIds =
+          w.selectedIds.length > 0 ? w.selectedIds : agents[0] ? [agents[0].id] : []
+        return agents === w.agents && selectedIds === w.selectedIds
+          ? w
+          : { ...w, agents, selectedIds }
+      })
+      return { activeWorkspaceId: id, liveWorkspaces }
+    }),
+
+  setGitInfo: (git) =>
+    set((s) => {
+      const ws = activeWs(s)
+      if (!ws) return {}
+      return { liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({ ...w, isGit: git.isGit, baseBranch: git.branch })) }
+    }),
 
   setWorkspaces: (workspaces) => set({ workspaces }),
 
-  // Re-tile to the new viewport (zoom stays 1 → font fixed; terminals re-flow).
+  // Re-tile EVERY live workspace to the new viewport — they all share this one
+  // window's canvas box, so a resize must reflow the hidden ones too (their panes
+  // are laid out even while hidden, ready to show crisp on switch).
   setCanvasSize: (w, h) =>
     set((s) => {
       if (s.canvasReady && w === s.canvasW && h === s.canvasH) return {}
@@ -551,7 +632,10 @@ export const useStore = create<AppState>((set, get) => ({
         canvasW: w,
         canvasH: h,
         canvasReady: true,
-        agents: laidOut(s.agents, s.layoutMode, w, h)
+        liveWorkspaces: s.liveWorkspaces.map((ws) => ({
+          ...ws,
+          agents: laidOut(ws.agents, ws.layoutMode, w, h)
+        }))
       }
     }),
 
@@ -569,14 +653,18 @@ export const useStore = create<AppState>((set, get) => ({
 
   setSelected: (ids) =>
     set((s) => {
+      const ws = activeWs(s)
+      if (!ws) return {}
       // Invariant: while any terminal exists, one is always selected (and so
       // keyboard-focused). Clicking empty canvas / rubber-banding nothing must
       // never leave the canvas with no active terminal to type into — keep the
       // current selection, or fall back to the first terminal.
-      if (ids.length === 0 && s.agents.length > 0) {
-        return s.selectedIds.length > 0 ? {} : { selectedIds: [s.agents[0].id] }
+      let selectedIds = ids
+      if (ids.length === 0 && ws.agents.length > 0) {
+        if (ws.selectedIds.length > 0) return {}
+        selectedIds = [ws.agents[0].id]
       }
-      return { selectedIds: ids }
+      return { liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({ ...w, selectedIds })) }
     }),
 
   setSetting: (key, value) =>
@@ -606,34 +694,64 @@ export const useStore = create<AppState>((set, get) => ({
 
   dismissUpdate: () => set({ updateDismissed: true }),
 
-  setDiffAgentId: (id) => set({ diffAgentId: id }),
+  setDiffAgentId: (id) =>
+    set((s) => {
+      // A diff review always belongs to the workspace on screen.
+      const ws = activeWs(s)
+      if (!ws) return {}
+      return { liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({ ...w, diffAgentId: id })) }
+    }),
 
   // The pane owning `id` runs the guarded close (dirty-check + confirm); these
-  // just hand the request to it and clear it once picked up.
-  requestClose: (id) => set({ pendingCloseId: id }),
-  clearPendingClose: () => set({ pendingCloseId: null }),
+  // just hand the request to it (on its own workspace) and clear it once picked up.
+  requestClose: (id) =>
+    set((s) => {
+      const ws = wsOfAgent(s, id)
+      if (!ws) return {}
+      return { liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({ ...w, pendingCloseId: id })) }
+    }),
+  clearPendingClose: () =>
+    set((s) => {
+      const ws = activeWs(s)
+      if (!ws || ws.pendingCloseId === null) return {}
+      return { liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({ ...w, pendingCloseId: null })) }
+    }),
 
   // Bulk close is confirmed (and executed) by the modal in App.tsx; the store
-  // only carries the request so both ⌘W and the palette can raise it.
-  requestBulkClose: (ids) => set({ bulkCloseIds: ids }),
-  clearBulkClose: () => set({ bulkCloseIds: null }),
-
+  // only carries the request (on the active workspace) so both ⌘W and the palette
+  // can raise it.
+  requestBulkClose: (ids) =>
+    set((s) => {
+      const ws = activeWs(s)
+      if (!ws) return {}
+      return { liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({ ...w, bulkCloseIds: ids })) }
+    }),
+  clearBulkClose: () =>
+    set((s) => {
+      const ws = activeWs(s)
+      if (!ws || ws.bulkCloseIds === null) return {}
+      return { liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({ ...w, bulkCloseIds: null })) }
+    }),
 
   addAgent: (opts) => {
+    const ws = activeWs(get())
+    if (!ws) return
     // Tell the user why nothing happened at the cap — the ⌘T / reopen keyboard
     // paths otherwise no-op silently (the Rail button + palette already hide/disable
     // themselves, but a keystroke gave no feedback and read as a broken shortcut).
-    if (get().agents.length >= MAX_AGENTS) {
+    if (ws.agents.length >= MAX_AGENTS) {
       get().pushToast(`Maximum ${MAX_AGENTS} terminals on one canvas`, 'info')
       return
     }
     set((s) => {
+      const cur = wsById(s, ws.id)
+      if (!cur) return {}
       const isolation: Isolation =
-        s.isGit && s.settings.defaultIsolation === 'worktree' ? 'worktree' : 'shared'
+        cur.isGit && s.settings.defaultIsolation === 'worktree' ? 'worktree' : 'shared'
       const shellId = opts?.shellId ?? s.settings.defaultShellId ?? undefined
       const agent: AgentInstance = {
         id: uuid(),
-        label: uniqueName(s.agents),
+        label: uniqueName(cur.agents),
         x: 0,
         y: 0,
         w: DEFAULT_W,
@@ -645,12 +763,12 @@ export const useStore = create<AppState>((set, get) => ({
         agentId: opts?.agentId
       }
       return {
-        agents: laidOut([...s.agents, agent], s.layoutMode, s.canvasW, s.canvasH),
-        selectedIds: [agent.id],
-        focusedId: null,
-        panX: 0,
-        panY: 0,
-        zoom: 1
+        liveWorkspaces: mapWs(s.liveWorkspaces, cur.id, (w) => ({
+          ...w,
+          agents: laidOut([...w.agents, agent], w.layoutMode, s.canvasW, s.canvasH),
+          selectedIds: [agent.id],
+          focusedId: null
+        }))
       }
     })
   },
@@ -659,60 +777,72 @@ export const useStore = create<AppState>((set, get) => ({
     // Two-phase: flag the pane so it plays its collapse animation, then do the
     // real removal (and worktree cleanup) once that's had time to finish. Guard
     // against double-calls so a second close can't double-remove the worktree.
-    const st = get()
-    if (st.closingIds.includes(id) || !st.agents.some((a) => a.id === id)) return
-    set({ closingIds: [...st.closingIds, id] })
+    const ws = wsOfAgent(get(), id)
+    if (!ws) return
+    if (ws.closingIds.includes(id) || !ws.agents.some((a) => a.id === id)) return
+    set((s) => ({
+      liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({
+        ...w,
+        closingIds: [...w.closingIds, id]
+      }))
+    }))
     setTimeout(() => {
       set((s) => {
-        const agent = s.agents.find((a) => a.id === id)
-        const closingIds = s.closingIds.filter((c) => c !== id)
-        if (!agent) return { closingIds }
+        const w = wsById(s, ws.id)
+        if (!w) return {}
+        const agent = w.agents.find((a) => a.id === id)
+        const closingIds = w.closingIds.filter((c) => c !== id)
+        if (!agent) return { liveWorkspaces: mapWs(s.liveWorkspaces, w.id, (x) => ({ ...x, closingIds })) }
         // keepWorktree leaves the branch + worktree on disk (recoverable work).
-        if (!opts?.keepWorktree && agent.isolation === 'worktree' && s.projectPath) {
-          void window.api.worktree.remove(s.projectPath, id)
+        if (!opts?.keepWorktree && agent.isolation === 'worktree' && w.path) {
+          void window.api.worktree.remove(w.path, id)
         }
-        const rest = s.agents.filter((a) => a.id !== id)
-        let selectedIds = s.selectedIds.filter((sid) => sid !== id)
+        const rest = w.agents.filter((a) => a.id !== id)
+        let selectedIds = w.selectedIds.filter((sid) => sid !== id)
         // Closing the active terminal shouldn't leave the canvas inert — hand
         // selection (and thus keyboard focus) to the nearest surviving neighbour.
         if (selectedIds.length === 0 && rest.length > 0) {
-          const idx = s.agents.findIndex((a) => a.id === id)
+          const idx = w.agents.findIndex((a) => a.id === id)
           selectedIds = [rest[Math.min(idx, rest.length - 1)].id]
         }
         return {
-          agents: laidOut(rest, s.layoutMode, s.canvasW, s.canvasH),
-          selectedIds,
-          closingIds,
-          focusedId: s.focusedId === id ? null : s.focusedId,
-          pendingCloseId: s.pendingCloseId === id ? null : s.pendingCloseId,
-          lastClosed: {
-            label: agent.label,
-            shellId: agent.shellId,
-            isolation: agent.isolation,
-            startupCommand: agent.startupCommand,
-            agentLabel: agent.agentLabel,
-            agentId: agent.agentId
-          },
-          panX: 0,
-          panY: 0,
-          zoom: 1
+          liveWorkspaces: mapWs(s.liveWorkspaces, w.id, (x) => ({
+            ...x,
+            agents: laidOut(rest, x.layoutMode, s.canvasW, s.canvasH),
+            selectedIds,
+            closingIds,
+            focusedId: x.focusedId === id ? null : x.focusedId,
+            pendingCloseId: x.pendingCloseId === id ? null : x.pendingCloseId,
+            lastClosed: {
+              label: agent.label,
+              shellId: agent.shellId,
+              isolation: agent.isolation,
+              startupCommand: agent.startupCommand,
+              agentLabel: agent.agentLabel,
+              agentId: agent.agentId
+            }
+          }))
         }
       })
     }, 180)
   },
 
   reopenLast: () => {
-    if (get().agents.length >= MAX_AGENTS) {
+    const ws = activeWs(get())
+    if (!ws) return
+    if (ws.agents.length >= MAX_AGENTS) {
       get().pushToast(`Maximum ${MAX_AGENTS} terminals on one canvas`, 'info')
       return
     }
     set((s) => {
-      const lc = s.lastClosed
+      const w = wsById(s, ws.id)
+      if (!w) return {}
+      const lc = w.lastClosed
       if (!lc) return {}
-      const taken = new Set(s.agents.map((a) => a.label.toLowerCase()))
+      const taken = new Set(w.agents.map((a) => a.label.toLowerCase()))
       const agent: AgentInstance = {
         id: uuid(),
-        label: taken.has(lc.label.toLowerCase()) ? uniqueName(s.agents) : lc.label,
+        label: taken.has(lc.label.toLowerCase()) ? uniqueName(w.agents) : lc.label,
         x: 0,
         y: 0,
         w: DEFAULT_W,
@@ -724,91 +854,154 @@ export const useStore = create<AppState>((set, get) => ({
         agentId: lc.agentId
       }
       return {
-        agents: laidOut([...s.agents, agent], s.layoutMode, s.canvasW, s.canvasH),
-        selectedIds: [agent.id],
-        focusedId: null,
-        lastClosed: null,
-        panX: 0,
-        panY: 0,
-        zoom: 1
+        liveWorkspaces: mapWs(s.liveWorkspaces, w.id, (x) => ({
+          ...x,
+          agents: laidOut([...x.agents, agent], x.layoutMode, s.canvasW, s.canvasH),
+          selectedIds: [agent.id],
+          focusedId: null,
+          lastClosed: null
+        }))
       }
     })
   },
 
   renameAgent: (id, label) =>
-    set((s) => ({
-      agents: s.agents.map((a) => (a.id === id ? { ...a, label: label || a.label } : a))
-    })),
+    set((s) => {
+      const ws = wsOfAgent(s, id)
+      if (!ws) return {}
+      return {
+        liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({
+          ...w,
+          agents: w.agents.map((a) => (a.id === id ? { ...a, label: label || a.label } : a))
+        }))
+      }
+    }),
 
-  // Toggle a card's wide (double-weight) tile and re-tile. A layout action, so
-  // it resets the camera like the others (setLayoutMode / relayout).
+  // Toggle a card's wide (double-weight) tile and re-tile.
   toggleWide: (id) =>
-    set((s) => ({
-      agents: laidOut(
-        s.agents.map((a) => (a.id === id ? { ...a, wide: !a.wide } : a)),
-        s.layoutMode,
-        s.canvasW,
-        s.canvasH
-      ),
-      panX: 0,
-      panY: 0,
-      zoom: 1
-    })),
+    set((s) => {
+      const ws = wsOfAgent(s, id)
+      if (!ws) return {}
+      return {
+        liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({
+          ...w,
+          agents: laidOut(
+            w.agents.map((a) => (a.id === id ? { ...a, wide: !a.wide } : a)),
+            w.layoutMode,
+            s.canvasW,
+            s.canvasH
+          )
+        }))
+      }
+    }),
 
-  // Switch the persistent layout and re-tile immediately.
+  // Switch the active workspace's persistent layout and re-tile immediately.
   setLayoutMode: (mode) =>
-    set((s) => ({
-      layoutMode: mode,
-      focusedId: null,
-      agents: laidOut(s.agents, mode, s.canvasW, s.canvasH),
-      panX: 0,
-      panY: 0,
-      zoom: 1
-    })),
+    set((s) => {
+      const ws = activeWs(s)
+      if (!ws) return {}
+      return {
+        liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({
+          ...w,
+          layoutMode: mode,
+          focusedId: null,
+          agents: laidOut(w.agents, mode, s.canvasW, s.canvasH)
+        }))
+      }
+    }),
 
-  setDraggingId: (id) => set({ draggingId: id }),
+  setDraggingId: (id) =>
+    set((s) => {
+      const ws = activeWs(s)
+      if (!ws) return {}
+      return { liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({ ...w, draggingId: id })) }
+    }),
 
   // Live reorder while dragging: move it in the order, re-tile the OTHERS (the
   // dragged one is skipped so it keeps following the cursor, leaving a gap).
   reorderAgent: (id, toIndex) =>
     set((s) => {
-      const from = s.agents.findIndex((a) => a.id === id)
-      if (from < 0) return {}
-      const arr = [...s.agents]
-      const [moved] = arr.splice(from, 1)
-      arr.splice(Math.max(0, Math.min(arr.length, toIndex)), 0, moved)
+      const ws = wsOfAgent(s, id)
+      if (!ws) return {}
       return {
-        agents: laidOut(arr, s.layoutMode, s.canvasW, s.canvasH, s.draggingId),
-        panX: 0,
-        panY: 0,
-        zoom: 1
+        liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => {
+          const from = w.agents.findIndex((a) => a.id === id)
+          if (from < 0) return w
+          const arr = [...w.agents]
+          const [moved] = arr.splice(from, 1)
+          arr.splice(Math.max(0, Math.min(arr.length, toIndex)), 0, moved)
+          return { ...w, agents: laidOut(arr, w.layoutMode, s.canvasW, s.canvasH, w.draggingId) }
+        })
       }
     }),
 
-  // Re-tile everything to the viewport (skips the dragged card if one is held).
+  // Re-tile the active workspace to the viewport (skips the dragged card if held).
   relayout: () =>
-    set((s) => ({
-      agents: laidOut(s.agents, s.layoutMode, s.canvasW, s.canvasH, s.draggingId),
-      panX: 0,
-      panY: 0,
-      zoom: 1
-    })),
+    set((s) => {
+      const ws = activeWs(s)
+      if (!ws) return {}
+      return {
+        liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({
+          ...w,
+          agents: laidOut(w.agents, w.layoutMode, s.canvasW, s.canvasH, w.draggingId)
+        }))
+      }
+    }),
 
   // Focus: the pane expands to fill the viewport (tmux-style zoom) rather than
   // scaling the camera. A CSS scale() breaks xterm's mouse math — its cell
   // hit-testing doesn't compensate for transforms, so selection landed on the
   // wrong characters — and scaled glyphs blur. Maximizing refits the terminal
   // instead: crisp text, MORE rows/cols, and pixel-perfect selection.
+  // Jumping to an agent in a BACKGROUND workspace also brings that workspace
+  // forward (so "Jump to"/notification targets always land somewhere visible).
   focusTerminal: (id) =>
-    set((s) => (s.agents.some((x) => x.id === id) ? { focusedId: id, selectedIds: [id] } : s)),
+    set((s) => {
+      const ws = wsOfAgent(s, id)
+      if (!ws) return {}
+      return {
+        activeWorkspaceId: ws.id,
+        liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({
+          ...w,
+          focusedId: id,
+          selectedIds: [id]
+        }))
+      }
+    }),
 
-  clearFocus: () => set({ focusedId: null }),
+  clearFocus: () =>
+    set((s) => {
+      const ws = activeWs(s)
+      if (!ws || ws.focusedId === null) return {}
+      return { liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({ ...w, focusedId: null })) }
+    }),
 
+  // Runtime + status updates come from EVERY live workspace's panes (background
+  // ones stream too), so locate the owning workspace by agent id rather than
+  // assuming the active one. Only the owning session's object changes.
   setAgentRuntime: (id, rt) =>
-    set((s) => ({ agents: s.agents.map((a) => (a.id === id ? { ...a, ...rt } : a)) })),
+    set((s) => {
+      const ws = wsOfAgent(s, id)
+      if (!ws) return {}
+      return {
+        liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({
+          ...w,
+          agents: w.agents.map((a) => (a.id === id ? { ...a, ...rt } : a))
+        }))
+      }
+    }),
 
   setStatus: (id, status) =>
-    set((s) => ({ agents: s.agents.map((a) => (a.id === id ? { ...a, status } : a)) })),
+    set((s) => {
+      const ws = wsOfAgent(s, id)
+      if (!ws) return {}
+      return {
+        liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({
+          ...w,
+          agents: w.agents.map((a) => (a.id === id ? { ...a, status } : a))
+        }))
+      }
+    }),
 
   pushToast: (text, kind = 'info', action) =>
     set((s) => {

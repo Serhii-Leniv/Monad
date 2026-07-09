@@ -1,5 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
-import { useStore } from './store'
+import { useStore, activeWs } from './store'
 
 /**
  * Live xterm instances keyed by agent id. TerminalPane (un)registers on
@@ -9,14 +9,27 @@ import { useStore } from './store'
 export const terminals = new Map<string, Terminal>()
 
 /**
+ * Each pane's FitAddon-driven refit, keyed by agent id. Registered on mount so a
+ * workspace's terminals can be re-measured when it's brought to the foreground —
+ * background workspaces are laid out while hidden, and a refit on show settles
+ * any viewport drift from the visibility flip.
+ */
+export const fits = new Map<string, () => void>()
+
+/** Refit a set of agents' terminals (the workspace being activated). */
+export function refitAgents(ids: string[]): void {
+  for (const id of ids) fits.get(id)?.()
+}
+
+/**
  * Hand keyboard focus back to the active terminal (the maximized one, else the
  * sole selected one). Called after an overlay closes or a click lands off a pane,
  * so typing never dead-ends on `<body>` when no selection *transition* occurred
  * to trigger TerminalPane's own focus effect.
  */
 export function focusActiveTerminal(): void {
-  const st = useStore.getState()
-  const id = st.focusedId ?? st.selectedIds[0]
+  const ws = activeWs(useStore.getState())
+  const id = ws?.focusedId ?? ws?.selectedIds[0]
   if (id) terminals.get(id)?.focus()
 }
 
@@ -27,7 +40,7 @@ export function focusActiveTerminal(): void {
  * spawned yet — or failed to — is skipped rather than erroring the whole send.
  */
 export function broadcastToAgents(ids: string[], data: string): void {
-  const agents = useStore.getState().agents
+  const agents = activeWs(useStore.getState())?.agents ?? []
   for (const id of ids) {
     const ptyId = agents.find((a) => a.id === id)?.ptyId
     if (ptyId) window.api.pty.write(ptyId, data)
@@ -104,10 +117,10 @@ export async function handleMenuEdit(action: 'copy' | 'paste' | 'selectAll'): Pr
     // Nothing has DOM focus (e.g. the user clicked a pane header, then hit ⌘V).
     // Route to the terminal they mean: the focused pane, or the single selected
     // one — so paste "just works" instead of silently going nowhere.
-    const st = useStore.getState()
+    const ws = activeWs(useStore.getState())
     // Only an unambiguous target — the maximized pane or the sole selection; under a
     // multi-select, paste stays suppressed rather than landing in an arbitrary pane.
-    const targetId = st.focusedId ?? (st.selectedIds.length === 1 ? st.selectedIds[0] : null)
+    const targetId = ws?.focusedId ?? (ws?.selectedIds.length === 1 ? ws.selectedIds[0] : null)
     const term = targetId ? terminals.get(targetId) : undefined
     if (term) await applyToTerm(term)
     return

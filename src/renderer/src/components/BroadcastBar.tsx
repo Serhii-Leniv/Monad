@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useStore } from '../store'
+import { useStore, activeWs } from '../store'
 import { broadcastToAgents, focusActiveTerminal } from '../terminalRegistry'
 import { IconClose, IconSend } from './Icons'
 
@@ -28,7 +28,7 @@ function loadHistory(): string[] {
  * steals focus on appearance — the terminals keep it until the bar is clicked.
  */
 export default function BroadcastBar(): JSX.Element {
-  const selectedCount = useStore((s) => s.selectedIds.length)
+  const selectedCount = useStore((s) => activeWs(s)?.selectedIds.length ?? 0)
   const setSelected = useStore((s) => s.setSelected)
   const [text, setText] = useState('')
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -66,7 +66,7 @@ export default function BroadcastBar(): JSX.Element {
   }
 
   const send = (): void => {
-    const ids = useStore.getState().selectedIds
+    const ids = activeWs(useStore.getState())?.selectedIds ?? []
     if (!text || ids.length === 0) return
     // \r = Enter, so the line executes in every pane (agents and shells alike).
     broadcastToAgents(ids, text + '\r')
@@ -100,7 +100,7 @@ export default function BroadcastBar(): JSX.Element {
   // Collapse the multi-selection down to its first card — the bar unmounts and
   // the surviving sole selection takes keyboard focus (TerminalPane's effect).
   const dismiss = (): void => {
-    const ids = useStore.getState().selectedIds
+    const ids = activeWs(useStore.getState())?.selectedIds ?? []
     setSelected(ids.length ? [ids[0]] : [])
   }
 
