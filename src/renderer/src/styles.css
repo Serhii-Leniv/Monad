@@ -1292,10 +1292,10 @@ body.has-wallpaper .aurora {
   align-items: center;
   gap: 7px;
   flex: 0 1 auto;
-  min-width: 92px;
-  max-width: 188px;
+  min-width: 84px;
+  max-width: 190px;
   height: 32px;
-  padding: 0 5px 0 7px;
+  padding: 0 6px 0 11px;
   border-radius: 9px;
   color: var(--text-2);
   cursor: pointer;
@@ -1314,20 +1314,6 @@ body.has-wallpaper .aurora {
   color: var(--text);
   box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.42);
 }
-.tab__emblem {
-  flex: 0 0 auto;
-  width: 20px;
-  height: 20px;
-  display: grid;
-  place-items: center;
-  border-radius: 5px;
-  font-family: var(--font-display);
-  font-size: 11px;
-  font-weight: 600;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
-}
 .tab__name {
   flex: 1 1 auto;
   min-width: 0;
@@ -1339,53 +1325,42 @@ body.has-wallpaper .aurora {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Status dot: shown only when it means something — a soft green pulse while an
-   agent works, a firm amber blink when one needs you. Idle shows nothing. */
+/* Status dot — ALWAYS shown (leading), so every project reads at a glance:
+   gray when its agents are idle, green while one is working, amber when one
+   needs your input. No animation (calm, and never reads as jank). */
 .tab__dot {
   flex: 0 0 auto;
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
+  background: rgba(150, 162, 182, 0.7);
 }
 .tab__dot--working {
   background: var(--status-working);
-  box-shadow: 0 0 6px var(--status-working);
-  animation: tab-pulse 1.5s ease-in-out infinite;
+  box-shadow: 0 0 6px rgba(48, 209, 88, 0.5);
 }
 .tab__dot--attention {
   background: var(--status-attention);
-  box-shadow: 0 0 7px var(--status-attention);
-  animation: tab-blink 1s steps(1, end) infinite;
-}
-@keyframes tab-pulse {
-  0%,
-  100% {
-    opacity: 0.45;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-@keyframes tab-blink {
-  0%,
-  60% {
-    opacity: 1;
-  }
-  61%,
-  100% {
-    opacity: 0.3;
-  }
+  box-shadow: 0 0 6px rgba(255, 159, 10, 0.5);
 }
 /* Close x — a reserved, contained slot (opacity-toggled, never display:none) so
-   it can't shift layout or spill outside the tab like the previous build did. */
+   it can't shift layout or spill outside the tab; text-2 ink keeps the glyph
+   legible on the accent-lit active tab. */
 .tab__close {
   flex: 0 0 auto;
   display: grid;
   place-items: center;
   width: 18px;
   height: 18px;
+  padding: 0;
+  border: 0;
+  /* The global reset only sets font-family, so a bare <button> would paint
+     Chromium's dark default box here (the "buggy cross"). Strip it. */
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
   border-radius: 5px;
-  color: var(--muted);
+  color: var(--text-2);
   cursor: pointer;
   opacity: 0;
   transition:
@@ -1395,7 +1370,7 @@ body.has-wallpaper .aurora {
 }
 .tab:hover .tab__close,
 .tab.is-active .tab__close {
-  opacity: 0.72;
+  opacity: 0.65;
 }
 .tab__close:hover {
   opacity: 1;
