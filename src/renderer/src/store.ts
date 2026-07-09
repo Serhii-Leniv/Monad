@@ -211,6 +211,7 @@ interface AppState {
   reorderAgent: (id: string, toIndex: number) => void
   relayout: () => void
   focusTerminal: (id: string) => void
+  revealAgent: (id: string) => void
   clearFocus: () => void
   setAgentRuntime: (id: string, rt: Partial<AgentInstance>) => void
   setStatus: (id: string, status: AgentStatus) => void
@@ -801,6 +802,31 @@ export const useStore = create<AppState>((set, get) => ({
   // instead: crisp text, MORE rows/cols, and pixel-perfect selection.
   focusTerminal: (id) =>
     set((s) => (s.agents.some((x) => x.id === id) ? { focusedId: id, selectedIds: [id] } : s)),
+
+  // Bring an agent to the foreground so you can act on it — the shared target of
+  // the rail's attention bell and a clicked desktop notification. Deliberately
+  // NEVER force-maximizes: if a pane is already maximized we retarget that
+  // maximize to this agent (so it doesn't stay hidden behind the zoomed one),
+  // otherwise we just select it — which hands over keyboard focus. If the card
+  // was panned/zoomed off-screen, snap the camera back to the tiled view so the
+  // agent you were alerted about is actually on screen. A lone, on-screen
+  // terminal therefore stays exactly as it is — no spurious "Restore" affordance
+  // from a pointless maximize. (Contrast focusTerminal, the tmux-style zoom.)
+  revealAgent: (id) =>
+    set((s) => {
+      const a = s.agents.find((x) => x.id === id)
+      if (!a) return s
+      // Something is maximized: retarget it rather than dropping back to grid.
+      if (s.focusedId) return s.focusedId === id ? s : { focusedId: id, selectedIds: [id] }
+      const wz = a.w * s.zoom
+      const hz = a.h * s.zoom
+      const sx = s.panX + a.x * s.zoom
+      const sy = s.panY + a.y * s.zoom
+      const offscreen = sx + wz < 0 || sx > s.canvasW || sy + hz < 0 || sy > s.canvasH
+      // 0/0/1 is the canonical "everything tiled fits" view (laidOut resets to it),
+      // so snapping there is the reliable way to reveal a panned-away card.
+      return offscreen ? { selectedIds: [id], panX: 0, panY: 0, zoom: 1 } : { selectedIds: [id] }
+    }),
 
   clearFocus: () => set({ focusedId: null }),
 

@@ -27,16 +27,18 @@ export default function Rail(): JSX.Element {
   )
   const addAgent = useStore((s) => s.addAgent)
   const setLayoutMode = useStore((s) => s.setLayoutMode)
-  const focusTerminal = useStore((s) => s.focusTerminal)
+  const revealAgent = useStore((s) => s.revealAgent)
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
 
-  // Cycle focus through the agents that currently need you.
+  // Cycle focus through the agents that currently need you. revealAgent brings
+  // each into view WITHOUT maximizing — so a single attention terminal is just
+  // selected in place, not zoomed into a redundant "Restore to the grid" state.
   const cycleRef = useRef(0)
   const focusNextAttention = (): void => {
     if (!attentionIds.length) return
     const next = attentionIds[cycleRef.current % attentionIds.length]
     cycleRef.current += 1
-    focusTerminal(next)
+    revealAgent(next)
   }
 
   return (
