@@ -111,21 +111,13 @@ export default function App(): JSX.Element {
     window.api.attention.set(attentionCount)
   }, [attentionCount])
 
-  // Clicking a desktop notification lands on the agent that raised it. With a
-  // DIFFERENT card maximized, that card would hide the one you came for — so
-  // retarget the maximize. With nothing maximized, selecting is enough (the
-  // sole-selection effect hands over keyboard focus); never force-maximize.
+  // Clicking a desktop notification lands on the agent that raised it — same
+  // "bring it to the foreground without force-maximizing" behavior as the rail's
+  // attention bell, so both entry points stay consistent. revealAgent guards the
+  // ghost-id case (pane closed between the notification and the click) itself.
   useEffect(() => {
     return window.api.notify.onClick((agentId) => {
-      const st = useStore.getState()
-      // The pane may have been closed between the notification and the click —
-      // don't select a ghost id (focusTerminal has its own existence guard).
-      if (!st.agents.some((a) => a.id === agentId)) return
-      if (st.focusedId) {
-        if (st.focusedId !== agentId) st.focusTerminal(agentId)
-      } else {
-        st.setSelected([agentId])
-      }
+      useStore.getState().revealAgent(agentId)
     })
   }, [])
 
