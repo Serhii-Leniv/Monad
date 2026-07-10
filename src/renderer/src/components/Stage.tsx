@@ -3,27 +3,34 @@ import Moveable from 'react-moveable'
 import Selecto from 'react-selecto'
 import TerminalPane from './TerminalPane'
 import BroadcastBar from './BroadcastBar'
-import { useStore } from '../store'
+import { useStore, wsById, activeWs, type AgentInstance } from '../store'
 import { terminals } from '../terminalRegistry'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export default function Stage(): JSX.Element {
-  const agents = useStore((s) => s.agents)
-  const selectedIds = useStore((s) => s.selectedIds)
+const EMPTY_AGENTS: AgentInstance[] = []
+const EMPTY_IDS: string[] = []
+
+/** One workspace's canvas. App mounts one per live workspace (keyed by id) and
+ *  only the active one is visible; the rest stay mounted (visibility-hidden) so
+ *  their PTYs keep streaming. All scoped reads are for THIS workspace. */
+export default function Stage({ workspaceId }: { workspaceId: string }): JSX.Element {
+  const agents = useStore((s) => wsById(s, workspaceId)?.agents ?? EMPTY_AGENTS)
+  const selectedIds = useStore((s) => wsById(s, workspaceId)?.selectedIds ?? EMPTY_IDS)
   const setSelected = useStore((s) => s.setSelected)
   const reorderAgent = useStore((s) => s.reorderAgent)
   const relayout = useStore((s) => s.relayout)
   const setDraggingId = useStore((s) => s.setDraggingId)
-  const setCanvasSize = useStore((s) => s.setCanvasSize)
-  const draggingId = useStore((s) => s.draggingId)
+  const draggingId = useStore((s) => wsById(s, workspaceId)?.draggingId ?? null)
   const panX = useStore((s) => s.panX)
   const panY = useStore((s) => s.panY)
   const zoom = useStore((s) => s.zoom)
-  const focusedId = useStore((s) => s.focusedId)
+  const focusedId = useStore((s) => wsById(s, workspaceId)?.focusedId ?? null)
+  // Only the foreground workspace shows interactive chrome (the broadcast bar).
+  const isActive = useStore((s) => s.activeWorkspaceId === workspaceId)
   // The broadcast bar only makes sense over a visible canvas — hide it while an
   // overlay (palette / settings / diff) covers the stage.
-  const overlayOpen = useStore((s) => s.settingsOpen || s.paletteOpen || !!s.diffAgentId)
+  const overlayOpen = useStore((s) => s.settingsOpen || s.paletteOpen || !!activeWs(s)?.diffAgentId)
 
   const stageRef = useRef<HTMLDivElement>(null)
   const moveableRef = useRef<Moveable>(null)
@@ -55,21 +62,8 @@ export default function Stage(): JSX.Element {
     if (!draggingRef.current) moveableRef.current?.updateRect()
   }, [panX, panY, zoom, layoutSig])
 
-  useEffect(() => {
-    const el = stageRef.current
-    if (!el) return
-    // Coalesce a burst of resize callbacks into one update per frame.
-    let raf = 0
-    const ro = new ResizeObserver(() => {
-      cancelAnimationFrame(raf)
-      raf = requestAnimationFrame(() => setCanvasSize(el.clientWidth, el.clientHeight))
-    })
-    ro.observe(el)
-    return () => {
-      cancelAnimationFrame(raf)
-      ro.disconnect()
-    }
-  }, [setCanvasSize])
+  // (Canvas measurement lives in App now — it observes the shared canvas box and
+  // re-tiles every workspace, so a hidden Stage never reports a 0×0 size.)
 
   const idOf = (el: HTMLElement | null): string | undefined =>
     (el?.closest('.vec-pane') as HTMLElement | null)?.dataset.id
@@ -77,9 +71,9 @@ export default function Stage(): JSX.Element {
   // Where does this drop land? The slot whose centre is nearest the dragged
   // card's centre — that index becomes the card's new place in the order.
   const nearestIndex = (cx: number, cy: number): number => {
-    const st = useStore.getState()
-    const list = st.agents
-    const dragId = st.draggingId
+    const ws = wsById(useStore.getState(), workspaceId)
+    const list = ws?.agents ?? EMPTY_AGENTS
+    const dragId = ws?.draggingId ?? null
     let best = 0
     let bestD = Infinity
     list.forEach((g, i) => {
@@ -122,7 +116,7 @@ export default function Stage(): JSX.Element {
           />
         )}
         {agents.map((a) => (
-          <TerminalPane key={a.id} agent={a} />
+          <TerminalPane key={a.id} agent={a} workspaceId={workspaceId} />
         ))}
       </div>
 
@@ -156,10 +150,10 @@ export default function Stage(): JSX.Element {
           const id = idOf(e.target)
           const t = e.translate
           if (!id || !t) return
-          const st = useStore.getState()
-          const a = st.agents.find((x) => x.id === id)
+          const list = wsById(useStore.getState(), workspaceId)?.agents ?? EMPTY_AGENTS
+          const a = list.find((x) => x.id === id)
           if (!a) return
-          const cur = st.agents.findIndex((x) => x.id === id)
+          const cur = list.findIndex((x) => x.id === id)
           const target = nearestIndex(t[0] + a.w / 2, t[1] + a.h / 2)
           if (target !== cur) reorderAgent(id, target)
         }}
@@ -172,7 +166,8 @@ export default function Stage(): JSX.Element {
           relayout()
           // Explicitly animate the lifted card into its final slot (transition is
           // back on now) — also covers releasing in the same cell.
-          const a = useStore.getState().agents.find((x) => x.id === idOf(e.target))
+          const list = wsById(useStore.getState(), workspaceId)?.agents ?? EMPTY_AGENTS
+          const a = list.find((x) => x.id === idOf(e.target))
           if (a) e.target.style.transform = `translate(${a.x}px, ${a.y}px)`
         }}
         onDragGroup={(e: any) =>
@@ -229,7 +224,7 @@ export default function Stage(): JSX.Element {
           // selection to that pane and kills the broadcast bar the instant it opens
           // (BroadcastBar deliberately never takes focus on appearance).
           if (!e.isDragStart && ids.length <= 1) {
-            const cur = ids[0] ?? useStore.getState().selectedIds[0]
+            const cur = ids[0] ?? wsById(useStore.getState(), workspaceId)?.selectedIds[0]
             if (cur) terminals.get(cur)?.focus()
           }
           if (e.isDragStart) {
@@ -241,7 +236,7 @@ export default function Stage(): JSX.Element {
         }}
       />
 
-      {selectedIds.length > 1 && !overlayOpen && <BroadcastBar />}
+      {isActive && selectedIds.length > 1 && !overlayOpen && <BroadcastBar />}
     </div>
   )
 }

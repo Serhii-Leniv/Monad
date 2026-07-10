@@ -6,8 +6,8 @@ import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
-import { useStore, displayBranch, RAIL_INSET, PAD, type AgentInstance, type AgentStatus } from '../store'
-import { terminals, quotePaths, pasteIntoTerminal } from '../terminalRegistry'
+import { useStore, wsById, displayBranch, RAIL_INSET, PAD, type AgentInstance, type AgentStatus } from '../store'
+import { terminals, fits, quotePaths, pasteIntoTerminal } from '../terminalRegistry'
 import { needsAttention, clampTail, stripAnsi } from '../attention'
 import { AGENT_INSTALL_URLS } from '../agentInstall'
 import { playCue, type Cue } from '../sound'
@@ -164,14 +164,21 @@ const resolvedTermTheme = (
  * positioned (driven by Moveable). Status is detected from PTY output so the
  * canvas can show, at a glance, which agent is working / idle / waiting on you.
  */
-function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
+function TerminalPane({
+  agent,
+  workspaceId
+}: {
+  agent: AgentInstance
+  workspaceId: string
+}): JSX.Element {
   const id = agent.id
   const termHostRef = useRef<HTMLDivElement>(null)
   // One array traversal for the three per-agent fields we read; useShallow keeps
-  // the re-render gated to actual changes in branch / isolated / status.
+  // the re-render gated to actual changes in branch / isolated / status. All
+  // scoped to THIS pane's workspace (background workspaces stream too).
   const { branch, isolated, status, workingSince } = useStore(
     useShallow((s) => {
-      const a = s.agents.find((x) => x.id === id)
+      const a = wsById(s, workspaceId)?.agents.find((x) => x.id === id)
       return {
         branch: a?.branch,
         isolated: a?.isolated,
@@ -180,8 +187,11 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       }
     })
   )
-  const selected = useStore((s) => s.selectedIds.includes(id))
-  const closing = useStore((s) => s.closingIds.includes(id))
+  // Whether this pane's workspace is the one on screen — gates DOM-focus grabs so
+  // a hidden background pane never steals keyboard focus from the active canvas.
+  const isActive = useStore((s) => s.activeWorkspaceId === workspaceId)
+  const selected = useStore((s) => wsById(s, workspaceId)?.selectedIds.includes(id) ?? false)
+  const closing = useStore((s) => wsById(s, workspaceId)?.closingIds.includes(id) ?? false)
   const removeAgent = useStore((s) => s.removeAgent)
   const fontSize = useStore((s) => s.settings.fontSize)
   const fontFamily = useStore((s) => s.settings.fontFamily)
@@ -191,14 +201,14 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
   const toggleWide = useStore((s) => s.toggleWide)
   // With a single pane there's nothing to weigh a "wider" card against — it
   // already fills the row — so the toggle would be inert. Hide it below 2.
-  const agentCount = useStore((s) => s.agents.length)
+  const agentCount = useStore((s) => wsById(s, workspaceId)?.agents.length ?? 0)
   const focusTerminal = useStore((s) => s.focusTerminal)
   const clearFocus = useStore((s) => s.clearFocus)
-  const focused = useStore((s) => s.focusedId === id)
+  const focused = useStore((s) => wsById(s, workspaceId)?.focusedId === id)
   const canvasW = useStore((s) => s.canvasW)
   const canvasH = useStore((s) => s.canvasH)
   const setDiffAgentId = useStore((s) => s.setDiffAgentId)
-  const pendingClose = useStore((s) => s.pendingCloseId === id)
+  const pendingClose = useStore((s) => wsById(s, workspaceId)?.pendingCloseId === id)
   const clearPendingClose = useStore((s) => s.clearPendingClose)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<(() => void) | null>(null)
@@ -285,8 +295,8 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     const fileLinks = term.registerLinkProvider({
       provideLinks(y, cb) {
         const text = term.buffer.active.getLine(y - 1)?.translateToString(true) ?? ''
-        const st = useStore.getState()
-        const cwd = st.agents.find((a) => a.id === id)?.cwd ?? st.projectPath ?? ''
+        const w = wsById(useStore.getState(), workspaceId)
+        const cwd = w?.agents.find((a) => a.id === id)?.cwd ?? w?.path ?? ''
         const cands: { x: number; t: string }[] = []
         FILE_RE.lastIndex = 0
         for (let m = FILE_RE.exec(text); m; m = FILE_RE.exec(text)) {
@@ -444,16 +454,26 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       })
     }
     fitRef.current = doFit
+    // Register the refit so App can re-measure this pane when its workspace is
+    // brought to the foreground (it was laid out while hidden).
+    fits.set(id, doFit)
     doFit()
 
-    // Take keyboard focus if we're the active pane. Covers first mount AND, crucially,
-    // Relaunch: bumping retryNonce re-creates the Terminal without any selection
-    // transition, so the soleSelected effect wouldn't re-fire and typing would
-    // dead-end on the fresh shell until the user clicked in.
-    if (useStore.getState().selectedIds[0] === id) term.focus()
+    // Take keyboard focus if we're the active pane in the FOREGROUND workspace.
+    // Covers first mount AND, crucially, Relaunch: bumping retryNonce re-creates
+    // the Terminal without any selection transition, so the soleSelected effect
+    // wouldn't re-fire and typing would dead-end on the fresh shell. A background
+    // workspace's pane must not grab focus here.
+    const st0 = useStore.getState()
+    if (st0.activeWorkspaceId === workspaceId && wsById(st0, workspaceId)?.selectedIds[0] === id)
+      term.focus()
 
     const state = useStore.getState()
-    const { projectPath, setAgentRuntime, setStatus } = state
+    const { setAgentRuntime, setStatus } = state
+    // This pane's own workspace folder — NOT the active one. "Spawn all on
+    // restart" spawns background panes while another workspace is on screen, so
+    // reading a global projectPath here would create the worktree in the wrong repo.
+    const projectPath = wsById(state, workspaceId)?.path ?? null
     const shell = state.shells.find((sh) => sh.id === agent.shellId)
     let ptyId: string | null = null
     let disposed = false
@@ -491,18 +511,22 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     const MAX_WORK_MS = 180000
 
     const labelOf = (): string =>
-      useStore.getState().agents.find((a) => a.id === id)?.label ?? 'Terminal'
+      wsById(useStore.getState(), workspaceId)?.agents.find((a) => a.id === id)?.label ?? 'Terminal'
 
     // Notify only for a backgrounded agent: app window unfocused OR the card is
     // off-screen. Never nag about the terminal you're already watching.
     const maybeNotify = (kind: 'attention' | 'done' | 'exited' | 'error'): void => {
       const st = useStore.getState()
       if (!st.settings.notifications) return
+      // A background workspace signals through its tab badge, not a desktop popup
+      // (whose click would have nowhere to land in this version) — only the
+      // workspace on screen fires notifications.
+      if (st.activeWorkspaceId !== workspaceId) return
       // A clean finish — whether it settled quietly ('done') or the process exited
       // 0 ('exited') — is the same "your agent is done" signal, so both honour the
       // "notify when finished" toggle. Only error exits notify unconditionally.
       if ((kind === 'done' || kind === 'exited') && !st.settings.notifyOnDone) return
-      const a = st.agents.find((x) => x.id === id)
+      const a = wsById(st, workspaceId)?.agents.find((x) => x.id === id)
       if (!a) return
       const wz = a.w * st.zoom
       const hz = a.h * st.zoom
@@ -845,7 +869,7 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
               // Remember the FULL typed line (unless one's already set from the
               // "Start <agent>" menu) so a hand-started agent relaunches on reopen
               // with its flags intact — not as a bare `claude`.
-              const had = st.agents.find((a) => a.id === id)?.startupCommand
+              const had = wsById(st, workspaceId)?.agents.find((a) => a.id === id)?.startupCommand
               setAgentRuntime(id, {
                 agentId: hit.id,
                 agentLabel: hit.label,
@@ -912,28 +936,34 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
       ptyRef.current = null
       searchRef.current = null
       terminals.delete(id)
+      fits.delete(id)
       term.dispose()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [retryNonce])
 
   // Entering focus (maximize) also hands over KEYBOARD focus — same for a
-  // notification click — so you can type immediately without clicking in.
+  // notification click — so you can type immediately without clicking in. Only
+  // when this workspace is on screen; App re-focuses on workspace activation.
   useEffect(() => {
-    if (focused) termRef.current?.focus()
-  }, [focused])
+    if (focused && isActive) termRef.current?.focus()
+  }, [focused, isActive])
 
   // The single selected terminal always owns keyboard focus, so you can type the
   // instant it becomes active — clicking its header, cycling to it, spawning it,
   // or having selection fall back to it when a neighbour closes. (Clicking empty
   // canvas keeps the current selection; Stage re-focuses it there.)
-  const soleSelected = useStore((s) => s.selectedIds.length === 1 && s.selectedIds[0] === id)
+  const soleSelected = useStore((s) => {
+    const w = wsById(s, workspaceId)
+    return !!w && w.selectedIds.length === 1 && w.selectedIds[0] === id
+  })
   useEffect(() => {
     // Don't focus when the shell failed to spawn — the term's textarea is detached
     // from the DOM (the error view replaced the body), so focusing it would send
-    // keystrokes nowhere. The Retry button autoFocuses instead.
-    if (soleSelected && !spawnError) termRef.current?.focus()
-  }, [soleSelected, spawnError])
+    // keystrokes nowhere. The Retry button autoFocuses instead. Only when this
+    // workspace is on screen — a hidden pane must never grab keyboard focus.
+    if (soleSelected && isActive && !spawnError) termRef.current?.focus()
+  }, [soleSelected, isActive, spawnError])
 
   // Escape closes the in-pane overlays the global handler can't see: the close
   // confirm (most dangerous dialog in the app) and the right-click menu. Capture
@@ -980,7 +1010,7 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
     }
     // Isolated worktree: never delete a branch with uncommitted work silently.
     setClosePrompt({ checking: true, dirty: false, count: 0 })
-    const projectPath = useStore.getState().projectPath
+    const projectPath = wsById(useStore.getState(), workspaceId)?.path ?? null
     try {
       const res = projectPath ? await window.api.git.diff(projectPath, id) : null
       const untracked = res?.untracked?.length ?? 0
@@ -1240,8 +1270,9 @@ function TerminalPane({ agent }: { agent: AgentInstance }): JSX.Element {
             // xterm's hidden textarea gains focus). Guarded so it only updates
             // the store when the selection actually changes.
             onFocus={() => {
-              const s = useStore.getState()
-              if (s.selectedIds.length !== 1 || s.selectedIds[0] !== id) s.setSelected([id])
+              const w = wsById(useStore.getState(), workspaceId)
+              if (!w || w.selectedIds.length !== 1 || w.selectedIds[0] !== id)
+                useStore.getState().setSelected([id])
             }}
             onContextMenu={(e) => {
               e.preventDefault()

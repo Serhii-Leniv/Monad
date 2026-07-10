@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useStore, displayBranch } from '../store'
+import { useStore, activeWs, displayBranch } from '../store'
 import { celebrate } from '../celebrate'
 import { IconClose, IconRefresh } from './Icons'
 
@@ -141,11 +141,11 @@ function parseDiff(text: string): FileGroup[] {
 
 /** Review one agent's worktree changes, then merge into the base branch or discard. */
 export default function DiffPanel(): JSX.Element {
-  const id = useStore((s) => s.diffAgentId) as string
-  const label = useStore((s) => s.agents.find((a) => a.id === id)?.label ?? 'Terminal')
-  const status = useStore((s) => s.agents.find((a) => a.id === id)?.status)
-  const projectPath = useStore((s) => s.projectPath)
-  const baseBranch = useStore((s) => s.baseBranch)
+  const id = useStore((s) => activeWs(s)?.diffAgentId) as string
+  const label = useStore((s) => activeWs(s)?.agents.find((a) => a.id === id)?.label ?? 'Terminal')
+  const status = useStore((s) => activeWs(s)?.agents.find((a) => a.id === id)?.status)
+  const projectPath = useStore((s) => activeWs(s)?.path ?? null)
+  const baseBranch = useStore((s) => activeWs(s)?.baseBranch ?? null)
   const setDiffAgentId = useStore((s) => s.setDiffAgentId)
   const removeAgent = useStore((s) => s.removeAgent)
   const pushToast = useStore((s) => s.pushToast)

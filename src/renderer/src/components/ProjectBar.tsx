@@ -1,99 +1,123 @@
-import { useEffect } from 'react'
-import { useStore } from '../store'
+import { useShallow } from 'zustand/react/shallow'
 import {
-  openProjectInteractive,
-  openProjectByPath,
-  closeCurrentProject,
-  initGitForProject
-} from '../openProject'
-import { emblemStyle } from '../projectColor'
-import { altModLabel, modLabel } from '../shortcuts'
+  useStore,
+  activeWs,
+  wsById,
+  NEEDS_ATTENTION,
+  MAX_LIVE_WORKSPACES,
+  type WorkspaceSession
+} from '../store'
+import { openProjectInteractive, closeWorkspaceById, initGitForProject } from '../openProject'
+import { modLabel } from '../shortcuts'
 
-function initial(name: string): string {
-  const m = name.match(/[a-z0-9]/i)
-  return (m ? m[0] : name.charAt(0) || '?').toUpperCase()
-}
-function prettyPath(p: string): string {
-  const parts = p.replace(/\\/g, '/').split('/').filter(Boolean)
-  return parts.slice(-2).join('/') || p
+/** A live workspace's at-a-glance state, worst-first: any agent waiting on you
+ *  beats any agent working beats quiet. Drives the tab's status dot — always
+ *  shown: gray when idle, green while an agent works, amber when one needs you. */
+function tabStatus(ws: WorkspaceSession | undefined): 'attention' | 'working' | 'idle' {
+  if (!ws) return 'idle'
+  if (ws.agents.some((a) => NEEDS_ATTENTION.includes(a.status ?? 'starting'))) return 'attention'
+  if (ws.agents.some((a) => a.status === 'working')) return 'working'
+  return 'idle'
 }
 
 /**
- * Floating, centered glass pill at the top — the project switcher. It sits above
- * the canvas (no-drag, so it's fully clickable) and opens a readable dropdown of
- * recent projects + open/close.
+ * One workspace tab. Subscribes ONLY to its own workspace's name / status / active
+ * flag (via useShallow), so a status tick in another workspace — or the constant
+ * working/idle churn of streaming agents — never re-renders the whole strip. That
+ * per-tab isolation is what keeps the bar smooth.
  */
-export default function ProjectBar(): JSX.Element {
-  const projectPath = useStore((s) => s.projectPath)
-  const projectName = useStore((s) => s.projectName)
-  const setPaletteOpen = useStore((s) => s.setPaletteOpen)
-  const isGit = useStore((s) => s.isGit)
-  const workspaces = useStore((s) => s.workspaces)
-  // Single shared menu state — opening this closes the rail's "new" menu, etc.
-  const open = useStore((s) => s.openMenu === 'project')
-  const setOpenMenu = useStore((s) => s.setOpenMenu)
-  const closeMenu = (): void => setOpenMenu(null)
-
-  // Esc closes the switcher — parity with every other overlay, and the only
-  // keyboard dismiss (the backdrop is mouse-only).
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        e.stopPropagation()
-        setOpenMenu(null)
+function WorkspaceTab({ id }: { id: string }): JSX.Element {
+  const setActiveWorkspace = useStore((s) => s.setActiveWorkspace)
+  const { name, path, status, active } = useStore(
+    useShallow((s) => {
+      const w = wsById(s, id)
+      return {
+        name: w?.name ?? '',
+        path: w?.path ?? '',
+        status: tabStatus(w),
+        active: s.activeWorkspaceId === id
       }
-    }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [open])
-
+    })
+  )
   return (
-    <div className="projbar">
+    <div
+      className={'tab' + (active ? ' is-active' : '')}
+      role="tab"
+      aria-selected={active}
+      title={path}
+      onClick={() => setActiveWorkspace(id)}
+    >
+      <span className={'tab__dot tab__dot--' + status} aria-hidden="true" />
+      <span className="tab__name">{name}</span>
       <button
-        className={'projbar__btn' + (open ? ' is-open' : '')}
-        onClick={() => setOpenMenu(open ? null : 'project')}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        title={projectPath ? `${projectName} — switch project` : 'Open a project'}
+        className="tab__close"
+        aria-label={`Close ${name}`}
+        title="Close workspace (keeps its worktrees on disk)"
+        onClick={(e) => {
+          e.stopPropagation()
+          closeWorkspaceById(id)
+        }}
       >
-        {projectPath ? (
-          <>
-            <span className="projbar__emblem" style={emblemStyle(projectPath)}>
-              {initial(projectName ?? '?')}
-            </span>
-            <span className="projbar__text">
-              <span className="projbar__label">Project</span>
-              <span className="projbar__name">{projectName}</span>
-            </span>
-          </>
-        ) : (
-          <>
-            <span className="projbar__emblem projbar__emblem--empty">+</span>
-            <span className="projbar__name projbar__name--muted">Open a project</span>
-          </>
-        )}
-        <svg
-          className="projbar__caret"
-          viewBox="0 0 24 24"
-          width="13"
-          height="13"
-          aria-hidden="true"
-        >
+        <svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true">
           <path
-            d="M7 10l5 5 5-5"
+            d="M7 7l10 10M17 7L7 17"
             fill="none"
             stroke="currentColor"
             strokeWidth="2.2"
             strokeLinecap="round"
-            strokeLinejoin="round"
           />
         </svg>
       </button>
+    </div>
+  )
+}
 
-      {/* Quick-launcher affordance — the palette is otherwise invisible (⌘K
-          only). Sits by the centered pill because the top corners are taken by
-          the window controls (mac traffic lights / Windows caption buttons). */}
+/**
+ * Chrome-style workspace tabs at the top. Click a tab to switch (instant,
+ * non-destructive — background workspaces keep running); the + opens another
+ * project; × closes a tab (detach — worktrees stay on disk). The container only
+ * re-renders when tabs are added/removed, never on agent activity.
+ */
+export default function ProjectBar(): JSX.Element {
+  // Just the id list — shallow-compared, so this re-renders only on add/remove/
+  // reorder, not on any agent status change inside a workspace.
+  const ids = useStore(useShallow((s) => s.liveWorkspaces.map((w) => w.id)))
+  const atCap = useStore((s) => s.liveWorkspaces.length >= MAX_LIVE_WORKSPACES)
+  const setPaletteOpen = useStore((s) => s.setPaletteOpen)
+  const activePath = useStore((s) => activeWs(s)?.path ?? null)
+  const activeIsGit = useStore((s) => activeWs(s)?.isGit ?? true)
+  const empty = ids.length === 0
+
+  return (
+    <div className="tabbar">
+      {!empty && (
+        <div className="tabbar__tabs" role="tablist" aria-label="Workspaces">
+          {ids.map((id) => (
+            <WorkspaceTab key={id} id={id} />
+          ))}
+        </div>
+      )}
+
+      <button
+        className={'tabbar__add' + (empty ? ' tabbar__add--labeled' : '')}
+        onClick={() => void openProjectInteractive()}
+        disabled={atCap}
+        title={atCap ? `Up to ${MAX_LIVE_WORKSPACES} workspaces at once` : 'Open a project'}
+        aria-label="Open a project"
+      >
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+          <path
+            d="M12 5v14M5 12h14"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+          />
+        </svg>
+        {empty && <span className="tabbar__add-label">Open a project</span>}
+      </button>
+
+      {/* Quick-launcher affordance — the palette is otherwise invisible (⌘K only). */}
       <button
         className="projbar__cmdk"
         onClick={() => setPaletteOpen(true)}
@@ -107,74 +131,16 @@ export default function ProjectBar(): JSX.Element {
         <span className="projbar__cmdk-key">{modLabel('K')}</span>
       </button>
 
-      {/* Persistent shared-mode indicator: unlike the one-shot open toast, this
-          stays as long as the folder isn't a git repo — the one state where the
-          headline feature (per-agent isolation) is silently off. Clicking it runs
-          the same git-init flow as the toast action; a successful init flips the
-          store's isGit and the chip disappears on its own. */}
-      {projectPath && !isGit && (
+      {/* Standing shared-mode caution for the workspace on screen: the folder isn't
+          a git repo, so per-agent isolation is off. Click to git-init. */}
+      {activePath && !activeIsGit && (
         <button
           className="projbar__chip"
           title="This folder isn’t a git repository — agents share it directly and their changes can collide. Click to initialize git."
-          onClick={() => void initGitForProject(projectPath)}
+          onClick={() => void initGitForProject(activePath)}
         >
           no isolation
         </button>
-      )}
-
-      {open && (
-        <>
-          <div className="projbar__backdrop" onClick={closeMenu} />
-          <div className="projbar__menu" role="menu">
-            <div className="rail__menu-head">Projects</div>
-            {workspaces.length === 0 && <div className="rail__menu-empty">No recent projects</div>}
-            {workspaces.map((w, i) => {
-              const active = w.path === projectPath
-              return (
-                <button
-                  key={w.path}
-                  role="menuitem"
-                  className={'rail__proj' + (active ? ' is-active' : '')}
-                  title={i < 9 ? `${w.path}  ·  ${altModLabel(i + 1)}` : w.path}
-                  onClick={() => {
-                    closeMenu()
-                    if (!active) void openProjectByPath(w)
-                  }}
-                >
-                  <span className="rail__proj-emblem" style={emblemStyle(w.path)}>
-                    {initial(w.name)}
-                  </span>
-                  <span className="rail__proj-text">
-                    <span className="rail__proj-name">{w.name}</span>
-                    <span className="rail__proj-path">{prettyPath(w.path)}</span>
-                  </span>
-                  {active && <span className="rail__proj-check">✓</span>}
-                </button>
-              )
-            })}
-            <div className="rail__menu-sep" />
-            <button
-              className="rail__menu-item"
-              onClick={() => {
-                closeMenu()
-                void openProjectInteractive()
-              }}
-            >
-              Open folder…
-            </button>
-            {projectPath && (
-              <button
-                className="rail__menu-item rail__menu-item--danger"
-                onClick={() => {
-                  closeMenu()
-                  closeCurrentProject()
-                }}
-              >
-                Close project
-              </button>
-            )}
-          </div>
-        </>
       )}
     </div>
   )
