@@ -232,6 +232,7 @@ interface AppState {
   reorderAgent: (id: string, toIndex: number) => void
   relayout: () => void
   focusTerminal: (id: string) => void
+  revealAgent: (id: string) => void
   clearFocus: () => void
   setAgentRuntime: (id: string, rt: Partial<AgentInstance>) => void
   setStatus: (id: string, status: AgentStatus) => void
@@ -967,6 +968,28 @@ export const useStore = create<AppState>((set, get) => ({
           focusedId: id,
           selectedIds: [id]
         }))
+      }
+    }),
+
+  // Bring an agent to the foreground so you can act on it — the shared target of
+  // the rail's attention bell and a clicked desktop notification. Brings its
+  // workspace forward (it may be a background one), then NEVER force-maximizes:
+  // if a pane is already maximized we retarget that maximize to this agent (so it
+  // doesn't stay hidden behind the zoomed one), otherwise we just select it —
+  // which hands over keyboard focus. (Contrast focusTerminal, the tmux-style zoom.)
+  revealAgent: (id) =>
+    set((s) => {
+      const ws = wsOfAgent(s, id)
+      if (!ws) return {}
+      return {
+        activeWorkspaceId: ws.id,
+        liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) =>
+          w.focusedId
+            ? w.focusedId === id
+              ? w
+              : { ...w, focusedId: id, selectedIds: [id] }
+            : { ...w, selectedIds: [id] }
+        )
       }
     }),
 
