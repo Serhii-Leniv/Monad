@@ -13,7 +13,7 @@ const Settings = lazy(() => import('./components/Settings'))
 const CommandPalette = lazy(() => import('./components/CommandPalette'))
 const DiffPanel = lazy(() => import('./components/DiffPanel'))
 const Feedback = lazy(() => import('./components/Feedback'))
-import { useStore, toPersisted, activeWs, wsOfAgent, useActiveAgents, NEEDS_ATTENTION } from './store'
+import { useStore, toPersisted, activeWs, useActiveAgents, NEEDS_ATTENTION } from './store'
 import { reminderTone, reminderHeadline } from './updateReminder'
 import { restoreWorkspaces, saveCanvas } from './openProject'
 import { applyAccent } from './accent'
@@ -154,23 +154,14 @@ export default function App(): JSX.Element {
     window.api.attention.set(attentionCount)
   }, [attentionCount])
 
-  // Clicking a desktop notification lands on the agent that raised it — bringing
-  // its workspace forward if it's a background one. With a DIFFERENT card
-  // maximized, retarget the maximize; with nothing maximized, selecting is enough
-  // (the sole-selection effect hands over keyboard focus); never force-maximize.
+  // Clicking a desktop notification lands on the agent that raised it — same
+  // "bring it to the foreground without force-maximizing" behavior as the rail's
+  // attention bell, so both entry points stay consistent. revealAgent guards the
+  // ghost-id case (pane closed between the notification and the click) itself,
+  // and brings the agent's workspace forward if it's a background one.
   useEffect(() => {
     return window.api.notify.onClick((agentId) => {
-      const st = useStore.getState()
-      const ws = wsOfAgent(st, agentId)
-      // The pane may have been closed between the notification and the click.
-      if (!ws) return
-      if (ws.focusedId) {
-        if (ws.focusedId !== agentId) st.focusTerminal(agentId)
-        else st.setActiveWorkspace(ws.id)
-      } else {
-        st.setActiveWorkspace(ws.id)
-        useStore.getState().setSelected([agentId])
-      }
+      useStore.getState().revealAgent(agentId)
     })
   }, [])
 
