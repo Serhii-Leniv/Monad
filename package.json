@@ -1,6 +1,6 @@
 {
   "name": "monad",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "description": "Monad — a cross-platform canvas for running terminals and AI agents in parallel",
   "main": "./out/main/index.js",
   "author": "Serhii Leniv",
@@ -17,7 +17,8 @@
     "smoke:pty": "electron scripts/pty-smoke.cjs",
     "smoke:p1": "electron scripts/phase1-smoke.cjs",
     "smoke:p2": "electron scripts/phase2-smoke.cjs",
-    "smoke:p3": "electron scripts/phase3-smoke.cjs"
+    "smoke:p3": "electron scripts/phase3-smoke.cjs",
+    "smoke:ws": "electron scripts/ws-smoke.cjs"
   },
   "dependencies": {
     "@homebridge/node-pty-prebuilt-multiarch": "^0.13.1",
