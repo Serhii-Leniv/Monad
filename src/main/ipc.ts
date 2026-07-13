@@ -151,7 +151,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
   // check compares against, so the two can never disagree.
   ipcMain.handle('app:version', () => app.getVersion())
 
-  // Newer-release check against the vectro-site release feed (null = up to date
+  // Newer-release check against the Monad-site release feed (null = up to date
   // or the check failed; the renderer surfaces a toast only on a real update).
   ipcMain.handle('update:check', () => checkForUpdate())
 

@@ -7,7 +7,7 @@ import {
   MAX_LIVE_WORKSPACES,
   type WorkspaceSession
 } from '../store'
-import { openProjectInteractive, closeWorkspaceById, initGitForProject } from '../openProject'
+import { openProjectInteractive, initGitForProject } from '../openProject'
 import { modLabel } from '../shortcuts'
 
 /** A live workspace's at-a-glance state, worst-first: any agent waiting on you
@@ -55,7 +55,7 @@ function WorkspaceTab({ id }: { id: string }): JSX.Element {
         title="Close workspace (keeps its worktrees on disk)"
         onClick={(e) => {
           e.stopPropagation()
-          closeWorkspaceById(id)
+          useStore.getState().requestWorkspaceClose(id)
         }}
       >
         <svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true">

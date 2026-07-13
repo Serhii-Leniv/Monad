@@ -270,10 +270,11 @@ export function closeWorkspaceById(id: string): void {
   useStore.getState().closeWorkspace(id)
 }
 
-/** Close the workspace currently on screen (⌘ affordances / palette). */
+/** Ask to close the workspace currently on screen (⌘ affordances / palette) —
+ *  routes through the same confirm modal as the tab ×. */
 export function closeCurrentProject(): void {
   const ws = activeWs(useStore.getState())
-  if (ws) closeWorkspaceById(ws.id)
+  if (ws) useStore.getState().requestWorkspaceClose(ws.id)
 }
 
 /** Pick a folder via the OS dialog, then open it as a tab. */
