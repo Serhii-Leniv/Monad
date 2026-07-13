@@ -2,15 +2,15 @@ name: Build installers
 
 # Run manually (Actions tab → Run workflow) or on a version tag. On a version tag
 # each build job also attaches its installer to a GitHub Release ON THIS repo
-# (Serhii-Leniv/vectro) using the built-in GITHUB_TOKEN. That release is where the
-# installers are fetched from for the manual publish to the public vectro-site repo.
+# (Serhii-Leniv/Monad) using the built-in GITHUB_TOKEN. That release is where the
+# installers are fetched from for the manual publish to the public Monad-site repo.
 #
 # Why not upload-artifact / a cross-repo publish job?
 #  - Actions ARTIFACT storage is a metered quota that fills up (old build outputs)
 #    and, once hit, blocks every upload for 6-12h — it took down releases. Release
 #    ASSETS are separate storage (free/unmetered for public repos), so attaching to
 #    a Release sidesteps the quota entirely.
-#  - Cross-repo publishing to vectro-site needs a PAT (SITE_RELEASE_TOKEN) that is
+#  - Cross-repo publishing to Monad-site needs a PAT (SITE_RELEASE_TOKEN) that is
 #    intentionally NOT configured; publishing to THIS repo only needs the automatic
 #    GITHUB_TOKEN. The site publish is done manually from the assets on this release.
 on:

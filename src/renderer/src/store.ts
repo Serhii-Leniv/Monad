@@ -182,6 +182,8 @@ interface AppState {
   update: UpdateInfo | null
   /** True once the user hides the update banner this session (returns next launch). */
   updateDismissed: boolean
+  /** Workspace tab awaiting close confirmation — the modal in App.tsx owns the UI. */
+  confirmWorkspaceCloseId: string | null
   panX: number
   panY: number
   zoom: number
@@ -217,6 +219,9 @@ interface AppState {
   clearPendingClose: () => void
   requestBulkClose: (ids: string[]) => void
   clearBulkClose: () => void
+  /** Ask to close a workspace tab (confirmed by the modal in App.tsx). */
+  requestWorkspaceClose: (id: string) => void
+  clearWorkspaceClose: () => void
   addAgent: (opts?: {
     command?: string
     shellId?: string
@@ -537,6 +542,7 @@ export const useStore = create<AppState>((set, get) => ({
   feedbackOpen: false,
   update: null,
   updateDismissed: false,
+  confirmWorkspaceCloseId: null,
   toasts: [],
   panX: 0,
   panY: 0,
@@ -734,6 +740,12 @@ export const useStore = create<AppState>((set, get) => ({
       if (!ws || ws.bulkCloseIds === null) return {}
       return { liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({ ...w, bulkCloseIds: null })) }
     }),
+
+  // Closing a workspace tab kills every PTY in it, so the tab × and the palette
+  // both route through this app-level request; the modal in App.tsx confirms and
+  // runs the actual close (closeWorkspaceById).
+  requestWorkspaceClose: (id) => set({ confirmWorkspaceCloseId: id }),
+  clearWorkspaceClose: () => set({ confirmWorkspaceCloseId: null }),
 
   addAgent: (opts) => {
     const ws = activeWs(get())

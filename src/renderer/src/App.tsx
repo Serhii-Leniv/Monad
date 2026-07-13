@@ -15,7 +15,7 @@ const DiffPanel = lazy(() => import('./components/DiffPanel'))
 const Feedback = lazy(() => import('./components/Feedback'))
 import { useStore, toPersisted, activeWs, useActiveAgents, NEEDS_ATTENTION } from './store'
 import { reminderTone, reminderHeadline } from './updateReminder'
-import { restoreWorkspaces, saveCanvas } from './openProject'
+import { restoreWorkspaces, saveCanvas, closeWorkspaceById } from './openProject'
 import { applyAccent } from './accent'
 import { applyTheme } from './theme'
 import {
@@ -48,6 +48,13 @@ export default function App(): JSX.Element {
   // workspace) so the palette can raise it too; this component owns the confirm UI.
   const bulkCloseIds = useStore((s) => activeWs(s)?.bulkCloseIds ?? null)
   const clearBulkClose = useStore((s) => s.clearBulkClose)
+  // Workspace tab awaiting close confirmation (tab × or palette). Closing a tab
+  // kills every PTY in it, so it always confirms; this component owns the modal.
+  const confirmWorkspaceCloseId = useStore((s) => s.confirmWorkspaceCloseId)
+  const clearWorkspaceClose = useStore((s) => s.clearWorkspaceClose)
+  const closingWs = confirmWorkspaceCloseId
+    ? liveWorkspaces.find((w) => w.id === confirmWorkspaceCloseId)
+    : undefined
   const saveTimer = useRef<number>()
   const canvasRef = useRef<HTMLDivElement>(null)
 
@@ -100,7 +107,7 @@ export default function App(): JSX.Element {
     return () => cancelAnimationFrame(raf)
   }, [activeWorkspaceId])
 
-  // Persistent update reminder. The main process reads the vectro-site release
+  // Persistent update reminder. The main process reads the Monad-site release
   // feed; we re-check on a delay after launch and then periodically, stashing
   // the result so the sticky UpdateBanner nags until the user actually updates
   // (the "continuous notification" the feature is about). On the first sighting
@@ -510,6 +517,19 @@ export default function App(): JSX.Element {
     return () => window.removeEventListener('keydown', onKey, true)
   }, [bulkCloseIds, clearBulkClose])
 
+  // Same capture-phase Escape treatment for the workspace-close confirm.
+  useEffect(() => {
+    if (!confirmWorkspaceCloseId) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      clearWorkspaceClose()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [confirmWorkspaceCloseId, clearWorkspaceClose])
+
   // Autosave every live workspace's canvas, debounced. Only the persisted fields
   // gate it (a flat join per workspace — no JSON pass on every status flip), so
   // runtime churn (status/pty id) doesn't trigger disk writes. Background
@@ -624,6 +644,40 @@ export default function App(): JSX.Element {
           </div>
         </div>
       )}
+      {closingWs &&
+        (() => {
+          const busy = closingWs.agents.filter(
+            (a) => a.status === 'working' || NEEDS_ATTENTION.includes(a.status ?? 'starting')
+          ).length
+          return (
+            <div className="modal" onPointerDown={clearWorkspaceClose}>
+              <div className="confirm" onPointerDown={(e) => e.stopPropagation()}>
+                <div className="confirm__title">Close “{closingWs.name}”?</div>
+                <div className="confirm__body">
+                  {busy > 0
+                    ? `${busy === 1 ? 'An agent is' : `${busy} agents are`} still busy in this workspace — closing the tab stops ${busy === 1 ? 'it' : 'them'}. `
+                    : 'This ends the workspace’s terminals. '}
+                  Worktrees and branches stay on disk, and the canvas is saved — reopen the
+                  project to pick up where you left off.
+                </div>
+                <div className="confirm__actions">
+                  <button className="confirm__btn" onClick={clearWorkspaceClose}>
+                    Cancel
+                  </button>
+                  <button
+                    className="confirm__btn confirm__btn--danger"
+                    onClick={() => {
+                      closeWorkspaceById(closingWs.id)
+                      clearWorkspaceClose()
+                    }}
+                  >
+                    Close workspace
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
       <Toasts />
     </div>
   )
