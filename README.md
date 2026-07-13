@@ -7,8 +7,7 @@ Codex, Gemini, Cursor) — the app just spawns the agents you already have
 installed, so there's no inference cost.
 
 > Original product. Built from scratch; not affiliated with or derived from any other app.
-> Download: https://serhii-leniv.github.io/vectro-site
-> (The download site keeps the pre-rename `vectro-site` name — see `RELEASING.md`.)
+> Download: https://serhii-leniv.github.io/Monad-site
 
 ## Requirements
 
@@ -43,7 +42,7 @@ src/
     ipc.ts         all IPC handlers (pty / project / git / worktree / diff-merge / update)
     pty-manager.ts node-pty session manager
     git.ts         git + worktree + diff/merge (shells out to `git`)
-    update.ts      newer-release check against the vectro-site release feed
+    update.ts      newer-release check against the Monad-site release feed
   preload/     contextBridge API (window.api.{pty,project,git,worktree,update,platform})
   renderer/    React + zustand; xterm.js terminals on an auto-tiling stage
                (react-moveable drag-to-reorder + react-selecto marquee selection)
@@ -57,7 +56,7 @@ src/
   shell profile can't move them out of their worktree.
 - **Persistence:** one canvas per project in `<project>/.monad/canvas.json`.
 - **Updates:** on launch the main process checks the
-  [vectro-site](https://github.com/Serhii-Leniv/vectro-site) release feed and, on a newer
+  [Monad-site](https://github.com/Serhii-Leniv/Monad-site) release feed and, on a newer
   version, shows an in-app toast linking to the download site. No auto-download, no
   background service, no telemetry.
 
@@ -77,7 +76,7 @@ npm run smoke:p3    # diff sees changes, merge lands work on base branch
 ## Releasing
 
 See [`RELEASING.md`](RELEASING.md) — tag `v*` builds installers and publishes them
-as a GitHub Release on the public `vectro-site` repo.
+as a GitHub Release on the public `Monad-site` repo.
 
 ## Deferred
 
