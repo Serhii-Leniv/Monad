@@ -1,13 +1,15 @@
 import { app } from 'electron'
 
-// Installers are published as GitHub Releases on the public vectro-site repo
-// (see RELEASING.md) — its releases/latest is the app's version feed. The check
-// runs in the main process so the renderer never talks to the network and the
-// production CSP stays strict.
-const RELEASES_API = 'https://api.github.com/repos/Serhii-Leniv/vectro-site/releases/latest'
+// Installers are published as GitHub Releases on the public Monad-site repo
+// (renamed from vectro-site; see RELEASING.md) — its releases/latest is the
+// app's version feed. The check runs in the main process so the renderer never
+// talks to the network and the production CSP stays strict.
+const RELEASES_API = 'https://api.github.com/repos/Serhii-Leniv/Monad-site/releases/latest'
 // Send users to the download site, not the raw release: it picks the right
 // installer per OS and explains the unsigned-build Gatekeeper/SmartScreen prompt.
-const DOWNLOAD_URL = 'https://serhii-leniv.github.io/vectro-site'
+// NOTE: must track the repo name — GitHub Pages URLs do NOT redirect on rename
+// (the old /vectro-site page 404s), unlike the REST API.
+const DOWNLOAD_URL = 'https://serhii-leniv.github.io/Monad-site'
 
 export interface UpdateInfo {
   current: string
@@ -50,16 +52,29 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
   const timer = setTimeout(() => ctrl.abort(), 8000)
   try {
     const res = await fetch(RELEASES_API, {
-      headers: { Accept: 'application/vnd.github+json' },
+      // GitHub's API rejects UA-less requests with 403 — don't rely on the
+      // fetch implementation's default.
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'User-Agent': `Monad/${app.getVersion()}`
+      },
       signal: ctrl.signal
     })
-    if (!res.ok) return null
+    if (!res.ok) {
+      console.warn(`[monad] update check failed: HTTP ${res.status} from ${RELEASES_API}`)
+      return null
+    }
     const json = (await res.json()) as { tag_name?: unknown }
     const latest = typeof json.tag_name === 'string' ? json.tag_name.replace(/^v/i, '') : ''
     const current = app.getVersion()
+    if (!parseVersion(latest)) {
+      console.warn(`[monad] update check: unparsable tag_name ${JSON.stringify(json.tag_name)}`)
+      return null
+    }
     if (!isNewer(latest, current)) return null
     return { current, latest, url: DOWNLOAD_URL }
-  } catch {
+  } catch (e) {
+    console.warn('[monad] update check failed:', e)
     return null
   } finally {
     clearTimeout(timer)
