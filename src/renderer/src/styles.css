@@ -705,6 +705,7 @@ body.has-wallpaper .aurora {
   pointer-events: none;
 }
 .toast {
+  position: relative; /* anchors the absolute .toast__close */
   pointer-events: auto;
   max-width: 320px;
   padding: 11px 15px;
@@ -721,6 +722,10 @@ body.has-wallpaper .aurora {
     0 14px 36px rgba(0, 0, 0, 0.5);
   cursor: pointer;
   animation: toast-in 280ms var(--ease-decelerate);
+}
+/* Sticky toasts render the ✕ in the top-right corner; keep text clear of it. */
+.toast--sticky {
+  padding-right: 34px;
 }
 .toast--success {
   border-left-color: var(--success);
@@ -3760,8 +3765,14 @@ body.has-wallpaper .vec-pane__term {
 /* Explicit dismiss for sticky toasts (errors + actionful) that no longer close on
    a stray body click. */
 .toast__close {
-  margin-left: 8px;
-  padding: 0 4px;
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
   font-size: 12px;
   line-height: 1;
   color: var(--text-2);

@@ -1,44 +1,28 @@
 # Releasing Monad
 
 Installers are built by [`.github/workflows/build.yml`](.github/workflows/build.yml) and
-published as a **GitHub Release on the public [`Monad-site`](https://github.com/Serhii-Leniv/Monad-site)
-repo** — that's what the download site (https://serhii-leniv.github.io/Monad-site) links to.
-This repo is private, so releases can't live here (anonymous users couldn't download them).
-
-> The site repo was renamed **vectro-site → Monad-site**. The GitHub REST API and
-> repo URLs redirect from the old name, but the **GitHub Pages URL does not** —
-> `serhii-leniv.github.io/vectro-site` 404s. Apps at v0.1.18 and older carry that
-> dead download URL baked into their update banner; the API feed they check still
-> works via the redirect, so they will still see new releases.
-
-## One-time setup
-
-The build runs here but publishes to a different repo, so the default `GITHUB_TOKEN`
-isn't enough. Create a token with write access to `Monad-site`:
-
-1. **Create a fine-grained PAT** — GitHub → Settings → Developer settings →
-   Fine-grained tokens. Resource owner: your account; repository access: only
-   `Monad-site`; permission: **Contents → Read and write**.
-2. **Add it as a secret on this repo** — Settings → Secrets and
-   variables → Actions → New repository secret → name `SITE_RELEASE_TOKEN`,
-   value = the PAT.
+attached as a **GitHub Release on this repo** — that's what the download site
+(https://serhii-leniv.github.io/Monad) links to. The site itself is GitHub Pages
+serving this repo's `gh-pages` branch. Everything lives here; there is no
+cross-repo publishing and no extra token: the workflow uses the automatic
+`GITHUB_TOKEN`.
 
 ## Cutting a release
 
 ```bash
-# 1. bump the version in package.json (e.g. 0.1.5), commit
-# 2. tag and push — the tag triggers the build + publish
-git tag v0.1.5
-git push origin v0.1.5
+# 1. bump the version in package.json (e.g. 0.1.20), commit
+# 2. tag and push — the tag triggers the build, which attaches the installers
+#    to a Release on this repo
+git tag v0.1.20
+git push origin v0.1.20
 ```
 
-The workflow builds macOS (Apple Silicon + Intel) and Windows, then publishes a
-release on `Monad-site` tagged `v0.1.5` with these fixed-name assets:
+The workflow builds macOS (Apple Silicon) and Windows and attaches these
+fixed-name assets to the tag's release:
 
 | Platform                | Asset                      |
 | ----------------------- | -------------------------- |
 | macOS · Apple Silicon   | `Monad-macOS-arm64.dmg`    |
-| macOS · Intel           | `Monad-macOS-x64.dmg`      |
 | Windows · x64           | `Monad-Windows-Setup.exe`  |
 
 The fixed names (set in [`electron-builder.yml`](electron-builder.yml)) are what make
@@ -51,19 +35,22 @@ also reads the GitHub Releases API to show the live version, date, and download 
 > buttons and the app's in-app update check both use GitHub's `releases/latest`
 > API, which skips prereleases.
 
-## Rename follow-ups (Vectro → Monad)
+## Updating the download site
 
-- **Release-blocking:** the first Monad release changes the asset filenames from
-  `Vectro-*` to `Monad-*`, so the download site's fixed
-  `releases/latest/download/<name>` links will 404 until the site's links (and
-  branding text) are updated to the new names. Update the site repo in the same
-  sitting as the first Monad release.
-- The new `appId`/`productName` means the Windows installer installs **alongside**
-  an existing Vectro install rather than upgrading it — old Start-menu/taskbar
-  shortcuts keep pointing at the old exe until the user uninstalls Vectro.
-  Worth a note on the download page. User data carries over automatically
-  (one-shot migration in `src/main/migrate-userdata.ts`).
-- ~~Optional, later: rename the `vectro-site` repo~~ **Done** — the repo is now
-  `Monad-site`, and `RELEASES_API`/`DOWNLOAD_URL` in `src/main/update.ts` point at
-  it (shipped after v0.1.18; older installs keep the dead Pages link in their
-  banner but still detect updates via the API redirect).
+The site is the `gh-pages` branch of this repo (single static `index.html` +
+assets). Edit, commit, push — GitHub Pages redeploys automatically.
+
+## Legacy: the `Monad-site` repo
+
+Until v0.1.19 this repo was private, so installers were published as releases on
+the separate public `Monad-site` repo (formerly `vectro-site`) and the download
+site was its Pages page. That repo is now a redirect stub pointing at
+https://serhii-leniv.github.io/Monad, kept alive because:
+
+- Installs at **v0.1.19 and older** poll `Monad-site`'s `releases/latest` API for
+  update notices (v0.1.18 and older via the `vectro-site` rename redirect). A final
+  `v0.1.20` release was mirrored there so those installs get pointed at the new
+  site; nothing further is published to it.
+- Deleting the repo would 404 that API feed and the old Pages URL, silently
+  cutting old installs off from updates. Don't delete it; archiving is fine once
+  old versions have died out.

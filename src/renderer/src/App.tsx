@@ -107,7 +107,7 @@ export default function App(): JSX.Element {
     return () => cancelAnimationFrame(raf)
   }, [activeWorkspaceId])
 
-  // Persistent update reminder. The main process reads the Monad-site release
+  // Persistent update reminder. The main process reads the app repo's release
   // feed; we re-check on a delay after launch and then periodically, stashing
   // the result so the sticky UpdateBanner nags until the user actually updates
   // (the "continuous notification" the feature is about). On the first sighting

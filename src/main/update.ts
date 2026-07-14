@@ -1,15 +1,15 @@
 import { app } from 'electron'
 
-// Installers are published as GitHub Releases on the public Monad-site repo
-// (renamed from vectro-site; see RELEASING.md) — its releases/latest is the
-// app's version feed. The check runs in the main process so the renderer never
-// talks to the network and the production CSP stays strict.
-const RELEASES_API = 'https://api.github.com/repos/Serhii-Leniv/Monad-site/releases/latest'
+// Installers are published as GitHub Releases on this repo (Serhii-Leniv/Monad,
+// public) — its releases/latest is the app's version feed. CI attaches them on
+// every version tag; see RELEASING.md. The check runs in the main process so the
+// renderer never talks to the network and the production CSP stays strict.
+const RELEASES_API = 'https://api.github.com/repos/Serhii-Leniv/Monad/releases/latest'
 // Send users to the download site, not the raw release: it picks the right
 // installer per OS and explains the unsigned-build Gatekeeper/SmartScreen prompt.
 // NOTE: must track the repo name — GitHub Pages URLs do NOT redirect on rename
 // (the old /vectro-site page 404s), unlike the REST API.
-const DOWNLOAD_URL = 'https://serhii-leniv.github.io/Monad-site'
+const DOWNLOAD_URL = 'https://serhii-leniv.github.io/Monad'
 
 export interface UpdateInfo {
   current: string

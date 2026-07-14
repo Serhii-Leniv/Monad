@@ -28,7 +28,7 @@ function ToastItem({
   }, [id, sticky, refresh])
   return (
     <div
-      className={`toast toast--${kind}`}
+      className={`toast toast--${kind}${sticky ? ' toast--sticky' : ''}`}
       // A toast with an action (e.g. "Download") must NOT dismiss on a stray body
       // click — that silently throws away the only in-app path to the action. It
       // closes via its button or the explicit ✕. Plain toasts still click-to-close.
