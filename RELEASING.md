@@ -39,18 +39,3 @@ also reads the GitHub Releases API to show the live version, date, and download 
 
 The site is the `gh-pages` branch of this repo (single static `index.html` +
 assets). Edit, commit, push — GitHub Pages redeploys automatically.
-
-## Legacy: the `Monad-site` repo
-
-Until v0.1.19 this repo was private, so installers were published as releases on
-the separate public `Monad-site` repo (formerly `vectro-site`) and the download
-site was its Pages page. That repo is now a redirect stub pointing at
-https://serhii-leniv.github.io/Monad, kept alive because:
-
-- Installs at **v0.1.19 and older** poll `Monad-site`'s `releases/latest` API for
-  update notices (v0.1.18 and older via the `vectro-site` rename redirect). A final
-  `v0.1.20` release was mirrored there so those installs get pointed at the new
-  site; nothing further is published to it.
-- Deleting the repo would 404 that API feed and the old Pages URL, silently
-  cutting old installs off from updates. Don't delete it; archiving is fine once
-  old versions have died out.
