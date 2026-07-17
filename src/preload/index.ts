@@ -14,6 +14,15 @@ ipcRenderer.on('pty:exit', (_e, { id, code }: { id: string; code: number }) => {
   exitListeners.get(id)?.forEach((cb) => cb(code))
 })
 
+// `file:changed` is a single global channel (not keyed per-id like pty). Fan it
+// out to every subscriber through one shared Set so many file-panel components
+// can subscribe/unsubscribe independently without leaking ipcRenderer.on wiring.
+type ChangedHandler = (p: { root: string }) => void
+const changedListeners = new Set<ChangedHandler>()
+ipcRenderer.on('file:changed', (_e, p: { root: string }) => {
+  changedListeners.forEach((cb) => cb(p))
+})
+
 function subscribe<T>(map: Map<string, Set<T>>, id: string, cb: T): () => void {
   let set = map.get(id)
   if (!set) {
@@ -66,6 +75,41 @@ export interface FeedbackResult {
   error?: 'not-configured' | 'empty' | 'network' | 'rejected'
 }
 
+/** One entry in a single (non-recursive) directory listing. */
+export interface FileEntry {
+  name: string
+  kind: 'dir' | 'file'
+}
+
+export interface FileTreeResult {
+  entries: FileEntry[]
+}
+
+/** Result of reading one file. Exactly one of `content`/`dataUrl` is set for a
+ *  readable text/image file; both absent when binary, too large, or missing. */
+export interface FileReadResult {
+  mtimeMs: number
+  size: number
+  /** Binary (a NUL byte in the first ~8KB) — not shown in the text editor. */
+  isBinary: boolean
+  /** Over the 2MB cap — not read. */
+  tooLarge: boolean
+  /** utf8 text (text files only). */
+  content?: string
+  /** `data:<mime>;base64,...` (image files only). */
+  dataUrl?: string
+}
+
+export interface FileSaveResult {
+  ok: boolean
+  /** On-disk mtime changed vs. expectedMtimeMs — nothing was written. Re-send
+   *  with expectedMtimeMs: 0 to override. */
+  conflict?: boolean
+  /** Current on-disk mtime — the new one after a write, or the conflicting one. */
+  mtimeMs?: number
+  error?: string
+}
+
 const api = {
   pty: {
     spawn: (opts: PtySpawnOptions): Promise<string> => ipcRenderer.invoke('pty:spawn', opts),
@@ -111,7 +155,28 @@ const api = {
     exists: (base: string, raw: string): Promise<boolean> =>
       ipcRenderer.invoke('path:exists', { base, raw }),
     open: (base: string, raw: string): Promise<boolean> =>
-      ipcRenderer.invoke('path:open', { base, raw })
+      ipcRenderer.invoke('path:open', { base, raw }),
+    // File explorer / editor. `root` is a scope root (worktree/project path);
+    // `rel` is always relative to it — the main process rejects any escape.
+    tree: (root: string, rel: string): Promise<FileTreeResult> =>
+      ipcRenderer.invoke('file:tree', { root, rel }),
+    read: (root: string, rel: string): Promise<FileReadResult> =>
+      ipcRenderer.invoke('file:read', { root, rel }),
+    save: (
+      root: string,
+      rel: string,
+      content: string,
+      expectedMtimeMs: number
+    ): Promise<FileSaveResult> =>
+      ipcRenderer.invoke('file:save', { root, rel, content, expectedMtimeMs }),
+    watch: (root: string): void => ipcRenderer.send('file:watch', { root }),
+    unwatch: (): void => ipcRenderer.send('file:unwatch'),
+    onChanged: (cb: ChangedHandler): (() => void) => {
+      changedListeners.add(cb)
+      return () => {
+        changedListeners.delete(cb)
+      }
+    }
   },
   update: {
     check: (): Promise<UpdateInfo | null> => ipcRenderer.invoke('update:check'),

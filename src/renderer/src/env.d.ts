@@ -103,6 +103,41 @@ interface FeedbackResult {
   error?: 'not-configured' | 'empty' | 'network' | 'rejected'
 }
 
+/** One entry in a single (non-recursive) directory listing. */
+interface FileEntry {
+  name: string
+  kind: 'dir' | 'file'
+}
+
+interface FileTreeResult {
+  entries: FileEntry[]
+}
+
+/** Result of reading one file. Exactly one of `content`/`dataUrl` is set for a
+ *  readable text/image file; both absent when binary, too large, or missing. */
+interface FileReadResult {
+  mtimeMs: number
+  size: number
+  /** Binary (a NUL byte in the first ~8KB) — not shown in the text editor. */
+  isBinary: boolean
+  /** Over the 2MB cap — not read. */
+  tooLarge: boolean
+  /** utf8 text (text files only). */
+  content?: string
+  /** `data:<mime>;base64,...` (image files only). */
+  dataUrl?: string
+}
+
+interface FileSaveResult {
+  ok: boolean
+  /** On-disk mtime changed vs. expectedMtimeMs — nothing was written. Re-send
+   *  with expectedMtimeMs: 0 to override. */
+  conflict?: boolean
+  /** Current on-disk mtime — the new one after a write, or the conflicting one. */
+  mtimeMs?: number
+  error?: string
+}
+
 /** Shape of the per-project canvas file (.monad/canvas.json). */
 interface PersistedCanvas {
   layoutMode?: 'grid' | 'columns' | 'preview' | 'free'
@@ -151,6 +186,17 @@ interface Window {
     file: {
       exists: (base: string, raw: string) => Promise<boolean>
       open: (base: string, raw: string) => Promise<boolean>
+      tree: (root: string, rel: string) => Promise<FileTreeResult>
+      read: (root: string, rel: string) => Promise<FileReadResult>
+      save: (
+        root: string,
+        rel: string,
+        content: string,
+        expectedMtimeMs: number
+      ) => Promise<FileSaveResult>
+      watch: (root: string) => void
+      unwatch: () => void
+      onChanged: (cb: (p: { root: string }) => void) => () => void
     }
     update: {
       check: () => Promise<UpdateInfo | null>

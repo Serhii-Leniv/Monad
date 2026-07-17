@@ -23,6 +23,13 @@ export const IconFolder = (): JSX.Element => (
   </Svg>
 )
 
+/** Folder glyph sized like the header/rail buttons (IconFolder is fixed 19px). */
+export const IconFiles = ({ size = 14 }: { size?: number }): JSX.Element => (
+  <Svg size={size}>
+    <path d="M3 7a2 2 0 0 1 2-2h3.5l2 2H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+  </Svg>
+)
+
 export const IconPlus = (): JSX.Element => (
   <Svg>
     <path d="M12 5v14M5 12h14" />

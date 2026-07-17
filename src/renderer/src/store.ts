@@ -116,6 +116,39 @@ export interface LastClosed {
 }
 
 /**
+ * What the file panel is rooted at: the project folder itself ('root'), or one
+ * agent's worktree ('agent' + its id). Phase 3 resolves this to an absolute base
+ * path via the main-process file API; the panel's openPath is always RELATIVE to it.
+ */
+export type FileScope = { kind: 'root' } | { kind: 'agent'; agentId: string }
+
+/** Per-workspace state of the right-docked file explorer/editor panel. Runtime
+ *  UI only — never persisted to canvas.json (like selectedIds / diffAgentId). */
+export interface FilePanelState {
+  open: boolean
+  scope: FileScope
+  /** Path RELATIVE to the scope root of the file open in the editor, or null. */
+  openPath: string | null
+  /** The open file has unsaved edits (Phase 3 sets this from the editor). */
+  dirty: boolean
+}
+
+/** Deep-equal for two FileScopes — drives "same scope" keep-vs-clear decisions. */
+function sameScope(a: FileScope, b: FileScope): boolean {
+  if (a.kind !== b.kind) return false
+  if (a.kind === 'agent' && b.kind === 'agent') return a.agentId === b.agentId
+  return true
+}
+
+/** The default file-panel state stamped onto every new/restored workspace. */
+const DEFAULT_FILE_PANEL: FilePanelState = {
+  open: false,
+  scope: { kind: 'root' },
+  openPath: null,
+  dirty: false
+}
+
+/**
  * A live workspace — one open project folder with its own canvas of agents,
  * kept running in the background even when another workspace is on screen. This
  * is what the top-bar tabs switch between. Everything that used to be a single
@@ -140,6 +173,7 @@ export interface WorkspaceSession {
   pendingCloseId: string | null
   bulkCloseIds: string[] | null
   diffAgentId: string | null
+  filePanel: FilePanelState
   lastClosed: LastClosed | null
 }
 
@@ -200,6 +234,9 @@ interface AppState {
   panY: number
   zoom: number
   toasts: Toast[]
+  /** Width (px) of the right-docked file panel — global, shared by every
+   *  workspace, persisted across restart. */
+  filePanelWidth: number
 
   /** Open a folder as a new live workspace tab (or focus it if already open). */
   openWorkspace: (ref: ProjectRef, saved: PersistedCanvas | null, git: GitInfo) => void
@@ -228,6 +265,21 @@ interface AppState {
   /** Hide the update banner for this session (it returns on next launch). */
   dismissUpdate: () => void
   setDiffAgentId: (id: string | null) => void
+  /** Open the file panel on the active workspace at a scope. Same scope keeps the
+   *  open file + dirty flag; a new scope clears both. */
+  openFilePanel: (scope: FileScope) => void
+  /** Re-root the (already-open) panel; clears the open file + dirty flag. */
+  setFilePanelScope: (scope: FileScope) => void
+  /** Set (or clear, with null) the file open in the editor — scope untouched. */
+  openFile: (relPath: string | null) => void
+  /** Mark the open file dirty / clean (editor buffer state). */
+  setFileDirty: (dirty: boolean) => void
+  /** Hide the panel (keeps scope + open file for a later re-open). */
+  closeFilePanel: () => void
+  /** Flip the panel's visibility; defaults to root scope when opening fresh. */
+  toggleFilePanel: () => void
+  /** Set the global panel width (px); clamps to [260, 820] and persists. */
+  setFilePanelWidth: (px: number) => void
   requestClose: (id: string) => void
   clearPendingClose: () => void
   requestBulkClose: (ids: string[]) => void
@@ -358,6 +410,33 @@ function loadSettings(): AppSettings {
 function saveSettings(s: AppSettings): void {
   try {
     localStorage.setItem('vectro.settings', JSON.stringify(s))
+  } catch {
+    /* ignore */
+  }
+}
+
+// --- file-panel width (global, persisted across restart) -------------------
+// A single width shared by every workspace's panel — not a per-canvas concern,
+// so it lives at the top level with its own key rather than in a WorkspaceSession
+// or the user-facing settings blob. Legacy 'vectro.' prefix like the other keys.
+export const FILE_PANEL_MIN = 260
+export const FILE_PANEL_MAX = 820
+export const FILE_PANEL_DEFAULT = 380
+const FILE_PANEL_WIDTH_KEY = 'vectro.filePanelWidth'
+
+function loadFilePanelWidth(): number {
+  try {
+    const raw = localStorage.getItem(FILE_PANEL_WIDTH_KEY)
+    if (raw === null) return FILE_PANEL_DEFAULT
+    return clampNum(JSON.parse(raw), FILE_PANEL_MIN, FILE_PANEL_MAX, FILE_PANEL_DEFAULT)
+  } catch {
+    return FILE_PANEL_DEFAULT
+  }
+}
+
+function saveFilePanelWidth(px: number): void {
+  try {
+    localStorage.setItem(FILE_PANEL_WIDTH_KEY, JSON.stringify(px))
   } catch {
     /* ignore */
   }
@@ -564,6 +643,7 @@ export const useStore = create<AppState>((set, get) => ({
   panX: 0,
   panY: 0,
   zoom: 1,
+  filePanelWidth: loadFilePanelWidth(),
 
   openWorkspace: (ref, saved, git) =>
     set((s) => {
@@ -595,6 +675,7 @@ export const useStore = create<AppState>((set, get) => ({
         pendingCloseId: null,
         bulkCloseIds: null,
         diffAgentId: null,
+        filePanel: DEFAULT_FILE_PANEL,
         lastClosed: null
       }
       return {
@@ -734,6 +815,109 @@ export const useStore = create<AppState>((set, get) => ({
       if (!ws) return {}
       return { liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({ ...w, diffAgentId: id })) }
     }),
+
+  // The file panel always belongs to the workspace on screen. Re-opening at the
+  // SAME scope preserves the open file + dirty flag (so toggling it shut and back
+  // resumes where you were); switching scope clears both — a different root's
+  // relative path is meaningless.
+  openFilePanel: (scope) =>
+    set((s) => {
+      const ws = activeWs(s)
+      if (!ws) return {}
+      return {
+        liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => {
+          const same = sameScope(w.filePanel.scope, scope)
+          return {
+            ...w,
+            filePanel: {
+              open: true,
+              scope,
+              openPath: same ? w.filePanel.openPath : null,
+              dirty: same ? w.filePanel.dirty : false
+            }
+          }
+        })
+      }
+    }),
+
+  setFilePanelScope: (scope) =>
+    set((s) => {
+      const ws = activeWs(s)
+      if (!ws) return {}
+      return {
+        liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({
+          ...w,
+          filePanel: { ...w.filePanel, scope, openPath: null, dirty: false }
+        }))
+      }
+    }),
+
+  openFile: (relPath) =>
+    set((s) => {
+      const ws = activeWs(s)
+      if (!ws) return {}
+      return {
+        liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({
+          ...w,
+          filePanel: { ...w.filePanel, openPath: relPath }
+        }))
+      }
+    }),
+
+  setFileDirty: (dirty) =>
+    set((s) => {
+      const ws = activeWs(s)
+      if (!ws) return {}
+      return {
+        liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({
+          ...w,
+          filePanel: { ...w.filePanel, dirty }
+        }))
+      }
+    }),
+
+  closeFilePanel: () =>
+    set((s) => {
+      const ws = activeWs(s)
+      if (!ws) return {}
+      return {
+        liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({
+          ...w,
+          filePanel: { ...w.filePanel, open: false }
+        }))
+      }
+    }),
+
+  toggleFilePanel: () =>
+    set((s) => {
+      const ws = activeWs(s)
+      if (!ws) return {}
+      return {
+        liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => {
+          const open = !w.filePanel.open
+          // Turning ON: if the remembered scope points at an agent that's since
+          // been closed, it's no longer meaningful — fall back to the project root.
+          const staleAgent =
+            open &&
+            w.filePanel.scope.kind === 'agent' &&
+            !w.agents.some((a) => a.id === (w.filePanel.scope as { agentId: string }).agentId)
+          return {
+            ...w,
+            filePanel: {
+              ...w.filePanel,
+              open,
+              ...(staleAgent ? { scope: { kind: 'root' as const }, openPath: null, dirty: false } : {})
+            }
+          }
+        })
+      }
+    }),
+
+  setFilePanelWidth: (px) => {
+    const filePanelWidth = clampNum(px, FILE_PANEL_MIN, FILE_PANEL_MAX, FILE_PANEL_DEFAULT)
+    saveFilePanelWidth(filePanelWidth)
+    set({ filePanelWidth })
+  },
 
   // The pane owning `id` runs the guarded close (dirty-check + confirm); these
   // just hand the request to it (on its own workspace) and clear it once picked up.
