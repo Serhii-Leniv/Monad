@@ -11,7 +11,7 @@ import { terminals, fits, flushes, quotePaths, pasteIntoTerminal } from '../term
 import { needsAttention, clampTail, stripAnsi } from '../attention'
 import { AGENT_INSTALL_URLS } from '../agentInstall'
 import { playCue, type Cue } from '../sound'
-import { IconClose, IconWide, IconNarrow } from './Icons'
+import { IconClose, IconWide, IconNarrow, IconFiles } from './Icons'
 import AgentBadge from './AgentBadge'
 
 // DECSCUSR (CSI Ps SP q) — shells like PSReadLine use it to force a (fast)
@@ -85,6 +85,33 @@ const MIN_FOCUS_SIZE = 200
 // candidates are verified against the pane's cwd in the main process, so only
 // real files light up as links.
 const FILE_RE = /(?:[A-Za-z]:[\\/]|~[\\/]|\.{1,2}[\\/])?[\w][\w.-]*(?:[\\/][\w.-]+)+(?::\d+(?::\d+)?)?/g
+
+/** Turn a FILE_RE token into a forward-slash rel path under `cwd`, stripping the
+ *  trailing :line(:col) and surrounding quotes/brackets the same way the main
+ *  process's resolveFileTarget does. Returns null when the file lands OUTSIDE
+ *  cwd (different root, or `..` escape) so the caller can fall back to OS-open. */
+function relUnderCwd(cwd: string, token: string): string | null {
+  const cleaned = token
+    .replace(/(?::\d+){1,2}$/, '') // trailing :line(:col)
+    .replace(/^['"(<[]+|['")>\],.;]+$/g, '')
+  if (!cleaned || !cwd) return null
+  const t = cleaned.replace(/\\/g, '/')
+  const base = cwd.replace(/\\/g, '/').replace(/\/+$/, '')
+  const isAbs = /^[A-Za-z]:\//.test(t) || t.startsWith('/') || t.startsWith('~/')
+  let rel: string
+  if (isAbs) {
+    // Windows compares paths case-insensitively — tolerate a drive-letter case
+    // mismatch between the emitted token and the stored cwd.
+    const bl = base.toLowerCase()
+    const tl = t.toLowerCase()
+    if (tl === bl || !tl.startsWith(bl + '/')) return null // the dir itself, or outside it
+    rel = t.slice(base.length + 1)
+  } else {
+    rel = t.replace(/^\.\//, '')
+  }
+  if (!rel || rel === '..' || rel.split('/').includes('..')) return null
+  return rel
+}
 
 /** m:ss elapsed while an agent works; hidden for bursts under 3s (shell echo). */
 function WorkTimer({ since }: { since: number }): JSX.Element | null {
@@ -223,6 +250,7 @@ function TerminalPane({
   const canvasW = useStore((s) => s.canvasW)
   const canvasH = useStore((s) => s.canvasH)
   const setDiffAgentId = useStore((s) => s.setDiffAgentId)
+  const openFilePanel = useStore((s) => s.openFilePanel)
   const pendingClose = useStore((s) => wsById(s, workspaceId)?.pendingCloseId === id)
   const clearPendingClose = useStore((s) => s.clearPendingClose)
   const termRef = useRef<Terminal | null>(null)
@@ -324,7 +352,18 @@ function TerminalPane({
             .map((c) => ({
               range: { start: { x: c.x + 1, y }, end: { x: c.x + c.t.length, y } },
               text: c.t,
-              activate: () => void window.api.file.open(cwd, c.t)
+              activate: () => {
+                // Prefer the in-app viewer scoped to this pane's worktree; only
+                // fall back to an OS-level open when the file lives outside cwd.
+                const rel = relUnderCwd(cwd, c.t)
+                if (rel) {
+                  const st = useStore.getState()
+                  st.openFilePanel({ kind: 'agent', agentId: id })
+                  st.openFile(rel)
+                } else {
+                  void window.api.file.open(cwd, c.t)
+                }
+              }
             }))
           cb(links.length ? links : undefined)
         })
@@ -1264,6 +1303,17 @@ function TerminalPane({
             </button>
           )
         )}
+        <button
+          className="vec-pane__files"
+          title="Browse files"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            openFilePanel({ kind: 'agent', agentId: id })
+          }}
+        >
+          <IconFiles />
+        </button>
         {!focused && agentCount > 1 && (
           // Hidden while maximized: the tiled geometry it changes isn't visible
           // there, so the toggle would read as a broken button. Also hidden with
