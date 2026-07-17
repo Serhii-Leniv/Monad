@@ -15,3 +15,5 @@ b.out
 # Per-project runtime data (terminal layout) + agent worktrees
 .monad/
 .monad-worktrees/
+# Stale canvas dir written by pre-rename builds
+.agent-canvas/
