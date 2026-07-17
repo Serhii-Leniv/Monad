@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="build/icon.png" alt="Monad logo" width="128">
+</p>
+
 # Monad
 
 A canvas for running and steering multiple AI coding agents in parallel.
