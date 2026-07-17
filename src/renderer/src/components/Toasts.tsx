@@ -9,23 +9,27 @@ function ToastItem({
   onAction,
   secondaryLabel,
   onSecondary,
+  sticky: stickyOverride,
+  timeoutMs,
   refresh
 }: Toast): JSX.Element {
   const dismiss = useStore((s) => s.dismissToast)
   // Errors (e.g. "isn't isolated — agent is editing the shared dir") carry a
   // warning the user must actually see, so they never auto-dismiss; nor do toasts
-  // with an action button. Both stay until clicked/dismissed.
-  const sticky = toastIsSticky({ kind, actionLabel, secondaryLabel })
+  // with an action button. Both stay until clicked/dismissed — unless the pusher
+  // explicitly opted out (sticky: false) because a persistent surface elsewhere
+  // carries the same affordance.
+  const sticky = toastIsSticky({ kind, actionLabel, secondaryLabel, sticky: stickyOverride })
   useEffect(() => {
     // `dismiss` is a stable store action captured in the closure; keeping it out
-    // of the deps avoids resetting the 3.4s timer on unrelated re-renders.
-    // `refresh` IS a dep on purpose: a de-duped push bumps it so the surviving
-    // toast gets a fresh 3.4s from the latest trigger.
+    // of the deps avoids resetting the auto-dismiss timer on unrelated
+    // re-renders. `refresh` IS a dep on purpose: a de-duped push bumps it so the
+    // surviving toast gets a fresh timeout from the latest trigger.
     if (sticky) return
-    const t = setTimeout(() => dismiss(id), 3400)
+    const t = setTimeout(() => dismiss(id), timeoutMs ?? 3400)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, sticky, refresh])
+  }, [id, sticky, timeoutMs, refresh])
   return (
     <div
       className={`toast toast--${kind}${sticky ? ' toast--sticky' : ''}`}

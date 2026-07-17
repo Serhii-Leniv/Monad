@@ -22,6 +22,11 @@ export interface Toast {
   /** Optional lower-emphasis second action (e.g. "Skip this version"). */
   secondaryLabel?: string
   onSecondary?: () => void
+  /** Explicit stickiness override — `false` auto-dismisses even with an action
+   *  (used when a persistent surface elsewhere carries the same affordance). */
+  sticky?: boolean
+  /** Auto-dismiss delay in ms (default 3400). */
+  timeoutMs?: number
   /**
    * Bumped when a duplicate push refreshes this toast instead of stacking a
    * twin — Toasts.tsx keys its auto-dismiss timer on it so the toast gets a
@@ -33,8 +38,12 @@ export interface Toast {
 /** Visible toast cap — a 6th pushes the oldest (non-sticky first) off the stack. */
 const MAX_TOASTS = 5
 
-/** Sticky toasts never auto-dismiss: errors and anything with an action to lose. */
-export function toastIsSticky(t: Pick<Toast, 'kind' | 'actionLabel' | 'secondaryLabel'>): boolean {
+/** Sticky toasts never auto-dismiss: errors and anything with an action to lose.
+ *  An explicit `sticky` on the toast overrides that inference. */
+export function toastIsSticky(
+  t: Pick<Toast, 'kind' | 'actionLabel' | 'secondaryLabel' | 'sticky'>
+): boolean {
+  if (t.sticky !== undefined) return t.sticky
   return !!t.actionLabel || !!t.secondaryLabel || t.kind === 'error'
 }
 
@@ -244,7 +253,10 @@ interface AppState {
   pushToast: (
     text: string,
     kind?: Toast['kind'],
-    action?: Pick<Toast, 'actionLabel' | 'onAction' | 'secondaryLabel' | 'onSecondary'>
+    action?: Pick<
+      Toast,
+      'actionLabel' | 'onAction' | 'secondaryLabel' | 'onSecondary' | 'sticky' | 'timeoutMs'
+    >
   ) => void
   dismissToast: (id: string) => void
 }
@@ -1058,6 +1070,8 @@ export const useStore = create<AppState>((set, get) => ({
           onAction: action?.onAction,
           secondaryLabel: action?.secondaryLabel,
           onSecondary: action?.onSecondary,
+          sticky: action?.sticky,
+          timeoutMs: action?.timeoutMs,
           refresh: (dup.refresh ?? 0) + 1
         }
         return { toasts: [...s.toasts.filter((t) => t !== dup), fresh] }

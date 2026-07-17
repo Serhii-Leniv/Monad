@@ -236,14 +236,18 @@ export async function openProjectByPath(ref: RecentProject): Promise<void> {
     useStore.getState().openWorkspace(ref, saved, git)
     // A non-git folder silently loses the headline feature (per-agent worktree
     // isolation) — say so instead of quietly downgrading to a shared dir, and
-    // offer the fix in place. The action makes this toast sticky (Toasts.tsx),
-    // so it can't vanish before the user reads it.
+    // offer the fix in place. Deliberately transient (7s): the amber
+    // "no isolation" chip in the project bar persists with the same
+    // click-to-init action, so nothing is lost when the toast fades — and the
+    // corner can't accumulate permanent toasts (e.g. next to an update nudge).
     if (!git.isGit) {
       useStore
         .getState()
         .pushToast('Not a git repo — agents will share this folder without isolation.', 'info', {
           actionLabel: 'Initialize git',
-          onAction: () => void initGitForProject(ref.path)
+          onAction: () => void initGitForProject(ref.path),
+          sticky: false,
+          timeoutMs: 7000
         })
     }
     // Always land on at least one terminal so a freshly-opened workspace isn't a
