@@ -47,6 +47,12 @@ export interface UpdateInfo {
   url: string
 }
 
+/** In-place auto-update progress (Windows; other platforms never emit). */
+export type UpdateState =
+  | { status: 'downloading'; percent: number }
+  | { status: 'ready' }
+  | { status: 'error'; message: string }
+
 export type FeedbackCategory = 'bug' | 'idea' | 'other'
 
 export interface FeedbackInput {
@@ -108,7 +114,14 @@ const api = {
       ipcRenderer.invoke('path:open', { base, raw })
   },
   update: {
-    check: (): Promise<UpdateInfo | null> => ipcRenderer.invoke('update:check')
+    check: (): Promise<UpdateInfo | null> => ipcRenderer.invoke('update:check'),
+    /** Restart into the downloaded version (no-op until state says 'ready'). */
+    install: (): void => ipcRenderer.send('update:install'),
+    onState: (cb: (state: UpdateState) => void): (() => void) => {
+      const handler = (_e: Electron.IpcRendererEvent, state: UpdateState): void => cb(state)
+      ipcRenderer.on('update:state', handler)
+      return () => ipcRenderer.removeListener('update:state', handler)
+    }
   },
   feedback: {
     send: (input: FeedbackInput): Promise<FeedbackResult> =>

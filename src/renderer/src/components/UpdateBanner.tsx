@@ -7,9 +7,14 @@ import { reminderTone, reminderHeadline } from '../updateReminder'
  * stays put for the whole session (until dismissed) and returns on the next
  * launch as long as a newer release exists — the "continuous notification"
  * half of the update feature. Tone firms up the longer the version is behind.
+ *
+ * On Windows the update also downloads in place (see main/update.ts): the
+ * action button walks available → "Downloading… n%" → "Restart to update".
+ * Everywhere else (and on any updater error) it links to the download site.
  */
 export default function UpdateBanner(): JSX.Element | null {
   const update = useStore((s) => s.update)
+  const ustate = useStore((s) => s.updateState)
   const dismissed = useStore((s) => s.updateDismissed)
   const dismissUpdate = useStore((s) => s.dismissUpdate)
 
@@ -17,6 +22,12 @@ export default function UpdateBanner(): JSX.Element | null {
   const tone = useMemo(() => (update ? reminderTone(update.latest) : null), [update])
 
   if (!update || dismissed || !tone) return null
+
+  const ready = ustate?.status === 'ready'
+  const downloading = ustate?.status === 'downloading'
+  const text = ready
+    ? `Monad ${update.latest} is downloaded — restart to finish updating.`
+    : reminderHeadline(update, tone)
 
   return (
     <div className={`updbar updbar--${tone.level}`} role="status">
@@ -30,10 +41,20 @@ export default function UpdateBanner(): JSX.Element | null {
           strokeLinejoin="round"
         />
       </svg>
-      <span className="updbar__text">{reminderHeadline(update, tone)}</span>
-      <button className="updbar__btn" onClick={() => void window.api.openExternal(update.url)}>
-        Update now
-      </button>
+      <span className="updbar__text">{text}</span>
+      {ready ? (
+        <button className="updbar__btn" onClick={() => window.api.update.install()}>
+          Restart to update
+        </button>
+      ) : downloading ? (
+        <button className="updbar__btn" disabled>
+          Downloading… {ustate.percent}%
+        </button>
+      ) : (
+        <button className="updbar__btn" onClick={() => void window.api.openExternal(update.url)}>
+          Update now
+        </button>
+      )}
       <button
         className="updbar__dismiss"
         title="Hide until next launch"
