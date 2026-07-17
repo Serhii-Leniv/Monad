@@ -1782,7 +1782,18 @@ body.has-wallpaper .aurora {
   max-height: 100%;
   object-fit: contain;
 }
-/* The CodeMirror root fills the content pane; background stays transparent
+/* @uiw/react-codemirror renders a wrapper <div> (this class) BETWEEN the flex
+   content pane and .cm-editor. Without constraining it, the editor sizes to its
+   content and overflows the panel instead of scrolling — so bound it to the pane
+   (flex:1 + min-width/height:0) and let .cm-scroller handle BOTH axes. */
+.fileview__cm {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+}
+/* The CodeMirror root fills the wrapper; background stays transparent
    (see FileView's EditorView.theme) so the panel's glass shows through. */
 .fileview__content .cm-editor {
   flex: 1;
@@ -1791,6 +1802,10 @@ body.has-wallpaper .aurora {
 }
 .fileview__content .cm-editor.cm-focused {
   outline: none;
+}
+/* Scroll vertically AND horizontally (long lines don't wrap) within the pane. */
+.fileview__content .cm-scroller {
+  overflow: auto;
 }
 
 /* Thin glass scrollbar to match the other scrollable surfaces. */
@@ -2086,23 +2101,6 @@ body.has-wallpaper .aurora {
 
 /* Per-card "Browse files" button — same quiet icon-button shape as the width
    toggle; opens the file panel scoped to this agent's worktree. */
-.vec-pane__files {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  color: var(--muted);
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.vec-pane__files:hover {
-  color: var(--text);
-  background: var(--hover-bg);
-}
-
 .vec-pane__body {
   position: relative;
   flex: 1;

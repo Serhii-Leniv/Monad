@@ -11,7 +11,7 @@ import { terminals, fits, flushes, quotePaths, pasteIntoTerminal } from '../term
 import { needsAttention, clampTail, stripAnsi } from '../attention'
 import { AGENT_INSTALL_URLS } from '../agentInstall'
 import { playCue, type Cue } from '../sound'
-import { IconClose, IconWide, IconNarrow, IconFiles } from './Icons'
+import { IconClose, IconWide, IconNarrow } from './Icons'
 import AgentBadge from './AgentBadge'
 
 // DECSCUSR (CSI Ps SP q) — shells like PSReadLine use it to force a (fast)
@@ -250,7 +250,6 @@ function TerminalPane({
   const canvasW = useStore((s) => s.canvasW)
   const canvasH = useStore((s) => s.canvasH)
   const setDiffAgentId = useStore((s) => s.setDiffAgentId)
-  const openFilePanel = useStore((s) => s.openFilePanel)
   const pendingClose = useStore((s) => wsById(s, workspaceId)?.pendingCloseId === id)
   const clearPendingClose = useStore((s) => s.clearPendingClose)
   const termRef = useRef<Terminal | null>(null)
@@ -353,12 +352,15 @@ function TerminalPane({
               range: { start: { x: c.x + 1, y }, end: { x: c.x + c.t.length, y } },
               text: c.t,
               activate: () => {
-                // Prefer the in-app viewer scoped to this pane's worktree; only
-                // fall back to an OS-level open when the file lives outside cwd.
+                // Open in the in-app viewer at PROJECT-ROOT scope (never the
+                // worktree copy — the human edits the real files). The printed
+                // path is cwd-relative, but the worktree mirrors the repo so the
+                // same rel resolves under the project root. Fall back to an
+                // OS-level open only when the file lives outside cwd.
                 const rel = relUnderCwd(cwd, c.t)
                 if (rel) {
                   const st = useStore.getState()
-                  st.openFilePanel({ kind: 'agent', agentId: id })
+                  st.openFilePanel({ kind: 'root' })
                   st.openFile(rel)
                 } else {
                   void window.api.file.open(cwd, c.t)
@@ -1303,17 +1305,6 @@ function TerminalPane({
             </button>
           )
         )}
-        <button
-          className="vec-pane__files"
-          title="Browse files"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation()
-            openFilePanel({ kind: 'agent', agentId: id })
-          }}
-        >
-          <IconFiles />
-        </button>
         {!focused && agentCount > 1 && (
           // Hidden while maximized: the tiled geometry it changes isn't visible
           // there, so the toggle would read as a broken button. Also hidden with

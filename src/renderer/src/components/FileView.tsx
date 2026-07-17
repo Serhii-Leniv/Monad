@@ -460,6 +460,7 @@ export default function FileView({
         )}
         {kind === 'text' && (
           <CodeMirror
+            className="fileview__cm"
             value={local}
             height="100%"
             theme="none"
