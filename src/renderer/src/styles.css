@@ -374,6 +374,30 @@ body.dragging .aurora__orb {
   animation-play-state: paused;
 }
 
+/* ---------- Power: pause decoration when nobody is watching ----------
+   powerIdle.ts stamps is-blurred / is-hidden / is-idle on <body>. Purely
+   decorative motion (aurora, emblem glow) freezes on all three — every frame
+   it animates forces the backdrop-filtered chrome above it to re-blur, which
+   is the app's whole idle GPU draw. Paused animations resume from the same
+   frame, so nothing jumps when focus/input returns. */
+body.is-blurred .aurora__orb,
+body.is-hidden .aurora__orb,
+body.is-idle .aurora__orb,
+body.is-blurred .empty__card > img,
+body.is-hidden .empty__card > img,
+body.is-idle .empty__card > img {
+  animation-play-state: paused;
+}
+
+/* Functional signals (working pulse, attention breathe, dock badge) are "come
+   look" cues for a user watching from another window — they keep animating
+   while merely unfocused or idle, and pause only when truly invisible. */
+body.is-hidden .vec-pane__dot--working,
+body.is-hidden .vec-pane.is-attention:not(.is-selected),
+body.is-hidden .rail-btn__badge {
+  animation-play-state: paused;
+}
+
 body.has-wallpaper .aurora {
   display: none;
 }
@@ -779,8 +803,10 @@ body.has-wallpaper .aurora {
 }
 
 /* ---------- Update banner (persistent "a newer version is available") ---------- */
-/* Sits in the column flow under the 40px titlebar (below the floating project
-   pill), full-width, so it's always visible while an update is pending. Tone
+/* An inset floating glass strip in the column flow under the 40px titlebar —
+   the top margin clears the floating tab bar (absolute, top:6px, ~40px tall)
+   and its shadow, so the two never overlap. Same glass family as the tab bar /
+   rail. Still in-flow: it pushes the canvas down and can't be missed. Tone
    escalates with how long the release has gone un-installed (see updateReminder). */
 .updbar {
   position: relative;
@@ -789,6 +815,7 @@ body.has-wallpaper .aurora {
   display: flex;
   align-items: center;
   gap: 11px;
+  margin: 10px 12px 0;
   padding: 8px 12px 8px 17px;
   font-size: 12.5px;
   line-height: 1.4;
@@ -796,10 +823,12 @@ body.has-wallpaper .aurora {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.012)),
     var(--menu-bg);
-  border-top: 1px solid var(--hairline);
-  border-bottom: 1px solid var(--line-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
   backdrop-filter: var(--blur-md);
   -webkit-backdrop-filter: var(--blur-md);
+  /* The inset accent rail follows the rounded corners (inset shadows clip to
+     the border-radius). */
   box-shadow: inset 3px 0 0 var(--accent);
   animation: updbar-in 320ms var(--ease-decelerate);
 }

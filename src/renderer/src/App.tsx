@@ -14,8 +14,8 @@ const CommandPalette = lazy(() => import('./components/CommandPalette'))
 const DiffPanel = lazy(() => import('./components/DiffPanel'))
 const Feedback = lazy(() => import('./components/Feedback'))
 import { useStore, toPersisted, activeWs, useActiveAgents, NEEDS_ATTENTION } from './store'
-import { reminderTone, reminderHeadline } from './updateReminder'
 import { restoreWorkspaces, saveCanvas, closeWorkspaceById } from './openProject'
+import { installPowerIdle } from './powerIdle'
 import { applyAccent } from './accent'
 import { applyTheme } from './theme'
 import {
@@ -23,6 +23,7 @@ import {
   terminals,
   focusActiveTerminal,
   refitAgents,
+  flushAgents,
   pasteIntoTerminal
 } from './terminalRegistry'
 
@@ -69,6 +70,10 @@ export default function App(): JSX.Element {
     document.body.classList.toggle('is-mac', window.api.platform === 'darwin')
   }, [])
 
+  // Freeze decorative animation (aurora, emblem glow) while the window is
+  // unfocused, hidden, or the user has gone idle — see powerIdle.ts.
+  useEffect(() => installPowerIdle(), [])
+
   // Reopen every live workspace from last session (spawning all their agents) and
   // restore which one was in front. Falls back to the last recent project.
   useEffect(() => {
@@ -101,7 +106,11 @@ export default function App(): JSX.Element {
     const raf = requestAnimationFrame(() => {
       const ws = useStore.getState().liveWorkspaces.find((w) => w.id === activeWorkspaceId)
       if (!ws) return
-      refitAgents(ws.agents.map((a) => a.id))
+      const ids = ws.agents.map((a) => a.id)
+      // Background panes buffer their PTY writes (TerminalPane) — replay them
+      // before refit/focus so the workspace surfaces fully up to date.
+      flushAgents(ids)
+      refitAgents(ids)
       focusActiveTerminal()
     })
     return () => cancelAnimationFrame(raf)
@@ -109,29 +118,14 @@ export default function App(): JSX.Element {
 
   // Persistent update reminder. The main process reads the app repo's release
   // feed; we re-check on a delay after launch and then periodically, stashing
-  // the result so the sticky UpdateBanner nags until the user actually updates
-  // (the "continuous notification" the feature is about). On the first sighting
-  // of a given version this session, a louder toast also fires — its tone (and
-  // the banner's) escalates the longer the release has gone un-installed. Silent
-  // on failure and when up to date.
-  const toastedVersion = useRef<string | null>(null)
+  // the result so the persistent UpdateBanner nags until the user actually
+  // updates (the "continuous notification" the feature is about). The banner is
+  // the single update surface — no toast twin cluttering the corner — and its
+  // tone escalates the longer the release has gone un-installed. Silent on
+  // failure and when up to date.
   useEffect(() => {
     const runCheck = (): void => {
-      void window.api.update.check().then((u) => {
-        const st = useStore.getState()
-        st.setUpdate(u)
-        if (!u || toastedVersion.current === u.latest) return
-        toastedVersion.current = u.latest
-        const tone = reminderTone(u.latest)
-        st.pushToast(reminderHeadline(u, tone), tone.level === 'urgent' ? 'error' : 'info', {
-          actionLabel: 'Update now',
-          onAction: () => void window.api.openExternal(u.url),
-          secondaryLabel: 'Later',
-          onSecondary: () => {
-            /* just closes the toast — the banner keeps the reminder alive */
-          }
-        })
-      })
+      void window.api.update.check().then((u) => useStore.getState().setUpdate(u))
     }
     // Delay the first check so it never competes with startup, then re-check
     // every 6h to catch releases cut while a long session stays open.

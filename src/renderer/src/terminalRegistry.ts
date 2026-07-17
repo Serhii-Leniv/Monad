@@ -22,6 +22,20 @@ export function refitAgents(ids: string[]): void {
 }
 
 /**
+ * Pending-output flush per pane, keyed by agent id. Panes in a hidden
+ * (background) workspace buffer PTY writes instead of feeding xterm per chunk —
+ * the DOM renderer pays ANSI parse + DOM mutation for every write even while
+ * visibility-hidden. App.tsx flushes a workspace's panes as it comes to the
+ * foreground, before refit/focus, so the switch always shows current content.
+ */
+export const flushes = new Map<string, () => void>()
+
+/** Flush buffered output for a set of agents (the workspace being activated). */
+export function flushAgents(ids: string[]): void {
+  for (const id of ids) flushes.get(id)?.()
+}
+
+/**
  * Hand keyboard focus back to the active terminal (the maximized one, else the
  * sole selected one). Called after an overlay closes or a click lands off a pane,
  * so typing never dead-ends on `<body>` when no selection *transition* occurred

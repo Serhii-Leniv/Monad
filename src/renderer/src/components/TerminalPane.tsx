@@ -7,7 +7,7 @@ import { SearchAddon } from '@xterm/addon-search'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { useStore, wsById, displayBranch, RAIL_INSET, PAD, type AgentInstance, type AgentStatus } from '../store'
-import { terminals, fits, quotePaths, pasteIntoTerminal } from '../terminalRegistry'
+import { terminals, fits, flushes, quotePaths, pasteIntoTerminal } from '../terminalRegistry'
 import { needsAttention, clampTail, stripAnsi } from '../attention'
 import { AGENT_INSTALL_URLS } from '../agentInstall'
 import { playCue, type Cue } from '../sound'
@@ -90,8 +90,23 @@ const FILE_RE = /(?:[A-Za-z]:[\\/]|~[\\/]|\.{1,2}[\\/])?[\w][\w.-]*(?:[\\/][\w.-
 function WorkTimer({ since }: { since: number }): JSX.Element | null {
   const [, setTick] = useState(0)
   useEffect(() => {
-    const t = setInterval(() => setTick((n) => n + 1), 1000)
-    return () => clearInterval(t)
+    // The display derives from Date.now() - since, so the interval can stop
+    // entirely while the document is hidden and self-correct on return.
+    let t: ReturnType<typeof setInterval> | undefined
+    const sync = (): void => {
+      clearInterval(t)
+      t = undefined
+      if (document.visibilityState === 'visible') {
+        setTick((n) => n + 1)
+        t = setInterval(() => setTick((n) => n + 1), 1000)
+      }
+    }
+    sync()
+    document.addEventListener('visibilitychange', sync)
+    return () => {
+      clearInterval(t)
+      document.removeEventListener('visibilitychange', sync)
+    }
   }, [])
   const s = Math.max(0, Math.floor((Date.now() - since) / 1000))
   if (s < 3) return null
@@ -813,6 +828,27 @@ function TerminalPane({
         }
       }
 
+      // A pane in a hidden (background) workspace buffers its writes for up to
+      // 400ms: xterm's DOM renderer pays ANSI parse + DOM mutation per write
+      // even while visibility-hidden. Nothing is ever dropped — chunks
+      // concatenate in order and replay byte-identically on flush, so
+      // scrollback and TUI alternate-screen state are exact. A BEL in the raw
+      // chunk flushes immediately so onBell (attention, notification) stays
+      // prompt; App.tsx flushes on workspace activation via the registry.
+      let pendingWrites: string[] = []
+      let pendingLen = 0
+      let pendingTimer: ReturnType<typeof setTimeout> | undefined
+      const flushPending = (): void => {
+        clearTimeout(pendingTimer)
+        pendingTimer = undefined
+        if (!pendingWrites.length) return
+        const out = pendingWrites.join('')
+        pendingWrites = []
+        pendingLen = 0
+        term.write(out)
+      }
+      flushes.set(id, flushPending)
+
       // The DECSCUSR strip is chunk-boundary safe: a sequence split across two
       // PTY chunks is held back (carry) and stripped once complete — otherwise
       // the leaked half re-enabled the fast-blink cursor it exists to suppress.
@@ -827,7 +863,19 @@ function TerminalPane({
         }
         if (s) {
           if (booting) onBootData(s)
-          else term.write(stripSeq(s))
+          else {
+            const out = stripSeq(s)
+            const hidden = useStore.getState().activeWorkspaceId !== workspaceId
+            if (hidden && !d.includes('\x07')) {
+              pendingWrites.push(out)
+              pendingLen += out.length
+              if (pendingLen > 512 * 1024) flushPending()
+              else if (!pendingTimer) pendingTimer = setTimeout(flushPending, 400)
+            } else {
+              flushPending()
+              term.write(out)
+            }
+          }
         }
         onActivity(d)
       }))
@@ -839,6 +887,7 @@ function TerminalPane({
           ptyRef.current = null
           const errored = !!code && code !== 0
           setStatus(id, errored ? 'error' : 'exited')
+          flushPending()
           term.write('\r\n\x1b[31m[process exited]\x1b[0m\r\n')
           maybeNotify(errored ? 'error' : 'exited')
           maybeSound(errored ? 'error' : 'done')
@@ -935,8 +984,12 @@ function TerminalPane({
       if (ptyId) window.api.pty.kill(ptyId)
       ptyRef.current = null
       searchRef.current = null
+      // Run the registered flush so its pending timer can't fire into a
+      // disposed terminal (the data listener is already unsubscribed above).
+      flushes.get(id)?.()
       terminals.delete(id)
       fits.delete(id)
+      flushes.delete(id)
       term.dispose()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

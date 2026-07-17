@@ -48,9 +48,32 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
       w.webContents.send(channel, payload)
     }
   }
+  // Coalesce PTY output before it crosses IPC: agents stream many tiny chunks,
+  // and a webContents.send per chunk costs a renderer wakeup + parse for each.
+  // Buffer per session for up to 8ms (under a frame), flushing early if a
+  // buffer grows large. Exit flushes first so the final output always lands
+  // before the renderer prints its "[process exited]" line.
+  const ptyBuffers = new Map<string, string>()
+  let ptyFlushTimer: NodeJS.Timeout | null = null
+  const flushPtyBuffers = (): void => {
+    if (ptyFlushTimer) {
+      clearTimeout(ptyFlushTimer)
+      ptyFlushTimer = null
+    }
+    for (const [id, data] of ptyBuffers) send('pty:data', { id, data })
+    ptyBuffers.clear()
+  }
   const ptyManager = new PtyManager(
-    (id, data) => send('pty:data', { id, data }),
-    (id, code, signal) => send('pty:exit', { id, code, signal })
+    (id, data) => {
+      const buf = (ptyBuffers.get(id) ?? '') + data
+      ptyBuffers.set(id, buf)
+      if (buf.length >= 256 * 1024) flushPtyBuffers()
+      else if (!ptyFlushTimer) ptyFlushTimer = setTimeout(flushPtyBuffers, 8)
+    },
+    (id, code, signal) => {
+      flushPtyBuffers()
+      send('pty:exit', { id, code, signal })
+    }
   )
 
   ipcMain.handle('pty:spawn', (_e, opts: SpawnOptions) => ptyManager.spawn(opts ?? {}))
