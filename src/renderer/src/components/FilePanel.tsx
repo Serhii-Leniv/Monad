@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { useStore, activeWs, displayBranch, FILE_PANEL_MIN, FILE_PANEL_MAX } from '../store'
+import { useStore, activeWs, FILE_PANEL_MIN, FILE_PANEL_MAX } from '../store'
 import { IconClose } from './Icons'
 import FileTree from './FileTree'
 
@@ -18,27 +18,17 @@ export default function FilePanel(): JSX.Element {
   const filePanelWidth = useStore((s) => s.filePanelWidth)
   const setFilePanelWidth = useStore((s) => s.setFilePanelWidth)
   const closeFilePanel = useStore((s) => s.closeFilePanel)
-  const scope = useStore((s) => activeWs(s)?.filePanel.scope ?? { kind: 'root' as const })
   const openPath = useStore((s) => activeWs(s)?.filePanel.openPath ?? null)
   const openFile = useStore((s) => s.openFile)
   const setFileDirty = useStore((s) => s.setFileDirty)
   const dirty = useStore((s) => activeWs(s)?.filePanel.dirty ?? false)
   const projectPath = useStore((s) => activeWs(s)?.path ?? null)
-  // Resolve an 'agent' scope to its label + branch for the header — falls back
-  // gracefully if the agent was closed while the panel remembered its scope.
-  const agent = useStore((s) => {
-    const sc = activeWs(s)?.filePanel.scope
-    if (sc?.kind !== 'agent') return null
-    return activeWs(s)?.agents.find((a) => a.id === sc.agentId) ?? null
-  })
+  const projectName = useStore((s) => activeWs(s)?.name ?? null)
 
-  const isRoot = scope.kind === 'root'
-  const title = isRoot ? 'Project root' : agent?.label ?? 'Agent'
-  const branch = !isRoot && agent?.branch ? displayBranch(agent.branch) : null
-  // Scope → absolute root: the project folder itself, or the agent's worktree.
-  // Shared-isolation agents have no worktree (no `cwd`) — fall back to the
-  // project root rather than showing an empty tree.
-  const root = isRoot ? projectPath : (agent?.cwd ?? projectPath)
+  // The panel always browses the PROJECT ROOT — the human edits the real project
+  // files, never an agent's isolated worktree copy (which wouldn't show up in
+  // their working tree until merged). Per-agent worktree scoping was removed.
+  const root = projectPath
 
   // Live-update: while the panel is open with a resolved root, run THE single
   // main-process watcher on it. This effect owns the whole watcher lifecycle —
@@ -118,8 +108,8 @@ export default function FilePanel(): JSX.Element {
       />
       <div className="filepanel__head">
         <div className="filepanel__title">
-          <span className="filepanel__scope">{title}</span>
-          {branch && <span className="filepanel__branch">canvas/{branch}</span>}
+          <span className="filepanel__scope">Files</span>
+          {projectName && <span className="filepanel__branch">{projectName}</span>}
         </div>
         <button className="settings__close filepanel__close" onClick={requestClose} title="Close">
           <IconClose size={16} />
