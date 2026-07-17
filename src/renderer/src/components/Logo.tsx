@@ -1,6 +1,6 @@
 import logoUrl from '../assets/logo.png'
 
-/** The emblem — a liquid-glass organic mark (text-free). */
+/** The emblem — a black geometric "M" monogram with a top-right dot on a white tile. */
 export default function Logo({ size = 26 }: { size?: number }): JSX.Element {
   return (
     <img

@@ -34,7 +34,7 @@ if (userDataArg) {
 // duplicate it.
 if (!userDataArg) migrateUserDataFromVectro()
 
-// App emblem (the liquid-glass mark). build/icon.png is also what electron-builder
+// App emblem (the black "M" monogram mark). build/icon.png is also what electron-builder
 // uses to generate the packaged .icns / .ico icons.
 const iconPng = join(__dirname, '../../build/icon.png')
 
