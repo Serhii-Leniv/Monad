@@ -1468,7 +1468,13 @@ body.has-wallpaper .aurora {
 
 .app__canvas {
   position: absolute;
-  inset: 0;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  /* Shrink from the right by the docked file panel's width (0 when closed).
+     Because the canvas is absolutely positioned, changing `right` changes its
+     clientWidth, so the ResizeObserver in App re-tiles every card automatically. */
+  right: var(--filepanel-w, 0);
 }
 
 /* One Stage per live workspace; only the active one is visible. Hidden layers
@@ -1486,6 +1492,328 @@ body.has-wallpaper .aurora {
 .canvas-wrap {
   width: 100%;
   height: 100%;
+}
+
+/* ---------- Right-docked file explorer / editor panel ---------- */
+/* Sibling of .app__canvas inside .app__main: anchored to the right edge, filling
+   the --filepanel-w gutter the canvas leaves free. Frosted-glass chrome matching
+   the review panel; its width is set inline from the persisted filePanelWidth. */
+.filepanel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015) 50%),
+    var(--menu-bg);
+  backdrop-filter: var(--blur-md);
+  -webkit-backdrop-filter: var(--blur-md);
+  border-left: 1px solid var(--glass-border);
+  box-shadow: -18px 0 46px rgba(0, 0, 0, 0.34);
+}
+
+/* Left-edge drag handle: a thin invisible strip that widens its hit target and
+   lights up on hover; the pointer-capture drag lives in FilePanel.tsx. */
+.filepanel__resize {
+  position: absolute;
+  top: 0;
+  left: -3px;
+  bottom: 0;
+  width: 8px;
+  z-index: 3;
+  cursor: col-resize;
+  touch-action: none;
+}
+.filepanel__resize::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: transparent;
+  transition: background 120ms ease;
+}
+.filepanel__resize:hover::before,
+.filepanel__resize:active::before {
+  background: rgba(var(--accent-rgb), 0.55);
+}
+
+.filepanel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 12px 12px 16px;
+  border-bottom: 1px solid var(--line-1);
+}
+
+.filepanel__title {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  min-width: 0;
+}
+
+.filepanel__scope {
+  font-family: var(--font-serif);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.filepanel__branch {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Vertical split: the tree takes a bounded slice up top, the editor fills the
+   rest. Each half manages its own scrolling — the body itself never scrolls. */
+.filepanel__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.filepanel__placeholder {
+  padding: 14px 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-2);
+}
+
+.filepanel__openpath {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---------- File tree ---------- */
+.filetree {
+  flex: 0 0 42%;
+  min-height: 80px;
+  overflow: auto;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line-1);
+  font-size: 12.5px;
+}
+.filetree__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 0;
+  color: var(--text-2);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+}
+.filetree__row:hover {
+  background: var(--hover-bg-soft);
+  color: var(--text);
+}
+.filetree__row--file.is-selected {
+  background: var(--accent-muted);
+  color: var(--text);
+}
+.filetree__row--loading,
+.filetree__row--empty {
+  cursor: default;
+  color: var(--muted);
+  font-style: italic;
+}
+.filetree__row--loading:hover,
+.filetree__row--empty:hover {
+  background: transparent;
+  color: var(--muted);
+}
+.filetree__twisty {
+  flex: 0 0 auto;
+  width: 12px;
+  font-size: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+.filetree__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.filetree__row.is-dotfile .filetree__name {
+  color: var(--muted);
+}
+
+/* ---------- File editor (view + edit) ---------- */
+.fileview {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.fileview__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line-1);
+}
+.fileview__path {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fileview__disk {
+  flex: 0 0 auto;
+  margin-right: 8px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: 10.5px;
+  color: rgba(var(--accent-rgb), 0.95);
+  background: rgba(var(--accent-rgb), 0.12);
+  white-space: nowrap;
+}
+.fileview__save {
+  flex: 0 0 auto;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background var(--dur-select) var(--ease-out);
+}
+.fileview__save:hover:not(:disabled) {
+  background: var(--hover-bg-strong);
+}
+.fileview__save:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Dirty-guard (Save/Discard/Cancel) and stale-on-disk conflict (Override/
+   Reload/Cancel) banners — attention-toned like review__conflict, not error-red. */
+.fileview__guard,
+.fileview__conflict {
+  padding: 10px 12px;
+  font-size: 12px;
+  background: rgba(255, 159, 10, 0.08);
+  border-bottom: 1px solid rgba(255, 159, 10, 0.28);
+}
+.fileview__guard-text,
+.fileview__conflict-text {
+  margin-bottom: 8px;
+  color: #ffbf5e;
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+.fileview__guard-actions,
+.fileview__conflict-actions {
+  display: flex;
+  gap: 8px;
+}
+.fileview__guard-actions button,
+.fileview__conflict-actions button {
+  padding: 5px 12px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background var(--dur-select) var(--ease-out);
+}
+.fileview__guard-actions button:hover:not(:disabled),
+.fileview__conflict-actions button:hover:not(:disabled) {
+  background: var(--hover-bg-strong);
+}
+.fileview__guard-actions button:disabled,
+.fileview__conflict-actions button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.fileview__error {
+  padding: 7px 12px;
+  font-size: 12px;
+  color: #ff9b94;
+  background: rgba(255, 90, 90, 0.1);
+  border-bottom: 1px solid var(--line-1);
+}
+
+.fileview__content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+.fileview__placeholder {
+  margin: auto;
+  padding: 20px;
+  max-width: 80%;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.fileview__img {
+  margin: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+/* The CodeMirror root fills the content pane; background stays transparent
+   (see FileView's EditorView.theme) so the panel's glass shows through. */
+.fileview__content .cm-editor {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+.fileview__content .cm-editor.cm-focused {
+  outline: none;
+}
+
+/* Thin glass scrollbar to match the other scrollable surfaces. */
+.filetree::-webkit-scrollbar,
+.fileview__content .cm-scroller::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+.filetree::-webkit-scrollbar-track,
+.fileview__content .cm-scroller::-webkit-scrollbar-track {
+  background: transparent;
+}
+.filetree::-webkit-scrollbar-thumb,
+.fileview__content .cm-scroller::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+.filetree::-webkit-scrollbar-thumb:hover,
+.fileview__content .cm-scroller::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.26);
+  background-clip: padding-box;
 }
 
 /* ---------- Stage (free canvas) ---------- */
@@ -1752,6 +2080,25 @@ body.has-wallpaper .aurora {
 }
 
 .vec-pane__wide:hover {
+  color: var(--text);
+  background: var(--hover-bg);
+}
+
+/* Per-card "Browse files" button — same quiet icon-button shape as the width
+   toggle; opens the file panel scoped to this agent's worktree. */
+.vec-pane__files {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.vec-pane__files:hover {
   color: var(--text);
   background: var(--hover-bg);
 }

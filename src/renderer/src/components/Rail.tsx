@@ -1,7 +1,8 @@
 import { useMemo, useRef } from 'react'
-import { IconTerminal, IconGrid, IconColumns, IconSettings, IconBell } from './Icons'
+import { IconTerminal, IconGrid, IconColumns, IconSettings, IconBell, IconFiles } from './Icons'
 import {
   useStore,
+  activeWs,
   useActiveAgents,
   useActiveLayoutMode,
   useActiveProjectPath,
@@ -36,6 +37,9 @@ export default function Rail(): JSX.Element {
   const setLayoutMode = useStore((s) => s.setLayoutMode)
   const revealAgent = useStore((s) => s.revealAgent)
   const setSettingsOpen = useStore((s) => s.setSettingsOpen)
+  const filePanelOpen = useStore((s) => activeWs(s)?.filePanel.open ?? false)
+  const openFilePanel = useStore((s) => s.openFilePanel)
+  const closeFilePanel = useStore((s) => s.closeFilePanel)
 
   // Cycle focus through the agents that currently need you. revealAgent brings
   // each into view WITHOUT maximizing — so a single attention terminal is just
@@ -121,6 +125,18 @@ export default function Rail(): JSX.Element {
               </button>
             </div>
             )}
+
+            {/* Files: one clean toggle for the right-side explorer, at project
+               root scope. Active state mirrors the panel's open flag. */}
+            <button
+              className={'rail-btn' + (filePanelOpen ? ' is-active' : '')}
+              onClick={() => (filePanelOpen ? closeFilePanel() : openFilePanel({ kind: 'root' }))}
+              aria-label="Toggle file explorer"
+              aria-pressed={filePanelOpen}
+              data-tip={`Files · ${modLabel('E')}`}
+            >
+              <IconFiles size={19} />
+            </button>
           </>
         )}
 

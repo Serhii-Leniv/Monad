@@ -13,6 +13,9 @@ const Settings = lazy(() => import('./components/Settings'))
 const CommandPalette = lazy(() => import('./components/CommandPalette'))
 const DiffPanel = lazy(() => import('./components/DiffPanel'))
 const Feedback = lazy(() => import('./components/Feedback'))
+// Docked (not an overlay), but still lazy — the file panel's body pulls in the
+// editor/tree chunk (Phase 3), which the first canvas view never needs.
+const FilePanel = lazy(() => import('./components/FilePanel'))
 import { useStore, toPersisted, activeWs, useActiveAgents, NEEDS_ATTENTION } from './store'
 import { restoreWorkspaces, saveCanvas, closeWorkspaceById } from './openProject'
 import { installPowerIdle } from './powerIdle'
@@ -38,6 +41,11 @@ export default function App(): JSX.Element {
   const paletteOpen = useStore((s) => s.paletteOpen)
   const feedbackOpen = useStore((s) => s.feedbackOpen)
   const diffAgentId = useStore((s) => activeWs(s)?.diffAgentId ?? null)
+  // The right-docked file panel is part of the layout (not an overlay): when
+  // open it shrinks the canvas from the right, and the canvas's ResizeObserver
+  // re-tiles every card. Both flags come from the active workspace / global width.
+  const filePanelOpen = useStore((s) => activeWs(s)?.filePanel.open ?? false)
+  const filePanelWidth = useStore((s) => s.filePanelWidth)
   const zoomFactor = useStore((s) => s.settings.zoomFactor)
   const theme = useStore((s) => s.settings.theme)
   const accent = useStore((s) => s.settings.accent)
@@ -415,6 +423,11 @@ export default function App(): JSX.Element {
       } else if (k === '2') {
         e.preventDefault()
         st.setLayoutMode('columns')
+      } else if (k === 'e') {
+        // ⌘E / Ctrl+Shift+E — VS Code's Explorer toggle (deliberately NOT F,
+        // which the terminal owns for find).
+        e.preventDefault()
+        st.toggleFilePanel()
       } else if (k === 'w') {
         if (ws.selectedIds.length >= 2) {
           // Multi-selection: ONE confirm for the whole batch (the per-pane flow
@@ -583,7 +596,10 @@ export default function App(): JSX.Element {
       <Titlebar />
       <ProjectBar />
       <UpdateBanner />
-      <div className="app__main">
+      <div
+        className="app__main"
+        style={{ ['--filepanel-w' as any]: filePanelOpen ? filePanelWidth + 'px' : '0px' }}
+      >
         <Rail />
         <div className="app__canvas" ref={canvasRef}>
           {/* One persistently-mounted Stage per live workspace — only the active
@@ -603,6 +619,14 @@ export default function App(): JSX.Element {
             ))
           )}
         </div>
+        {/* Docked file panel — sibling of the canvas so it occupies the reserved
+           --filepanel-w gutter (see .app__canvas right). Lazy, so its own
+           Suspense boundary keeps the docked layout independent of the overlays. */}
+        {filePanelOpen && (
+          <Suspense fallback={null}>
+            <FilePanel />
+          </Suspense>
+        )}
       </div>
       <Suspense fallback={null}>
         {/* Stacking order mirrors the Escape handler's close order (diff →
