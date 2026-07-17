@@ -191,6 +191,9 @@ interface AppState {
   update: UpdateInfo | null
   /** True once the user hides the update banner this session (returns next launch). */
   updateDismissed: boolean
+  /** In-place download progress (Windows auto-updater); null = no download /
+   *  not supported / errored — the banner then links to the download site. */
+  updateState: UpdateState | null
   /** Workspace tab awaiting close confirmation — the modal in App.tsx owns the UI. */
   confirmWorkspaceCloseId: string | null
   panX: number
@@ -221,6 +224,7 @@ interface AppState {
   setFeedbackOpen: (open: boolean) => void
   /** Record a detected release (or clear it); resets the session dismiss. */
   setUpdate: (update: UpdateInfo | null) => void
+  setUpdateState: (updateState: UpdateState | null) => void
   /** Hide the update banner for this session (it returns on next launch). */
   dismissUpdate: () => void
   setDiffAgentId: (id: string | null) => void
@@ -554,6 +558,7 @@ export const useStore = create<AppState>((set, get) => ({
   feedbackOpen: false,
   update: null,
   updateDismissed: false,
+  updateState: null,
   confirmWorkspaceCloseId: null,
   toasts: [],
   panX: 0,
@@ -711,6 +716,14 @@ export const useStore = create<AppState>((set, get) => ({
       if (update && s.update && update.latest === s.update.latest) return { update }
       return { update, updateDismissed: false }
     }),
+
+  // A ready download un-dismisses the banner: "restart to update" is a one-click
+  // finish the user almost certainly wants to see, unlike another download nag.
+  setUpdateState: (updateState) =>
+    set((s) => ({
+      updateState,
+      updateDismissed: updateState?.status === 'ready' ? false : s.updateDismissed
+    })),
 
   dismissUpdate: () => set({ updateDismissed: true }),
 

@@ -27,7 +27,7 @@ import {
   friendlyGitError
 } from './git'
 import { detectShells, detectAgents } from './shells'
-import { checkForUpdate } from './update'
+import { checkForUpdate, initAutoUpdate } from './update'
 import { sendFeedback, FEEDBACK_EMAIL, type FeedbackInput, type FeedbackCategory } from './feedback'
 
 /** Per-project dir holding canvas.json. */
@@ -175,8 +175,12 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
   ipcMain.handle('app:version', () => app.getVersion())
 
   // Newer-release check against this repo's release feed (null = up to date
-  // or the check failed; the renderer surfaces a toast only on a real update).
+  // or the check failed; the renderer surfaces a banner only on a real update).
+  // On packaged Windows the check also starts the in-place background download;
+  // initAutoUpdate streams its progress to the renderer over `update:state` and
+  // handles `update:install` (restart into the downloaded version).
   ipcMain.handle('update:check', () => checkForUpdate())
+  initAutoUpdate(getWindow)
 
   // --- Feedback (bugs / ideas / comments) → maintainer inbox ---
   // The POST runs here (strict renderer CSP can't reach the relay); version and

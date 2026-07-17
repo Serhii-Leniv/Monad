@@ -127,11 +127,15 @@ export default function App(): JSX.Element {
     const runCheck = (): void => {
       void window.api.update.check().then((u) => useStore.getState().setUpdate(u))
     }
+    // On Windows the check above also starts an in-place background download;
+    // its progress stream upgrades the banner button to "Restart to update".
+    const offState = window.api.update.onState((st) => useStore.getState().setUpdateState(st))
     // Delay the first check so it never competes with startup, then re-check
     // every 6h to catch releases cut while a long session stays open.
     const first = window.setTimeout(runCheck, 5000)
     const interval = window.setInterval(runCheck, 6 * 60 * 60 * 1000)
     return () => {
+      offState()
       window.clearTimeout(first)
       window.clearInterval(interval)
     }

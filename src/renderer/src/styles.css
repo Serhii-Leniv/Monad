@@ -832,6 +832,14 @@ body.has-wallpaper .aurora {
   box-shadow: inset 3px 0 0 var(--accent);
   animation: updbar-in 320ms var(--ease-decelerate);
 }
+
+/* Mid-download the action button becomes a passive progress readout. */
+.updbar__btn:disabled {
+  opacity: 0.65;
+  cursor: default;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
 .updbar--recommended {
   background:
     linear-gradient(180deg, rgba(var(--accent-rgb), 0.1), rgba(var(--accent-rgb), 0.03)),

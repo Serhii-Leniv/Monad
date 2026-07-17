@@ -18,9 +18,21 @@ process.on('unhandledRejection', (reason) => {
   console.error('[monad] unhandledRejection:', reason)
 })
 
+// Optional profile override: `--user-data-dir=<abs path>` gives this instance
+// its own userData AND its own single-instance lock (the lock is keyed to the
+// dir), so a packaged test install can run beside the real one without fighting
+// it or dirtying its profile. Must precede anything that touches userData.
+const userDataArg = process.argv.find((a) => a.startsWith('--user-data-dir='))
+if (userDataArg) {
+  const dir = userDataArg.slice('--user-data-dir='.length).trim()
+  if (dir) app.setPath('userData', dir)
+}
+
 // One-shot Vectro → Monad profile migration. Must precede the single-instance
-// lock and window creation (both touch the userData dir).
-migrateUserDataFromVectro()
+// lock and window creation (both touch the userData dir). Skipped for an
+// override profile — migrating the real Vectro data into a throwaway dir would
+// duplicate it.
+if (!userDataArg) migrateUserDataFromVectro()
 
 // App emblem (the liquid-glass mark). build/icon.png is also what electron-builder
 // uses to generate the packaged .icns / .ico icons.

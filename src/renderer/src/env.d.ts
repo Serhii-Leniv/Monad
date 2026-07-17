@@ -84,6 +84,12 @@ interface UpdateInfo {
   url: string
 }
 
+/** In-place auto-update progress (Windows; other platforms never emit). */
+type UpdateState =
+  | { status: 'downloading'; percent: number }
+  | { status: 'ready' }
+  | { status: 'error'; message: string }
+
 type FeedbackCategory = 'bug' | 'idea' | 'other'
 
 interface FeedbackInput {
@@ -148,6 +154,8 @@ interface Window {
     }
     update: {
       check: () => Promise<UpdateInfo | null>
+      install: () => void
+      onState: (cb: (state: UpdateState) => void) => () => void
     }
     feedback: {
       send: (input: FeedbackInput) => Promise<FeedbackResult>

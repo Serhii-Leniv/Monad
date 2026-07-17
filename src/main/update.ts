@@ -1,9 +1,21 @@
-import { app } from 'electron'
+import { app, ipcMain, BrowserWindow } from 'electron'
+import { autoUpdater } from 'electron-updater'
 
 // Installers are published as GitHub Releases on this repo (Serhii-Leniv/Monad,
 // public) — its releases/latest is the app's version feed. CI attaches them on
-// every version tag; see RELEASING.md. The check runs in the main process so the
-// renderer never talks to the network and the production CSP stays strict.
+// every version tag; see RELEASING.md. All update traffic runs in the main
+// process so the renderer never talks to the network and the production CSP
+// stays strict.
+//
+// Two tiers:
+//  - Windows (packaged): full in-place auto-update via electron-updater — the
+//    new version downloads in the background (delta via .blockmap when
+//    possible) and installs silently on "Restart to update" or on quit.
+//  - macOS + everything else: notify-only. electron-updater refuses to install
+//    into an unsigned/ad-hoc-signed mac app, so until we ship Developer-ID
+//    signed builds the banner links to the download site instead. To enable
+//    mac later: sign + notarize, add a `zip` target for mac in
+//    electron-builder.yml, and add 'darwin' to canAutoUpdate().
 const RELEASES_API = 'https://api.github.com/repos/Serhii-Leniv/Monad/releases/latest'
 // Send users to the download site, not the raw release: it picks the right
 // installer per OS and explains the unsigned-build Gatekeeper/SmartScreen prompt.
@@ -15,6 +27,19 @@ export interface UpdateInfo {
   current: string
   latest: string
   url: string
+}
+
+/** Push-stream of in-place update progress (Windows only; mac never sends). */
+export type UpdateState =
+  | { status: 'downloading'; percent: number }
+  | { status: 'ready' }
+  | { status: 'error'; message: string }
+
+function canAutoUpdate(): boolean {
+  // MONAD_DEV_UPDATE_CONFIG=<path to dev-app-update.yml> lets a dev run drive
+  // the real electron-updater against a local feed (see scripts/ e2e harness).
+  if (process.env.MONAD_DEV_UPDATE_CONFIG) return true
+  return process.platform === 'win32' && app.isPackaged
 }
 
 /** "v0.1.9" | "0.1.9" → [0, 1, 9]; null when it isn't a dotted number. */
@@ -36,17 +61,84 @@ function isNewer(latest: string, current: string): boolean {
 }
 
 /**
+ * Wire the in-place updater: state events stream to the renderer over
+ * `update:state`, and `update:install` restarts into the downloaded version.
+ * Registered unconditionally (the renderer may always call install; it no-ops
+ * when nothing is downloaded) — but the updater itself only runs when
+ * canAutoUpdate().
+ */
+export function initAutoUpdate(getWindow: () => BrowserWindow | null): void {
+  const sendState = (state: UpdateState): void => {
+    const w = getWindow()
+    if (w && !w.isDestroyed()) w.webContents.send('update:state', state)
+  }
+
+  ipcMain.on('update:install', () => {
+    // The canAutoUpdate() guard makes this a no-op under MONAD_FAKE_UPDATE,
+    // where 'ready' is synthetic and there is nothing real to install.
+    if (!downloaded || !canAutoUpdate()) return
+    // Silent NSIS reinstall into the same directory, then relaunch.
+    autoUpdater.quitAndInstall(true, true)
+  })
+
+  if (!canAutoUpdate()) return
+
+  if (process.env.MONAD_DEV_UPDATE_CONFIG) {
+    autoUpdater.forceDevUpdateConfig = true
+    autoUpdater.updateConfigPath = process.env.MONAD_DEV_UPDATE_CONFIG
+  }
+  autoUpdater.logger = console
+  autoUpdater.autoDownload = true
+  // Even if the user never clicks "Restart to update", the pending version
+  // installs on normal quit, so the next launch is current.
+  autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.on('download-progress', (p) => {
+    sendState({ status: 'downloading', percent: Math.round(p.percent) })
+  })
+  autoUpdater.on('update-downloaded', () => {
+    downloaded = true
+    sendState({ status: 'ready' })
+  })
+  autoUpdater.on('error', (e) => {
+    // An update must never surface as an app error — log, tell the renderer so
+    // the banner falls back to the download-site button, and move on.
+    console.warn('[monad] auto-update error:', e?.message ?? e)
+    sendState({ status: 'error', message: String(e?.message ?? e) })
+  })
+}
+
+let downloaded = false
+
+/**
  * One-shot update check: resolves to the newer version if there is one, else
  * null (including on any network/API failure — an update check must never
- * surface an error). Dev runs report null; set MONAD_UPDATE_CHECK=1 to test.
+ * surface an error). On Windows this also kicks off the background download;
+ * progress then streams via `update:state`. Dev runs report null; set
+ * MONAD_UPDATE_CHECK=1 to test the REST path.
  */
 export async function checkForUpdate(): Promise<UpdateInfo | null> {
   // Dev-only harness for the update UI: `MONAD_FAKE_UPDATE=9.9.9 npm run dev`
-  // reports a synthetic newer release so the reminder banner/toast can be seen
-  // without cutting a real release. Ignored in packaged builds.
+  // reports a synthetic newer release AND plays a fake download→ready
+  // progression so the banner's whole lifecycle is visible without cutting a
+  // release. Ignored in packaged builds.
   if (!app.isPackaged && process.env.MONAD_FAKE_UPDATE) {
+    fakeDownloadFlow()
     return { current: app.getVersion(), latest: process.env.MONAD_FAKE_UPDATE, url: DOWNLOAD_URL }
   }
+
+  if (canAutoUpdate()) {
+    try {
+      const res = await autoUpdater.checkForUpdates()
+      const latest = res?.updateInfo?.version ?? ''
+      const current = app.getVersion()
+      if (!latest || !isNewer(latest, current)) return null
+      return { current, latest, url: DOWNLOAD_URL }
+    } catch (e) {
+      console.warn('[monad] auto-update check failed:', e)
+      return null
+    }
+  }
+
   if (!app.isPackaged && process.env.MONAD_UPDATE_CHECK !== '1') return null
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), 8000)
@@ -79,4 +171,22 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
   } finally {
     clearTimeout(timer)
   }
+}
+
+/** Dev-only: synthetic downloading→ready progression for MONAD_FAKE_UPDATE. */
+function fakeDownloadFlow(): void {
+  let percent = 0
+  const tick = (): void => {
+    const w = BrowserWindow.getAllWindows()[0]
+    if (!w || w.isDestroyed()) return
+    percent = Math.min(100, percent + 9 + Math.round(Math.random() * 8))
+    if (percent < 100) {
+      w.webContents.send('update:state', { status: 'downloading', percent })
+      setTimeout(tick, 350)
+    } else {
+      downloaded = true
+      w.webContents.send('update:state', { status: 'ready' })
+    }
+  }
+  setTimeout(tick, 1200)
 }
