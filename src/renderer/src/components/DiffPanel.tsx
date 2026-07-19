@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useStore, activeWs, displayBranch } from '../store'
+import { useStore, activeWs, agentPath, displayBranch } from '../store'
 import { celebrate } from '../celebrate'
 import { IconClose, IconRefresh } from './Icons'
 
@@ -144,7 +144,13 @@ export default function DiffPanel(): JSX.Element {
   const id = useStore((s) => activeWs(s)?.diffAgentId) as string
   const label = useStore((s) => activeWs(s)?.agents.find((a) => a.id === id)?.label ?? 'Terminal')
   const status = useStore((s) => activeWs(s)?.agents.find((a) => a.id === id)?.status)
-  const projectPath = useStore((s) => activeWs(s)?.path ?? null)
+  // The repo being reviewed is the one THIS agent works in — with per-agent
+  // folders that can differ from the workspace default, and diffing/merging
+  // against the wrong repo would be destructive rather than merely wrong.
+  const projectPath = useStore((s) => {
+    const ws = activeWs(s)
+    return agentPath(ws, ws?.agents.find((a) => a.id === id))
+  })
   const baseBranch = useStore((s) => activeWs(s)?.baseBranch ?? null)
   const setDiffAgentId = useStore((s) => s.setDiffAgentId)
   const removeAgent = useStore((s) => s.removeAgent)

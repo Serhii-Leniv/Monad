@@ -19,7 +19,10 @@
     "smoke:p2": "electron scripts/phase2-smoke.cjs",
     "smoke:p3": "electron scripts/phase3-smoke.cjs",
     "smoke:file": "electron scripts/file-smoke.cjs",
-    "smoke:ws": "electron scripts/ws-smoke.cjs"
+    "smoke:ws": "electron scripts/ws-smoke.cjs",
+    "smoke:tabs": "electron scripts/tabs-smoke.cjs",
+    "smoke:wspersist": "electron scripts/wspersist-smoke.cjs",
+    "smoke:agentfolder": "electron scripts/agentfolder-smoke.cjs"
   },
   "dependencies": {
     "@codemirror/lang-cpp": "^6.0.3",

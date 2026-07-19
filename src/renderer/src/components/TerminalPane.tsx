@@ -6,7 +6,17 @@ import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
-import { useStore, wsById, displayBranch, RAIL_INSET, PAD, type AgentInstance, type AgentStatus } from '../store'
+import {
+  useStore,
+  wsById,
+  agentPath,
+  agentPathById,
+  displayBranch,
+  RAIL_INSET,
+  PAD,
+  type AgentInstance,
+  type AgentStatus
+} from '../store'
 import { terminals, fits, flushes, quotePaths, pasteIntoTerminal } from '../terminalRegistry'
 import { needsAttention, clampTail, stripAnsi } from '../attention'
 import { AGENT_INSTALL_URLS } from '../agentInstall'
@@ -338,7 +348,10 @@ function TerminalPane({
       provideLinks(y, cb) {
         const text = term.buffer.active.getLine(y - 1)?.translateToString(true) ?? ''
         const w = wsById(useStore.getState(), workspaceId)
-        const cwd = w?.agents.find((a) => a.id === id)?.cwd ?? w?.path ?? ''
+        // Prefer the live cwd (an isolated agent's worktree); fall back to the
+        // folder this agent is pointed at, which may not be the workspace default.
+        const a = w?.agents.find((x) => x.id === id)
+        const cwd = a?.cwd ?? agentPath(w, a) ?? ''
         const cands: { x: number; t: string }[] = []
         FILE_RE.lastIndex = 0
         for (let m = FILE_RE.exec(text); m; m = FILE_RE.exec(text)) {
@@ -529,7 +542,10 @@ function TerminalPane({
     // This pane's own workspace folder — NOT the active one. "Spawn all on
     // restart" spawns background panes while another workspace is on screen, so
     // reading a global projectPath here would create the worktree in the wrong repo.
-    const projectPath = wsById(state, workspaceId)?.path ?? null
+    // This agent's OWN folder — not the active workspace's, and not necessarily
+    // its own workspace's default either, since an agent can be pointed
+    // elsewhere. Getting this wrong creates the worktree in the wrong repo.
+    const projectPath = agentPath(wsById(state, workspaceId), agent)
     const shell = state.shells.find((sh) => sh.id === agent.shellId)
     let ptyId: string | null = null
     let disposed = false
@@ -1104,7 +1120,7 @@ function TerminalPane({
     }
     // Isolated worktree: never delete a branch with uncommitted work silently.
     setClosePrompt({ checking: true, dirty: false, count: 0 })
-    const projectPath = wsById(useStore.getState(), workspaceId)?.path ?? null
+    const projectPath = agentPathById(useStore.getState(), id)
     try {
       const res = projectPath ? await window.api.git.diff(projectPath, id) : null
       const untracked = res?.untracked?.length ?? 0

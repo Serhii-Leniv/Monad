@@ -153,7 +153,29 @@ interface PersistedCanvas {
     shellId?: string
     /** Double-weight tile (takes 2 shares of its row's width). */
     wide?: boolean
+    /** Per-agent folder override; absent means inherit the workspace default. */
+    projectPath?: string
   }>
+}
+
+/** One workspace as written to app data. `defaultPath` is null for a workspace
+ *  created empty from the tab strip — it has an identity and agents but no
+ *  folder — and is only a DEFAULT: an agent may carry its own projectPath. */
+interface PersistedWorkspace {
+  id: string
+  name: string
+  defaultPath: string | null
+  /** Pre-per-agent-folders name for defaultPath. Read-only compatibility. */
+  path?: string | null
+  layoutMode?: 'grid' | 'columns'
+  agents: PersistedCanvas['agents']
+}
+
+/** Shape of userData/workspaces.json — the whole tab set, in order. */
+interface PersistedWorkspaces {
+  version: number
+  activeId: string | null
+  workspaces: PersistedWorkspace[]
 }
 
 interface Window {
@@ -229,6 +251,10 @@ interface Window {
       exists: (projectPath: string) => Promise<boolean>
       load: (projectPath: string) => Promise<PersistedCanvas | null>
       save: (projectPath: string, data: PersistedCanvas) => Promise<boolean>
+    }
+    workspaces: {
+      load: () => Promise<PersistedWorkspaces | null>
+      save: (data: PersistedWorkspaces) => Promise<boolean>
     }
     git: {
       info: (projectPath: string) => Promise<GitInfo>

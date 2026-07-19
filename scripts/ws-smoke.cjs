@@ -3,7 +3,7 @@
 // pane stays mounted, so its ptyId is stable and it never exits). Also checks:
 //   - two workspaces coexist live; switching updates the active one
 //   - opening a 2nd workspace does NOT disturb the 1st's running pty
-//   - the live open-set is persisted to localStorage (restore across restart)
+//   - the live set is persisted to the app-data store (restore across restart)
 //   - closing a workspace tab detaches (kills the pty) but LEAVES its worktree
 //     on disk (reopenable) — no worktree.remove on close
 const { app, BrowserWindow } = require('electron')
@@ -48,8 +48,8 @@ let win
 const run = (code) => win.webContents.executeJavaScript(code, true)
 const sleep = (ms) => run(`new Promise(r=>setTimeout(r,${ms}))`)
 const store = 'window.__agentStore.getState()'
-const wsA = `${store}.liveWorkspaces.find(w=>w.path===${JSON.stringify(A)})`
-const wsB = `${store}.liveWorkspaces.find(w=>w.path===${JSON.stringify(B)})`
+const wsA = `${store}.liveWorkspaces.find(w=>w.defaultPath===${JSON.stringify(A)})`
+const wsB = `${store}.liveWorkspaces.find(w=>w.defaultPath===${JSON.stringify(B)})`
 
 app.whenReady().then(async () => {
   setupRepo(A)
@@ -101,14 +101,18 @@ app.whenReady().then(async () => {
   const ptyA_afterBack = await run(`(()=>{const ws=${wsA};return ws&&ws.agents[0]&&ws.agents[0].ptyId})()`)
   const aStatus = await run(`(()=>{const ws=${wsA};return ws&&ws.agents[0]&&ws.agents[0].status})()`)
 
-  // The live set is mirrored to disk for restore-on-restart.
-  const openSet = await run(`localStorage.getItem('vectro.openWorkspaces')`)
+  // The live set is mirrored to disk for restore-on-restart. Since Phase B that
+  // is one app-data file (userData/workspaces.json), not a localStorage path
+  // list — a folder-less workspace has no canvas.json to live in. Autosave is
+  // debounced at 400ms, so give it room to land.
+  await sleep(900)
+  const openSet = JSON.stringify(await run(`window.api.workspaces.load()`))
 
   // Detach-only close: closing A's tab kills its pty but LEAVES the worktree.
   const worktreeExistedBefore = aWtCwd ? fs.existsSync(aWtCwd) : false
   await run(`(()=>{const st=${store};st.closeWorkspace((${wsA}).id)})()`)
   await sleep(500)
-  const aGone = await run(`!${store}.liveWorkspaces.some(w=>w.path===${JSON.stringify(A)})`)
+  const aGone = await run(`!${store}.liveWorkspaces.some(w=>w.defaultPath===${JSON.stringify(A)})`)
   const worktreeSurvives = aWtCwd ? fs.existsSync(aWtCwd) : false
 
   const ptyStable = !!ptyA && ptyA_afterOpenB === ptyA && ptyA_afterBack === ptyA

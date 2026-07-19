@@ -1,7 +1,13 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { useStore, activeWs, FILE_PANEL_MIN, FILE_PANEL_MAX } from '../store'
+import { useStore, activeWs, agentPath, FILE_PANEL_MIN, FILE_PANEL_MAX } from '../store'
 import { IconClose } from './Icons'
 import FileTree from './FileTree'
+
+/** Last segment of a folder path — labels the panel with the folder on screen. */
+function baseName(p: string): string {
+  const parts = p.replace(/\\/g, '/').split('/').filter(Boolean)
+  return parts[parts.length - 1] || p
+}
 
 // CodeMirror is heavy — its own lazy boundary keeps the tree responsive even
 // while the editor chunk is still loading (FilePanel itself is already lazy
@@ -22,13 +28,28 @@ export default function FilePanel(): JSX.Element {
   const openFile = useStore((s) => s.openFile)
   const setFileDirty = useStore((s) => s.setFileDirty)
   const dirty = useStore((s) => activeWs(s)?.filePanel.dirty ?? false)
-  const projectPath = useStore((s) => activeWs(s)?.path ?? null)
-  const projectName = useStore((s) => activeWs(s)?.name ?? null)
+  // Follows the SELECTED agent's folder, falling back to the workspace default.
+  // Agents in one workspace can now point at different repos, so "the project
+  // root" is only meaningful relative to whichever agent you're looking at.
+  const projectPath = useStore((s) => {
+    const ws = activeWs(s)
+    if (!ws) return null
+    const sel = ws.agents.find((a) => a.id === ws.selectedIds[0])
+    return agentPath(ws, sel)
+  })
 
-  // The panel always browses the PROJECT ROOT — the human edits the real project
-  // files, never an agent's isolated worktree copy (which wouldn't show up in
-  // their working tree until merged). Per-agent worktree scoping was removed.
+  // The panel always browses that folder's ROOT — the human edits the real
+  // project files, never an agent's isolated worktree copy (which wouldn't show
+  // up in their working tree until merged). agentPath returns the repo root, not
+  // the agent's worktree cwd, so that rule still holds.
   const root = projectPath
+  // Name the folder on screen, not the tab — with per-agent folders the
+  // workspace name says nothing about which repo you're browsing.
+  const projectName = useStore((s) => {
+    const ws = activeWs(s)
+    if (!ws) return null
+    return root && root !== ws.defaultPath ? baseName(root) : ws.name
+  })
 
   // Live-update: while the panel is open with a resolved root, run THE single
   // main-process watcher on it. This effect owns the whole watcher lifecycle —

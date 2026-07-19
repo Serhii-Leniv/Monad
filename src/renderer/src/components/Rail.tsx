@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { IconTerminal, IconGrid, IconColumns, IconSettings, IconBell, IconFiles } from './Icons'
 import {
   useStore,
@@ -14,6 +14,12 @@ import { modLabel } from '../shortcuts'
 /** Below this many terminals, grid and columns produce the same layout, so the
  *  layout toggle is hidden to keep the dock uncluttered. */
 const LAYOUT_TOGGLE_MIN = 3
+
+/** Last segment of a folder path — labels the launch target in the new menu. */
+function baseName(p: string): string {
+  const parts = p.replace(/\\/g, '/').split('/').filter(Boolean)
+  return parts[parts.length - 1] || p
+}
 
 /** Minimal floating dock — icons only, refined liquid glass. Workspace switching
  *  lives in the top bar; the rail is just identity + the active canvas's tools. */
@@ -40,6 +46,32 @@ export default function Rail(): JSX.Element {
   const filePanelOpen = useStore((s) => activeWs(s)?.filePanel.open ?? false)
   const openFilePanel = useStore((s) => s.openFilePanel)
   const closeFilePanel = useStore((s) => s.closeFilePanel)
+
+  // Folder the next launch from this menu targets. Null = inherit the workspace
+  // default. Deliberately scoped to one menu opening and shown in the menu, so
+  // it can never become invisible sticky state that surprises a later launch.
+  const [target, setTarget] = useState<{ path: string; name: string; isGit: boolean } | null>(null)
+  useEffect(() => {
+    if (!newOpen) setTarget(null)
+  }, [newOpen])
+
+  const chooseTarget = async (): Promise<void> => {
+    try {
+      const ref = await window.api.project.pick()
+      if (!ref) return
+      const git = await window.api.git.info(ref.path)
+      setTarget({ path: ref.path, name: ref.name, isGit: git.isGit })
+    } catch (e) {
+      console.error('[monad] choose agent folder failed:', e)
+      useStore.getState().pushToast('Couldn’t open that folder.', 'error')
+    }
+  }
+
+  /** Launch options carrying the chosen folder (if any) through to addAgent. */
+  const withTarget = (opts?: Parameters<typeof addAgent>[0]): Parameters<typeof addAgent>[0] =>
+    target ? { ...opts, projectPath: target.path, isGit: target.isGit } : opts
+
+  const targetLabel = target?.name ?? (projectPath ? baseName(projectPath) : 'No folder')
 
   // Cycle focus through the agents that currently need you. revealAgent brings
   // each into view WITHOUT maximizing — so a single attention terminal is just
@@ -78,7 +110,7 @@ export default function Rail(): JSX.Element {
                       className="rail__menu-item"
                       onClick={() => {
                         setNewOpen(false)
-                        addAgent()
+                        addAgent(withTarget())
                       }}
                     >
                       New terminal
@@ -91,12 +123,44 @@ export default function Rail(): JSX.Element {
                         className="rail__menu-item"
                         onClick={() => {
                           setNewOpen(false)
-                          addAgent({ command: a.command, agentLabel: a.label, agentId: a.id })
+                          addAgent(
+                            withTarget({ command: a.command, agentLabel: a.label, agentId: a.id })
+                          )
                         }}
                       >
                         Start {a.label}
                       </button>
                     ))}
+                    {/* Where the launches above will run. Shown rather than
+                        hidden, because one workspace can hold agents across
+                        several repos and "which folder" is no longer obvious. */}
+                    <div className="rail__menu-sep" />
+                    <div className="rail__menu-head">Folder</div>
+                    <div className="rail__menu-target">
+                      <span
+                        className={'rail__menu-target-name' + (target ? ' is-override' : '')}
+                        title={target?.path ?? projectPath ?? 'Agents will start in your home directory'}
+                      >
+                        {targetLabel}
+                      </span>
+                      {target ? (
+                        <button
+                          className="rail__menu-target-btn"
+                          onClick={() => setTarget(null)}
+                          title="Go back to this workspace’s folder"
+                        >
+                          Reset
+                        </button>
+                      ) : (
+                        <button
+                          className="rail__menu-target-btn"
+                          onClick={() => void chooseTarget()}
+                          title="Run the next agent in a different folder"
+                        >
+                          Change…
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </>
               )}

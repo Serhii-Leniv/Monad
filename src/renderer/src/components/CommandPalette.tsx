@@ -98,7 +98,7 @@ export default function CommandPalette(): JSX.Element {
     list.push({ id: 'open', title: 'Open project…', group: 'Workspace', run: openProjectInteractive })
     // Recents not already open → open as a new live tab.
     workspaces
-      .filter((w) => !liveWorkspaces.some((lw) => lw.path === w.path))
+      .filter((w) => !liveWorkspaces.some((lw) => lw.defaultPath === w.path))
       .forEach((w) =>
         list.push({ id: 'open-' + w.path, title: `Open ${w.name}`, group: 'Workspace', run: () => void openProjectByPath(w) })
       )

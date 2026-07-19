@@ -227,6 +227,11 @@ const api = {
     save: (projectPath: string, data: unknown): Promise<boolean> =>
       ipcRenderer.invoke('project:save', { projectPath, data })
   },
+  // The whole tab set, in app data — workspaces outlived being folders.
+  workspaces: {
+    load: (): Promise<unknown> => ipcRenderer.invoke('workspaces:load'),
+    save: (data: unknown): Promise<boolean> => ipcRenderer.invoke('workspaces:save', data)
+  },
   git: {
     info: (projectPath: string): Promise<unknown> => ipcRenderer.invoke('git:info', projectPath),
     init: (projectPath: string): Promise<unknown> => ipcRenderer.invoke('git:init', projectPath),

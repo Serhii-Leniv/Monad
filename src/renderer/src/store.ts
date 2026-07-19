@@ -5,8 +5,9 @@ import { sanitizeTheme, type ThemePreference } from './theme'
 export type Isolation = 'worktree' | 'shared'
 export type LayoutMode = 'grid' | 'columns'
 export type SettingsTab = 'terminal' | 'appearance' | 'workspace' | 'notifications' | 'shortcuts'
-/** The one dropdown menu allowed open at a time (rail "new", project switcher). */
-export type MenuId = 'rail-new' | 'project'
+/** The one dropdown menu allowed open at a time (rail "new", project switcher,
+ *  the tab strip's + menu). */
+export type MenuId = 'rail-new' | 'project' | 'tabbar-add'
 
 /** A recently-opened project folder — the switcher's recents list.
  *  (Was `Workspace`; "workspace" now means a *live* session — see WorkspaceSession.) */
@@ -85,6 +86,13 @@ export interface AgentInstance {
   agentLabel?: string
   /** Id of the launched agent (claude/codex/gemini/…) → drives its icon. */
   agentId?: string
+  /**
+   * Folder this agent runs against, overriding its workspace's default.
+   * Undefined means "inherit" — which is what every agent created before
+   * per-agent folders existed does, so there's nothing to migrate.
+   * Read via agentPath(), never directly.
+   */
+  projectPath?: string
   /** Double-weight tile: takes 2 shares of its row's width instead of 1. */
   wide?: boolean
   /** Terminal interior theme: follow the app ('auto'/undefined) or pin it. */
@@ -160,7 +168,15 @@ export interface WorkspaceSession {
   /** Stable per live tab (not the folder path — lets the same folder theory be
    *  guarded against, and survives renames). */
   id: string
-  path: string
+  /**
+   * The folder new agents in this workspace inherit, or null for a workspace
+   * that doesn't have one (created empty from the tab strip's +). This is a
+   * DEFAULT, not the workspace's folder — an agent may override it, so never
+   * read this to answer "where does this agent run"; use agentPath() for that.
+   */
+  defaultPath: string | null
+  /** User-facing label. Seeded from the folder basename when opened from disk,
+   *  but owned by the user after that — renaming a tab never touches the folder. */
   name: string
   isGit: boolean
   baseBranch: string | null
@@ -194,6 +210,8 @@ export interface PersistedAgent {
   agentId?: string
   wide?: boolean
   termTheme?: 'auto' | 'dark' | 'light'
+  /** Per-agent folder override; absent means it inherits the workspace default. */
+  projectPath?: string
 }
 
 interface AppState {
@@ -240,6 +258,21 @@ interface AppState {
 
   /** Open a folder as a new live workspace tab (or focus it if already open). */
   openWorkspace: (ref: ProjectRef, saved: PersistedCanvas | null, git: GitInfo) => void
+  /** Rebuild the live tab set from app data on launch, preserving each
+   *  workspace's id and user-chosen name. Replaces the whole set — only ever
+   *  called once, before anything else can open a tab. Git state is filled in
+   *  afterwards per workspace (see setWorkspaceGit) so tabs paint immediately
+   *  instead of waiting on a git call per folder. */
+  hydrateWorkspaces: (records: PersistedWorkspace[], activeId: string | null) => void
+  /** Stamp git state onto one workspace by id (restore fills these in async). */
+  setWorkspaceGit: (id: string, git: GitInfo) => void
+  /** Create an empty, folder-less workspace tab and focus it. Returns nothing —
+   *  read `activeWorkspaceId` afterwards if you need the new id. */
+  createWorkspace: (name?: string) => void
+  /** Rename a workspace tab. Blank/whitespace names are rejected (kept as-is). */
+  renameWorkspace: (id: string, name: string) => void
+  /** Attach a folder to a workspace that doesn't have one (or change it). */
+  setWorkspacePath: (id: string, ref: ProjectRef, git: GitInfo) => void
   /** Close a live workspace tab (detach: kills its PTYs, keeps worktrees on disk). */
   closeWorkspace: (id: string) => void
   /** Bring a live workspace to the foreground. */
@@ -292,6 +325,14 @@ interface AppState {
     shellId?: string
     agentLabel?: string
     agentId?: string
+    /** Target a specific workspace instead of the active one. */
+    workspaceId?: string
+    /** Run this agent in a folder other than the workspace default. */
+    projectPath?: string
+    /** Whether `projectPath` is a git repo — decides if isolation is available.
+     *  Caller supplies it because git state can't be resolved synchronously;
+     *  omitted means "use the workspace's". */
+    isGit?: boolean
   }) => void
   removeAgent: (id: string, opts?: { keepWorktree?: boolean }) => void
   reopenLast: () => void
@@ -443,7 +484,7 @@ function saveFilePanelWidth(px: number): void {
 }
 
 /** crypto.randomUUID requires a secure context (not guaranteed under file://). */
-function uuid(): string {
+export function uuid(): string {
   try {
     return crypto.randomUUID()
   } catch {
@@ -570,7 +611,8 @@ export function toPersisted(agents: AgentInstance[]): PersistedAgent[] {
     agentLabel: a.agentLabel,
     agentId: a.agentId,
     wide: a.wide,
-    termTheme: a.termTheme
+    termTheme: a.termTheme,
+    projectPath: a.projectPath
   }))
 }
 
@@ -596,6 +638,28 @@ export function wsOfAgent(s: AppState, agentId: string): WorkspaceSession | unde
   return s.liveWorkspaces.find((w) => w.agents.some((a) => a.id === agentId))
 }
 
+/**
+ * The folder an agent actually runs in: its own override if it has one, else
+ * its workspace's default, else null (spawns wherever the shell starts).
+ *
+ * THE single answer to "where does this agent work" — worktree creation, the
+ * diff view, the file panel and the spawn cwd must all agree, and they only do
+ * so by going through here. Reading ws.defaultPath directly is the bug this
+ * function exists to prevent.
+ */
+export function agentPath(
+  ws: WorkspaceSession | undefined,
+  agent: AgentInstance | undefined
+): string | null {
+  return agent?.projectPath ?? ws?.defaultPath ?? null
+}
+
+/** agentPath by agent id, resolving the owning workspace too. */
+export function agentPathById(s: AppState, agentId: string): string | null {
+  const ws = wsOfAgent(s, agentId)
+  return agentPath(ws, ws?.agents.find((a) => a.id === agentId))
+}
+
 /** Convenience hooks for components that only care about the active workspace. */
 export const useActiveAgents = (): AgentInstance[] =>
   useStore((s) => activeWs(s)?.agents ?? EMPTY_AGENTS)
@@ -604,7 +668,7 @@ export const useActiveSelectedIds = (): string[] =>
 export const useActiveLayoutMode = (): LayoutMode =>
   useStore((s) => activeWs(s)?.layoutMode ?? 'grid')
 export const useActiveProjectPath = (): string | null =>
-  useStore((s) => activeWs(s)?.path ?? null)
+  useStore((s) => activeWs(s)?.defaultPath ?? null)
 export const useActiveProjectName = (): string | null =>
   useStore((s) => activeWs(s)?.name ?? null)
 export const useActiveIsGit = (): boolean => useStore((s) => activeWs(s)?.isGit ?? false)
@@ -617,6 +681,57 @@ function mapWs(
   fn: (w: WorkspaceSession) => WorkspaceSession
 ): WorkspaceSession[] {
   return list.map((w) => (w.id === id ? fn(w) : w))
+}
+
+/** Matches the auto-assigned "Workspace N" label — used to tell a name the user
+ *  chose from one we made up, so attaching a folder can replace ours but never theirs. */
+const DEFAULT_NAME_RE = /^Workspace \d+$/
+
+/** Lowest unused "Workspace N", so closing #2 of 3 and adding one reuses 2. */
+function nextWorkspaceName(list: WorkspaceSession[]): string {
+  const taken = new Set(list.map((w) => w.name))
+  for (let n = 1; ; n++) {
+    const name = `Workspace ${n}`
+    if (!taken.has(name)) return name
+  }
+}
+
+/** Turn persisted agent records back into live AgentInstances, capped at
+ *  MAX_AGENTS. Shared by open-a-folder and launch-time hydration so both apply
+ *  the same label migration and isolation default. */
+function hydrateAgents(persisted: PersistedCanvas['agents'] | undefined): AgentInstance[] {
+  const loaded: AgentInstance[] = []
+  for (const p of (persisted ?? []).slice(0, MAX_AGENTS)) {
+    // Migrate old numeric auto-names (and blanks) to short random names;
+    // preserve any custom rename the user made.
+    const label = !p.label || /^\d+$/.test(p.label.trim()) ? uniqueName(loaded) : p.label
+    loaded.push({ ...p, label, isolation: p.isolation ?? 'shared' })
+  }
+  return loaded
+}
+
+/** Build a WorkspaceSession, defaulting every per-session UI field. Both entry
+ *  points (open-a-folder and create-empty) go through here so a new field added
+ *  to WorkspaceSession can't be forgotten by one of them. */
+function newSession(init: Partial<WorkspaceSession> & { name: string }): WorkspaceSession {
+  return {
+    id: uuid(),
+    defaultPath: null,
+    isGit: false,
+    baseBranch: null,
+    agents: EMPTY_AGENTS,
+    layoutMode: 'grid',
+    selectedIds: EMPTY_IDS,
+    focusedId: null,
+    closingIds: [],
+    draggingId: null,
+    pendingCloseId: null,
+    bulkCloseIds: null,
+    diffAgentId: null,
+    filePanel: DEFAULT_FILE_PANEL,
+    lastClosed: null,
+    ...init
+  }
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -648,39 +763,92 @@ export const useStore = create<AppState>((set, get) => ({
   openWorkspace: (ref, saved, git) =>
     set((s) => {
       // Same folder already live → just bring its tab forward (never duplicate).
-      const existing = s.liveWorkspaces.find((w) => w.path === ref.path)
+      const existing = s.liveWorkspaces.find((w) => w.defaultPath === ref.path)
       if (existing) return { activeWorkspaceId: existing.id }
 
-      const loaded: AgentInstance[] = []
-      for (const p of (saved?.agents ?? []).slice(0, MAX_AGENTS)) {
-        // Migrate old numeric auto-names (and blanks) to short random names;
-        // preserve any custom rename the user made.
-        const label = !p.label || /^\d+$/.test(p.label.trim()) ? uniqueName(loaded) : p.label
-        loaded.push({ ...p, label, isolation: p.isolation ?? 'shared' })
-      }
+      const loaded = hydrateAgents(saved?.agents)
       const mode: LayoutMode = saved?.layoutMode === 'columns' ? 'columns' : 'grid'
-      const session: WorkspaceSession = {
-        id: uuid(),
-        path: ref.path,
+      const session = newSession({
+        defaultPath: ref.path,
         name: ref.name,
         isGit: git.isGit,
         baseBranch: git.branch,
         // Start with the first terminal active so you can type immediately.
         agents: laidOut(loaded, mode, s.canvasW, s.canvasH),
         layoutMode: mode,
-        selectedIds: loaded[0] ? [loaded[0].id] : [],
-        focusedId: null,
-        closingIds: [],
-        draggingId: null,
-        pendingCloseId: null,
-        bulkCloseIds: null,
-        diffAgentId: null,
-        filePanel: DEFAULT_FILE_PANEL,
-        lastClosed: null
-      }
+        selectedIds: loaded[0] ? [loaded[0].id] : []
+      })
       return {
         liveWorkspaces: [...s.liveWorkspaces, session],
         activeWorkspaceId: session.id
+      }
+    }),
+
+  hydrateWorkspaces: (records, activeId) =>
+    set((s) => {
+      const liveWorkspaces = records.slice(0, MAX_LIVE_WORKSPACES).map((r) => {
+        const loaded = hydrateAgents(r.agents)
+        const mode: LayoutMode = r.layoutMode === 'columns' ? 'columns' : 'grid'
+        return newSession({
+          id: r.id,
+          name: r.name,
+          defaultPath: r.defaultPath ?? r.path ?? null,
+          agents: laidOut(loaded, mode, s.canvasW, s.canvasH),
+          layoutMode: mode,
+          selectedIds: loaded[0] ? [loaded[0].id] : []
+        })
+      })
+      return {
+        liveWorkspaces,
+        // Fall back to the first tab if the saved active id is gone (e.g. it was
+        // past the cap) — never leave a non-empty set with nothing on screen.
+        activeWorkspaceId:
+          (activeId && liveWorkspaces.some((w) => w.id === activeId) ? activeId : null) ??
+          liveWorkspaces[0]?.id ??
+          null
+      }
+    }),
+
+  setWorkspaceGit: (id, git) =>
+    set((s) => ({
+      liveWorkspaces: mapWs(s.liveWorkspaces, id, (w) => ({
+        ...w,
+        isGit: git.isGit,
+        baseBranch: git.branch
+      }))
+    })),
+
+  createWorkspace: (name) =>
+    set((s) => {
+      if (s.liveWorkspaces.length >= MAX_LIVE_WORKSPACES) return {}
+      const session = newSession({ name: name?.trim() || nextWorkspaceName(s.liveWorkspaces) })
+      return {
+        liveWorkspaces: [...s.liveWorkspaces, session],
+        activeWorkspaceId: session.id
+      }
+    }),
+
+  renameWorkspace: (id, name) =>
+    set((s) => {
+      const next = name.trim()
+      // A blank name would leave an unclickable-looking tab; keep the old one.
+      if (!next) return {}
+      return { liveWorkspaces: mapWs(s.liveWorkspaces, id, (w) => ({ ...w, name: next })) }
+    }),
+
+  setWorkspacePath: (id, ref, git) =>
+    set((s) => {
+      const w = s.liveWorkspaces.find((x) => x.id === id)
+      if (!w) return {}
+      return {
+        liveWorkspaces: mapWs(s.liveWorkspaces, id, (x) => ({
+          ...x,
+          defaultPath: ref.path,
+          isGit: git.isGit,
+          baseBranch: git.branch,
+          // Only adopt the folder's name if the user never named this tab themselves.
+          name: x.defaultPath === null && DEFAULT_NAME_RE.test(x.name) ? ref.name : x.name
+        }))
       }
     }),
 
@@ -957,7 +1125,9 @@ export const useStore = create<AppState>((set, get) => ({
   clearWorkspaceClose: () => set({ confirmWorkspaceCloseId: null }),
 
   addAgent: (opts) => {
-    const ws = activeWs(get())
+    // Defaults to the workspace on screen; restore passes an explicit id so it
+    // can seed background tabs without yanking the foreground around.
+    const ws = opts?.workspaceId ? wsById(get(), opts.workspaceId) : activeWs(get())
     if (!ws) return
     // Tell the user why nothing happened at the cap — the ⌘T / reopen keyboard
     // paths otherwise no-op silently (the Rail button + palette already hide/disable
@@ -969,8 +1139,12 @@ export const useStore = create<AppState>((set, get) => ({
     set((s) => {
       const cur = wsById(s, ws.id)
       if (!cur) return {}
+      // Isolation follows the folder this agent will actually run in — an agent
+      // pointed at a non-git folder can't have a worktree even if its workspace
+      // default is a repo (and vice versa).
+      const isGit = opts?.isGit ?? cur.isGit
       const isolation: Isolation =
-        cur.isGit && s.settings.defaultIsolation === 'worktree' ? 'worktree' : 'shared'
+        isGit && s.settings.defaultIsolation === 'worktree' ? 'worktree' : 'shared'
       const shellId = opts?.shellId ?? s.settings.defaultShellId ?? undefined
       const agent: AgentInstance = {
         id: uuid(),
@@ -983,7 +1157,11 @@ export const useStore = create<AppState>((set, get) => ({
         shellId,
         startupCommand: opts?.command,
         agentLabel: opts?.agentLabel,
-        agentId: opts?.agentId
+        agentId: opts?.agentId,
+        // Only stored when it differs from the default — an agent that just
+        // inherits stays undefined so moving the workspace's folder moves it too.
+        projectPath:
+          opts?.projectPath && opts.projectPath !== cur.defaultPath ? opts.projectPath : undefined
       }
       return {
         liveWorkspaces: mapWs(s.liveWorkspaces, cur.id, (w) => ({
@@ -1017,8 +1195,12 @@ export const useStore = create<AppState>((set, get) => ({
         const closingIds = w.closingIds.filter((c) => c !== id)
         if (!agent) return { liveWorkspaces: mapWs(s.liveWorkspaces, w.id, (x) => ({ ...x, closingIds })) }
         // keepWorktree leaves the branch + worktree on disk (recoverable work).
-        if (!opts?.keepWorktree && agent.isolation === 'worktree' && w.path) {
-          void window.api.worktree.remove(w.path, id)
+        // Must remove from the agent's OWN repo — with per-agent folders the
+        // workspace default may be a different repo entirely, and removing
+        // there would silently fail to clean up (or hit the wrong worktree).
+        const repo = agentPath(w, agent)
+        if (!opts?.keepWorktree && agent.isolation === 'worktree' && repo) {
+          void window.api.worktree.remove(repo, id)
         }
         const rest = w.agents.filter((a) => a.id !== id)
         let selectedIds = w.selectedIds.filter((sid) => sid !== id)

@@ -30,8 +30,16 @@ import { detectShells, detectAgents } from './shells'
 import { checkForUpdate, initAutoUpdate } from './update'
 import { sendFeedback, FEEDBACK_EMAIL, type FeedbackInput, type FeedbackCategory } from './feedback'
 
-/** Per-project dir holding canvas.json. */
+/** Per-project dir holding canvas.json. Legacy: still read for the one-time
+ *  migration into the app-data store, and still written by older versions. */
 const CANVAS_DIR = '.monad'
+
+/** The app-data file holding every workspace (folder-bound or not). Resolved
+ *  lazily — app.getPath('userData') is only valid after the app is ready, and
+ *  the integration smoke tests reassign it before registering handlers. */
+function workspacesFile(): string {
+  return join(app.getPath('userData'), 'workspaces.json')
+}
 
 /**
  * Registers every main-process IPC handler against a window accessor.
@@ -505,6 +513,40 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
       }
     }
   )
+
+  // --- App-data workspace store ---
+  // Single source of truth for the whole tab set since workspaces stopped being
+  // folders: one with no folder has no .monad/canvas.json to live in, so the
+  // per-project file can't hold the set any more.
+  ipcMain.handle('workspaces:load', async () => {
+    try {
+      const txt = await fs.readFile(workspacesFile(), 'utf8')
+      return JSON.parse(txt)
+    } catch {
+      return null
+    }
+  })
+
+  ipcMain.handle('workspaces:save', async (_e, data: unknown) => {
+    // Write-and-rename, not write-in-place: this one file holds EVERY workspace,
+    // so a write torn by a crash or power loss would lose the entire tab set
+    // rather than a single project's layout.
+    const target = workspacesFile()
+    const tmp = target + '.tmp'
+    try {
+      await fs.writeFile(tmp, JSON.stringify(data, null, 2), 'utf8')
+      await fs.rename(tmp, target)
+      return true
+    } catch (e) {
+      console.error('[monad] workspaces:save failed:', e)
+      try {
+        await fs.unlink(tmp)
+      } catch {
+        /* the temp file may not exist — nothing to clean up */
+      }
+      return false
+    }
+  })
 
   // --- Git / per-agent worktree isolation ---
   ipcMain.handle('git:info', (_e, projectPath: string) => getGitInfo(projectPath))

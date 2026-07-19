@@ -1,4 +1,4 @@
-import { useStore, toPersisted, activeWs, MAX_LIVE_WORKSPACES, type LayoutMode, type PersistedAgent } from './store'
+import { useStore, toPersisted, activeWs, agentPath, uuid, MAX_LIVE_WORKSPACES } from './store'
 import { RECENT_KEY, getRecent, removeRecent, type RecentProject } from './recent'
 
 export type { RecentProject }
@@ -7,40 +7,53 @@ export type { RecentProject }
 // hundred ms, so we must not toast on every attempt. Reset when a save succeeds.
 let saveFailedNotified = false
 
-/** Single writer for a project's canvas file — shared by the debounced autosave
- *  in App and the flush-on-switch below, so the on-disk shape stays in one place.
- *  A read-only folder / full disk / network share returns false; we tell the user
- *  once rather than silently dropping their canvas. */
-export async function saveCanvas(
-  projectPath: string,
-  agents: PersistedAgent[],
-  layoutMode: LayoutMode
-): Promise<void> {
-  let ok = false
-  try {
-    ok = await window.api.project.save(projectPath, { agents, layoutMode })
-  } catch {
-    ok = false
-  }
-  if (ok) {
-    saveFailedNotified = false
-  } else if (!saveFailedNotified) {
-    saveFailedNotified = true
-    useStore
-      .getState()
-      .pushToast('Couldn’t save this canvas — the project folder may be read-only.', 'error')
-  }
-}
-
 /** Last path segment of a folder path (fallback display name). */
 function basename(p: string): string {
   const parts = p.replace(/\\/g, '/').split('/').filter(Boolean)
   return parts[parts.length - 1] || p
 }
 
-/** The live workspace open on a given folder path, if any. */
+/** The live workspace whose DEFAULT folder is this path, if any. Note this is no
+ *  longer "the workspace using this folder" — agents can point anywhere, and
+ *  several workspaces can share a default. Use agentsUsing() for ownership. */
 function wsByPath(path: string): ReturnType<typeof activeWs> {
-  return useStore.getState().liveWorkspaces.find((w) => w.path === path)
+  return useStore.getState().liveWorkspaces.find((w) => w.defaultPath === path)
+}
+
+/** Compare two folder paths as the OS would: separator- and (on Windows)
+ *  case-insensitive, since these come from both a dialog and saved JSON. */
+function samePath(a: string | null, b: string | null): boolean {
+  if (!a || !b) return false
+  const norm = (p: string): string => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+  return norm(a) === norm(b)
+}
+
+/**
+ * Ids of every live agent running in a folder, ACROSS ALL WORKSPACES.
+ *
+ * Worktree cleanup hands this to the main process as the "don't touch these"
+ * set. It used to be one workspace's agent list, which was complete only while
+ * a folder could be open in exactly one workspace. Now that agents carry their
+ * own folder, a repo can be in use by agents in several workspaces at once —
+ * missing any of them would sweep a worktree that's alive and working.
+ */
+function agentsUsing(path: string): string[] {
+  const ids: string[] = []
+  for (const w of useStore.getState().liveWorkspaces) {
+    for (const a of w.agents) {
+      if (samePath(agentPath(w, a), path)) ids.push(a.id)
+    }
+  }
+  return ids
+}
+
+/** Whether any live agent still runs in this folder — the guard for cleanup
+ *  toasts that can outlive the workspace they were raised for. */
+function pathStillLive(path: string): boolean {
+  return (
+    agentsUsing(path).length > 0 ||
+    useStore.getState().liveWorkspaces.some((w) => samePath(w.defaultPath, path))
+  )
 }
 
 function pushRecent(ref: RecentProject): void {
@@ -56,52 +69,94 @@ function pushRecent(ref: RecentProject): void {
   }
 }
 
-// --- live-workspace set persistence (survives restart) ---------------------
-// The ordered list of open tabs + which was active, so a relaunch reopens them
-// all and spawns their agents (decision: "reopen all tabs, spawn all"). Legacy
-// 'vectro.' prefix kept for consistency with the other persisted keys.
-const OPEN_KEY = 'vectro.openWorkspaces'
+// --- workspace persistence (survives restart) ------------------------------
+// Everything about the tab set — order, names, folders, agents, which was
+// active — lives in ONE app-data file. It used to be split between a
+// localStorage path list and a canvas.json inside each project folder, which
+// stopped working once a workspace could exist without a folder.
+//
+// Legacy key, still read once to migrate users forward, never written again.
+const LEGACY_OPEN_KEY = 'vectro.openWorkspaces'
 
-interface OpenSet {
-  paths: string[]
-  active: string | null
+// Gated until restoreWorkspaces has read the saved set — otherwise an early
+// store mutation (e.g. shell detection landing) would write an EMPTY set and
+// clobber the tabs we're about to restore.
+let persistEnabled = false
+
+/** Snapshot the live tab set for disk. Runtime-only agent fields (ptyId, status,
+ *  cwd, …) are stripped by toPersisted. */
+function snapshot(): PersistedWorkspaces {
+  const s = useStore.getState()
+  return {
+    version: 1,
+    activeId: s.activeWorkspaceId,
+    workspaces: s.liveWorkspaces.map((w) => ({
+      id: w.id,
+      name: w.name,
+      defaultPath: w.defaultPath,
+      layoutMode: w.layoutMode,
+      agents: toPersisted(w.agents)
+    }))
+  }
 }
 
-function getOpenSet(): OpenSet | null {
+/** Single writer for the workspace store — shared by the debounced autosave in
+ *  App and the flush-on-close below. No-ops until restore has run. */
+export async function saveWorkspaces(): Promise<void> {
+  if (!persistEnabled) return
+  let ok = false
   try {
-    const raw = localStorage.getItem(OPEN_KEY)
-    if (!raw) return null
-    const v = JSON.parse(raw)
-    if (!v || !Array.isArray(v.paths)) return null
-    return {
-      paths: v.paths.filter((p: unknown): p is string => typeof p === 'string'),
-      active: typeof v.active === 'string' ? v.active : null
+    ok = await window.api.workspaces.save(snapshot())
+  } catch {
+    ok = false
+  }
+  if (ok) {
+    saveFailedNotified = false
+  } else if (!saveFailedNotified) {
+    saveFailedNotified = true
+    useStore.getState().pushToast('Couldn’t save your workspaces.', 'error')
+  }
+}
+
+/** Rebuild the old split persistence (localStorage path list + per-project
+ *  canvas.json) into the app-data shape, once, for users upgrading. The
+ *  canvas.json files are deliberately left on disk as a fallback. */
+async function migrateLegacyWorkspaces(): Promise<PersistedWorkspace[]> {
+  let paths: string[] = []
+  try {
+    const raw = localStorage.getItem(LEGACY_OPEN_KEY)
+    const v = raw ? JSON.parse(raw) : null
+    if (v && Array.isArray(v.paths)) {
+      paths = v.paths.filter((p: unknown): p is string => typeof p === 'string')
     }
   } catch {
-    return null
+    /* unreadable legacy key — fall through to recents below */
   }
-}
+  // Pre-tabs users have no open-set at all; carry their most recent project over
+  // so an upgrade never lands them on an empty Home.
+  const recent = getRecent()
+  if (paths.length === 0 && recent[0]) paths = [recent[0].path]
+  if (paths.length === 0) return []
 
-// Persist the live set on any open/close/switch. Subscribing keeps disk in sync
-// without threading a save call through every mutation path. Gated until
-// restoreWorkspaces has read the saved set — otherwise an early store mutation
-// (e.g. shell detection landing) would write an EMPTY set and clobber the tabs
-// we're about to restore.
-let persistEnabled = false
-let lastOpenSig = ''
-useStore.subscribe((s) => {
-  if (!persistEnabled) return
-  const paths = s.liveWorkspaces.map((w) => w.path)
-  const active = s.liveWorkspaces.find((w) => w.id === s.activeWorkspaceId)?.path ?? null
-  const sig = paths.join('|') + '::' + (active ?? '')
-  if (sig === lastOpenSig) return
-  lastOpenSig = sig
-  try {
-    localStorage.setItem(OPEN_KEY, JSON.stringify({ paths, active }))
-  } catch {
-    /* ignore */
+  const names = new Map(recent.map((r) => [r.path, r.name]))
+  const out: PersistedWorkspace[] = []
+  for (const path of paths.slice(0, MAX_LIVE_WORKSPACES)) {
+    try {
+      if (!(await window.api.project.exists(path))) continue
+      const saved = await window.api.project.load(path)
+      out.push({
+        id: uuid(),
+        name: names.get(path) ?? basename(path),
+        defaultPath: path,
+        layoutMode: saved?.layoutMode === 'columns' ? 'columns' : 'grid',
+        agents: saved?.agents ?? []
+      })
+    } catch (e) {
+      console.error('[monad] migrate workspace failed:', path, e)
+    }
   }
-})
+  return out
+}
 
 /** Run `git init` in a project folder, then refresh the store's git state so the
  *  non-git affordances (shared-mode chip, isolation default) update in place.
@@ -118,7 +173,7 @@ export async function initGitForProject(path: string): Promise<void> {
     const git = await window.api.git.info(path)
     // The user may have switched workspaces while init ran — only stamp git state
     // when the inited folder is still the one on screen.
-    if (activeWs(useStore.getState())?.path === path) useStore.getState().setGitInfo(git)
+    if (activeWs(useStore.getState())?.defaultPath === path) useStore.getState().setGitInfo(git)
     useStore
       .getState()
       .pushToast(
@@ -131,19 +186,37 @@ export async function initGitForProject(path: string): Promise<void> {
   }
 }
 
+/** Attach a folder to an existing workspace tab (one created empty, or one being
+ *  repointed). Unlike openProjectInteractive this never creates a tab — the
+ *  workspace, its name, and its agents all survive the change. */
+export async function pickFolderForWorkspace(id: string): Promise<void> {
+  try {
+    const ref = await window.api.project.pick()
+    if (!ref) return
+    // The tab may have been closed while the OS dialog was up.
+    if (!useStore.getState().liveWorkspaces.some((w) => w.id === id)) return
+    const git = await window.api.git.info(ref.path)
+    useStore.getState().setWorkspacePath(id, ref, git)
+    pushRecent(ref)
+  } catch (e) {
+    console.error('[monad] pick folder for workspace failed:', e)
+    useStore.getState().pushToast('Couldn’t open that folder.', 'error')
+  }
+}
+
 /** Remove the work-free orphaned worktrees the open-time check found. The main
  *  process re-lists at cleanup time (no path list round-trips through here) and
  *  never removes an orphan with unmerged/uncommitted work. */
 async function cleanOrphanWorktrees(path: string): Promise<void> {
   try {
-    // The toast can outlive a workspace close — never sweep against a folder that
-    // isn't open any more.
-    if (!wsByPath(path)) return
+    // The toast can outlive a workspace close — never sweep against a folder
+    // nothing is using any more.
+    if (!pathStillLive(path)) return
     // Owned ids are read at CLICK time, not from the toast's closure: agents
     // added since the toast appeared own fresh worktrees that must never sweep.
-    const owned = wsByPath(path)?.agents.map((a) => a.id) ?? []
+    const owned = agentsUsing(path)
     const { removed } = await window.api.git.cleanOrphans(path, owned)
-    if (!wsByPath(path)) return
+    if (!pathStillLive(path)) return
     if (removed > 0) {
       useStore
         .getState()
@@ -164,11 +237,11 @@ async function checkOrphanWorktrees(path: string): Promise<void> {
   try {
     // Read the agent list NOW (post-open, post-default-agent) so every live
     // agent's worktree — including ones being created this instant — is owned.
-    const owned = wsByPath(path)?.agents.map((a) => a.id) ?? []
+    const owned = agentsUsing(path)
     const orphans = await window.api.git.orphans(path, owned)
     // The user may have closed this workspace while the check ran — this toast
     // (and its action) belongs to that folder only.
-    if (!wsByPath(path)) return
+    if (!pathStillLive(path)) return
     if (orphans.length === 0) return
     const removable = orphans.filter((o) => !o.hasWork).length
     const kept = orphans.length - removable
@@ -201,7 +274,7 @@ let opening = false
 export async function openProjectByPath(ref: RecentProject): Promise<void> {
   const store = useStore.getState()
   // Already live → focus its tab (never a second copy, never respawn its agents).
-  const already = store.liveWorkspaces.find((w) => w.path === ref.path)
+  const already = store.liveWorkspaces.find((w) => w.defaultPath === ref.path)
   if (already) {
     store.setActiveWorkspace(already.id)
     return
@@ -265,13 +338,13 @@ export async function openProjectByPath(ref: RecentProject): Promise<void> {
   }
 }
 
-/** Close a live workspace tab, flushing its canvas first so the debounced
- *  autosave can't drop the last <400ms of edits when its panes unmount. Detach
- *  only — worktrees/branches stay on disk (reopen restores them). */
+/** Close a live workspace tab. Detach only — worktrees/branches stay on disk
+ *  (reopen restores them). The save happens AFTER the close so the removed tab
+ *  is actually gone from the snapshot; the debounced autosave would get there
+ *  too, but flushing here means a quit right after a close can't lose it. */
 export function closeWorkspaceById(id: string): void {
-  const ws = useStore.getState().liveWorkspaces.find((w) => w.id === id)
-  if (ws) saveCanvas(ws.path, toPersisted(ws.agents), ws.layoutMode)
   useStore.getState().closeWorkspace(id)
+  void saveWorkspaces()
 }
 
 /** Ask to close the workspace currently on screen (⌘ affordances / palette) —
@@ -301,49 +374,63 @@ export async function restoreWorkspaces(): Promise<void> {
     persistEnabled = true
     return
   }
-  const openSet = getOpenSet()
-  const recent = getRecent()
-  const names = new Map(recent.map((r) => [r.path, r.name]))
-  const paths = (
-    openSet && openSet.paths.length > 0 ? openSet.paths : recent[0] ? [recent[0].path] : []
-  ).slice(0, MAX_LIVE_WORKSPACES)
-  if (paths.length === 0) {
+
+  let saved: PersistedWorkspaces | null = null
+  try {
+    saved = await window.api.workspaces.load()
+  } catch (e) {
+    console.error('[monad] workspaces:load failed:', e)
+  }
+  // No app-data store yet → either a first run or an upgrade from the old split
+  // persistence. Migrating writes the new file on the first save below.
+  const records = saved?.workspaces?.length
+    ? saved.workspaces
+    : saved
+      ? [] // an explicitly-empty saved set means the user closed everything
+      : await migrateLegacyWorkspaces()
+
+  // Drop folders that have since been moved or deleted — restoring one would
+  // spawn a canvas full of dead terminals. Folder-less workspaces always survive.
+  const alive: PersistedWorkspace[] = []
+  for (const r of records) {
+    try {
+      const rp = r.defaultPath ?? r.path ?? null
+      if (rp && !(await window.api.project.exists(rp))) continue
+      alive.push(r)
+    } catch {
+      /* an unreadable path is treated as gone */
+    }
+  }
+
+  if (alive.length === 0) {
     persistEnabled = true
     return
   }
 
-  for (const path of paths) {
+  // Paint every tab at once, then fill in the slower per-folder git state.
+  useStore.getState().hydrateWorkspaces(alive, saved?.activeId ?? null)
+
+  for (const r of alive) {
+    if (!r.path) continue
+    const path = r.path
     try {
-      const exists = await window.api.project.exists(path)
-      if (!exists) continue
-      // Guard against a duplicate if two restores raced (shouldn't, but cheap).
-      if (wsByPath(path)) continue
-      const ref: RecentProject = { path, name: names.get(path) ?? basename(path) }
-      const [saved, git] = await Promise.all([
-        window.api.project.load(path),
-        window.api.git.info(path)
-      ])
+      const git = await window.api.git.info(path)
+      useStore.getState().setWorkspaceGit(r.id, git)
       void window.api.git.prune(path)
-      // Don't pushRecent here — restoring shouldn't churn the recents order every
-      // launch; these folders are already in the list.
-      useStore.getState().openWorkspace(ref, saved, git)
-      if ((wsByPath(path)?.agents.length ?? 0) === 0) {
-        // addAgent targets the active workspace; openWorkspace just made this one
-        // active, so it lands here.
-        useStore.getState().addAgent()
-      }
       if (git.isGit) void checkOrphanWorktrees(path)
     } catch (e) {
-      console.error('[monad] restore workspace failed:', path, e)
+      console.error('[monad] restore git info failed:', path, e)
     }
   }
 
-  // Restore which tab was in front (else the last one opened stays active).
-  const activePath = openSet?.active
-  if (activePath) {
-    const ws = wsByPath(activePath)
-    if (ws) useStore.getState().setActiveWorkspace(ws.id)
+  // Never restore a workspace to a bare canvas — but only for folder-bound ones.
+  // An empty folder-less workspace is a deliberate state (you just made it).
+  for (const r of alive) {
+    const ws = useStore.getState().liveWorkspaces.find((w) => w.id === r.id)
+    if (ws && ws.defaultPath && ws.agents.length === 0)
+      useStore.getState().addAgent({ workspaceId: ws.id })
   }
-  // Saved set is fully restored — from here, mirror every open/close/switch to disk.
+
+  // Saved set is fully restored — from here, mirror every change to disk.
   persistEnabled = true
 }

@@ -17,7 +17,7 @@ const Feedback = lazy(() => import('./components/Feedback'))
 // editor/tree chunk (Phase 3), which the first canvas view never needs.
 const FilePanel = lazy(() => import('./components/FilePanel'))
 import { useStore, toPersisted, activeWs, useActiveAgents, NEEDS_ATTENTION } from './store'
-import { restoreWorkspaces, saveCanvas, closeWorkspaceById } from './openProject'
+import { restoreWorkspaces, saveWorkspaces, closeWorkspaceById } from './openProject'
 import { installPowerIdle } from './powerIdle'
 import { applyAccent } from './accent'
 import { applyTheme } from './theme'
@@ -548,17 +548,28 @@ export default function App(): JSX.Element {
   const persistedByWs = useMemo(
     () =>
       liveWorkspaces.map((w) => ({
-        path: w.path,
+        id: w.id,
+        name: w.name,
+        path: w.defaultPath,
         layoutMode: w.layoutMode,
         persisted: toPersisted(w.agents)
       })),
     [liveWorkspaces]
   )
+  // Signature of everything that reaches disk. Identity, name and the active tab
+  // are in here now (they're persisted too), but nothing runtime — status churn
+  // from a streaming agent must never trigger a write.
   const persistedKey = useMemo(
     () =>
+      activeWorkspaceId +
+      '@@' +
       persistedByWs
         .map(
           (w) =>
+            w.id +
+            '#' +
+            w.name +
+            '#' +
             w.path +
             '#' +
             w.layoutMode +
@@ -571,13 +582,13 @@ export default function App(): JSX.Element {
               .join('|')
         )
         .join('~~'),
-    [persistedByWs]
+    [persistedByWs, activeWorkspaceId]
   )
   useEffect(() => {
     window.clearTimeout(saveTimer.current)
-    saveTimer.current = window.setTimeout(() => {
-      for (const w of persistedByWs) saveCanvas(w.path, w.persisted, w.layoutMode)
-    }, 400)
+    // One write for the whole tab set — saveWorkspaces reads the store itself,
+    // so it always persists the latest state rather than this render's snapshot.
+    saveTimer.current = window.setTimeout(() => void saveWorkspaces(), 400)
     return () => window.clearTimeout(saveTimer.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [persistedKey])

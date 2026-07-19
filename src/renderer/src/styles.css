@@ -1327,7 +1327,14 @@ body.has-wallpaper .aurora {
     var(--glass-specular),
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
     0 10px 26px rgba(0, 0, 0, 0.46);
-  overflow: hidden;
+  /* Scrolls rather than clips: tabs now carry a name + count and can't be
+     assumed to fit. Scrollbar hidden — the strip is short and drag/Alt+N cover it. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.tabbar__tabs::-webkit-scrollbar {
+  display: none;
 }
 .tab {
   display: flex;
@@ -1366,6 +1373,47 @@ body.has-wallpaper .aurora {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* Inline rename field — sits in the name's slot with no chrome of its own, so
+   the tab doesn't resize or jump when you double-click into it. */
+.tab__rename {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  outline: none;
+}
+.tab__rename::selection {
+  background: rgba(var(--accent-rgb), 0.38);
+}
+/* Live agent count — trailing, tabular so the tab width doesn't twitch as it
+   ticks between 9 and 10. Muted by default; picks up the accent on the active
+   tab so the workspace you're in reads as the loudest thing in the strip. */
+.tab__count {
+  flex: 0 0 auto;
+  min-width: 17px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--text-2);
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 17px;
+  text-align: center;
+}
+.tab.is-active .tab__count {
+  background: rgba(var(--accent-rgb), 0.3);
+  color: var(--text);
 }
 /* Status dot — ALWAYS shown (leading), so every project reads at a glance:
    gray when its agents are idle, green while one is working, amber when one
@@ -1458,6 +1506,22 @@ body.has-wallpaper .aurora {
   font-family: var(--font-display);
   font-size: 13.5px;
   font-weight: 600;
+}
+/* Anchor for the + dropdown. Zero-size influence — it just wraps the button. */
+.tabbar__addwrap {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+}
+/* Reuses .rail__menu's chrome; only the anchoring differs (the rail's menu
+   opens from a left-edge button, this one hangs below the strip). */
+.tabbar__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 168px;
+  z-index: 40;
 }
 
 .app__main {
@@ -2504,6 +2568,45 @@ body.has-wallpaper .vec-pane__term {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
+}
+/* Launch-target row in the new-agent menu: which folder the items above run in.
+   Not a menu item — it reads as a setting, so it doesn't take the hover/press
+   affordances that would suggest clicking it launches something. */
+.rail__menu-target {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 8px 4px;
+}
+.rail__menu-target-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* An explicitly-chosen folder is accent-inked so it's obvious the next launch
+   is NOT going to the workspace's own folder. */
+.rail__menu-target-name.is-override {
+  color: rgb(var(--accent-rgb));
+  font-weight: 600;
+}
+.rail__menu-target-btn {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border: 1px solid var(--line-3);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.rail__menu-target-btn:hover {
+  color: var(--text);
+  border-color: rgba(var(--accent-rgb), 0.5);
 }
 .rail__menu-empty {
   padding: 6px 10px 10px;
