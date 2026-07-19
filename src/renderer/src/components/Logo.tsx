@@ -1,6 +1,6 @@
 import logoUrl from '../assets/logo.png'
 
-/** The emblem — a black geometric "M" monogram with a top-right dot on a white tile. */
+/** The emblem — Monad's spirograph mark, rendered white for the dark app UI. */
 export default function Logo({ size = 26 }: { size?: number }): JSX.Element {
   return (
     <img
