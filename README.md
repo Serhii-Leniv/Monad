@@ -21,7 +21,11 @@
 </p>
 
 <p align="center">
-  <img alt="Monad running three coding agents in parallel — a build, an agent writing rate-limiting code, and a passing test suite." src="https://serhii-leniv.github.io/Monad/demo.gif" width="840">
+  <a href="https://github.com/Serhii-Leniv/Monad/blob/main/assets/demo.mp4">
+    <img alt="Watch Monad run a swarm of coding agents in parallel — click to play" src="assets/demo-poster.png" width="840">
+  </a>
+  <br>
+  <sub><a href="https://github.com/Serhii-Leniv/Monad/blob/main/assets/demo.mp4">▶ Watch the 45-second demo</a></sub>
 </p>
 
 ---
