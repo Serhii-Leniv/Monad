@@ -4305,8 +4305,8 @@ body.has-wallpaper .vec-pane__term {
    SVG's viewBox (627x291); aspect-ratio holds the box before the mask loads,
    so the hero never reflows. */
 .home__wordmark {
-  margin: 4px 0 14px;
-  width: clamp(210px, 26vw, 330px);
+  margin: 4px 0 18px;
+  width: clamp(280px, 34vw, 440px);
   aspect-ratio: 627 / 291;
   -webkit-mask: url('./assets/wordmark.svg') center / contain no-repeat;
   mask: url('./assets/wordmark.svg') center / contain no-repeat;
