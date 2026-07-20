@@ -60,26 +60,42 @@ jobs:
       # never present on the Windows runner — electron-builder reads CSC_LINK on
       # every platform and would try to sign the NSIS installer with the mac cert.
       #
-      # Signing degrades gracefully: with no MAC_CERT_P12 secret,
-      # CSC_IDENTITY_AUTO_DISCOVERY is "false", electron-builder skips signing, and
-      # (because the app is unsigned) skips notarization too. The build still
-      # produces a working ad-hoc-signed .dmg that needs the xattr step on install.
-      # Add the five secrets below and the same tag produces a notarized build with
+      # The secrets are read into MAC_CERT_* / APPLE_* names and only re-exported
+      # under the names electron-builder looks for when a cert is actually there.
+      # They CANNOT be passed as CSC_LINK directly: Actions still defines an env key
+      # whose secret is missing, just with an empty value, and electron-builder tests
+      # for the presence of CSC_LINK rather than a non-empty one. It then resolves ""
+      # to the working directory and fails with "<workspace> not a file" — which is
+      # exactly how run 29743588647 died.
+      #
+      # So: no cert -> CSC_* stay undefined, CSC_IDENTITY_AUTO_DISCOVERY=false,
+      # electron-builder skips signing and (app being unsigned) skips notarization;
+      # scripts/afterPack.cjs ad-hoc signs and the .dmg needs `xattr` on install.
+      # Add the five secrets and the same tag yields a signed, notarized build with
       # no workflow change. See docs/RELEASING.md.
       - name: Build installer (macOS)
         if: runner.os == 'macOS'
-        run: npm run ${{ matrix.script }}
+        run: |
+          if [ -n "$MAC_CERT_P12" ]; then
+            echo "Developer ID cert present — signing and notarizing."
+            export CSC_LINK="$MAC_CERT_P12"
+            export CSC_KEY_PASSWORD="$MAC_CERT_PASSWORD"
+            export APPLE_ID="$APPLE_ID_SECRET"
+            export APPLE_APP_SPECIFIC_PASSWORD="$APPLE_APP_SPECIFIC_PASSWORD_SECRET"
+            export APPLE_TEAM_ID="$APPLE_TEAM_ID_SECRET"
+          else
+            echo "No Developer ID cert — building unsigned (installs need xattr)."
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+          fi
+          npm run ${{ matrix.script }}
         env:
           # Developer ID Application cert (.p12) as base64, plus its export password.
-          CSC_LINK: ${{ secrets.MAC_CERT_P12 }}
-          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          MAC_CERT_P12: ${{ secrets.MAC_CERT_P12 }}
+          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
           # notarytool credentials.
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # "true" only when a cert secret actually exists; otherwise force the
-          # unsigned path rather than letting the runner keychain be searched.
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.MAC_CERT_P12 != '' }}
+          APPLE_ID_SECRET: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD_SECRET: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID_SECRET: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Build installer (Windows)
         if: runner.os == 'Windows'
