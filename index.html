@@ -176,6 +176,24 @@
         padding: 56px 0 8px;
         text-align: center;
       }
+      /* The handwritten wordmark opens the page, painted as a mask over the same
+         gradient `h1 .grad` uses so the two read as one lockup. A mask keys off
+         the SVG's alpha, so the file's own black fill is irrelevant. */
+      .hero-wordmark {
+        width: min(360px, 56vw);
+        aspect-ratio: 627 / 291;
+        margin: 0 auto 10px;
+        background: linear-gradient(110deg, #fff 25%, var(--accent-2) 80%);
+        -webkit-mask: url('wordmark.svg') center / contain no-repeat;
+        mask: url('wordmark.svg') center / contain no-repeat;
+      }
+      /* Forced colours drop background images, and that gradient IS the ink here
+         — without this the wordmark disappears rather than degrading. */
+      @media (forced-colors: active) {
+        .hero-wordmark {
+          background: CanvasText;
+        }
+      }
       .eyebrow {
         display: inline-flex;
         align-items: center;
@@ -549,6 +567,7 @@
       </nav>
 
       <header id="download">
+        <div class="hero-wordmark" role="img" aria-label="Monad"></div>
         <span class="eyebrow"><span class="pulse"></span>The agentic coding canvas</span>
         <h1>Run <span class="grad">every coding agent</span><br />at once.</h1>
         <p class="tag">
