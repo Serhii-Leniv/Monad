@@ -23,11 +23,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Serhii-Leniv/Monad/blob/main/assets/demo.mp4">
-    <img alt="Watch Monad run a swarm of coding agents in parallel — click to play" src="assets/demo-poster.png" width="840">
-  </a>
+  <img alt="Six AI coding agents running in parallel on the Monad canvas, each in its own git worktree" src="assets/demo.gif" width="880">
   <br>
-  <sub><a href="https://github.com/Serhii-Leniv/Monad/blob/main/assets/demo.mp4">▶ Watch the 45-second demo</a></sub>
+  <sub><a href="https://github.com/Serhii-Leniv/Monad/blob/main/assets/demo.mp4">▶ Watch the full demo — worktrees, diff &amp; merge, workspaces</a></sub>
 </p>
 
 ---
