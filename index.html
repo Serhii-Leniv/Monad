@@ -9,7 +9,7 @@
       content="Monad is a desktop app that runs Claude Code, Codex, Gemini and any other CLI coding agent side by side — each sealed in its own git worktree, with diff and merge built in. Free, MIT-licensed, bring your own CLIs."
     />
     <link rel="canonical" href="https://serhii-leniv.github.io/Monad/" />
-    <meta name="theme-color" content="#0a0c10" />
+    <meta name="theme-color" content="#08090c" />
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Monad" />
@@ -29,15 +29,20 @@
 
     <style>
       /* ------------------------------------------------------------------
-         Monad — landing page.
+         Monad — landing page. Single file, no build step, no CDN.
 
-         House rules, and the reason this page doesn't look generated:
-           1. No box-shadow. Anywhere. Depth comes from the surface ladder
-              (--canvas -> --surface-1 -> --surface-2) plus 1px hairlines.
-           2. The brand gradient appears exactly twice: the logo mark and the
-              rule under the hero. Buttons are white. Everything else is grey.
-           3. The demo is the largest, brightest thing on the page. Every
-              other element steps back so it reads first.
+         Art direction, and the reasons for it:
+           - Nothing is centred except the ticker. The hero is an asymmetric
+             two-column split: headline left, supporting text right. Centred
+             stacks are what every generated page does.
+           - Type contrast is violent, not graduated: ~88px headline against
+             a 16px body. A smooth ramp reads as a template.
+           - The demo breaks the container into a full-bleed band with its
+             own texture, so the page has a spine instead of one column.
+           - The worktree layout is drawn as a real terminal tree. It is the
+             one thing on the page that could not be a stock component.
+           - Still no box-shadow anywhere: depth is the surface ladder plus
+             1px hairlines.
          ------------------------------------------------------------------ */
 
       @font-face {
@@ -56,42 +61,40 @@
       }
 
       :root {
-        /* Surface ladder — depth via steps, never shadows */
-        --canvas: #0a0c10;
-        --surface-1: #12151b;
-        --surface-2: #1a1d24;
+        --canvas: #08090c;
+        --surface-1: #101218;
+        --surface-2: #171a21;
 
-        /* Hairlines */
-        --line: #23262d;
-        --line-strong: #32363f;
+        --line: #1e2128;
+        --line-strong: #2c3038;
 
-        /* Text ramp — four steps, used rigorously */
-        --ink: #f2f5fa;
-        --ink-muted: #cdd6e4;
-        --ink-subtle: #8b94a5;
-        --ink-faint: #5c6472;
+        --ink: #f4f6fa;
+        --ink-muted: #c8d0de;
+        --ink-subtle: #848d9d;
+        --ink-faint: #565d6b;
 
-        /* Brand gradient — lifted from build/logo-mark-gradient.svg */
+        --brand-1: #ff6a5a;
+        --brand-2: #ff453a;
+        --brand-3: #8b46c9;
+        --brand-4: #3b5bd9;
         --brand-gradient: linear-gradient(115deg, #ff6a5a 0%, #ff453a 42%, #8b46c9 62%, #3b5bd9 100%);
 
         --success: #34c08a;
+        --amber: #f0b429;
 
-        --cta-bg: #ffffff;
-        --cta-fg: #0a0c10;
-
-        --font-display: 'Space Grotesk', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        --font-display: 'Space Grotesk', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 
-        --container: 1120px;
-        --rhythm: 112px;
+        --container: 1200px;
+        --gutter: 32px;
       }
 
       *,
       *::before,
       *::after {
         box-sizing: border-box;
-        box-shadow: none; /* rule 1 — deliberate, don't "improve" this away */
+        box-shadow: none; /* deliberate — don't "improve" this away */
       }
 
       html {
@@ -105,27 +108,22 @@
         font-family: var(--font-body);
         font-size: 16px;
         line-height: 1.6;
-        letter-spacing: -0.05px;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
         font-feature-settings: 'kern', 'liga', 'calt';
+        overflow-x: clip;
       }
 
       a {
         color: var(--ink);
         text-decoration: none;
       }
-      a:hover {
-        color: #fff;
-      }
-
       img,
       svg,
       video {
         max-width: 100%;
         display: block;
       }
-
       h1,
       h2,
       h3 {
@@ -133,34 +131,26 @@
         margin: 0;
         font-weight: 600;
       }
-
       :focus-visible {
-        outline: 2px solid #8b8fff;
+        outline: 2px solid var(--brand-1);
         outline-offset: 3px;
-        border-radius: 4px;
+        border-radius: 3px;
       }
 
-      .container {
+      .wrap {
         width: 100%;
         max-width: var(--container);
         margin: 0 auto;
-        padding: 0 24px;
+        padding: 0 var(--gutter);
       }
 
-      .mono {
+      .label {
         font-family: var(--font-mono);
-        font-size: 13px;
-        letter-spacing: 0;
-      }
-
-      .eyebrow {
-        font-family: var(--font-mono);
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 500;
-        line-height: 1.3;
-        letter-spacing: 0.9px;
+        letter-spacing: 1.4px;
         text-transform: uppercase;
-        color: var(--ink-subtle);
+        color: var(--ink-faint);
         margin: 0;
       }
 
@@ -168,11 +158,10 @@
       .nav {
         position: sticky;
         top: 0;
-        z-index: 50;
-        height: 64px;
-        background: rgba(10, 12, 16, 0.72);
-        backdrop-filter: saturate(160%) blur(12px);
-        -webkit-backdrop-filter: saturate(160%) blur(12px);
+        z-index: 60;
+        background: rgba(8, 9, 12, 0.8);
+        backdrop-filter: saturate(150%) blur(14px);
+        -webkit-backdrop-filter: saturate(150%) blur(14px);
         border-bottom: 1px solid transparent;
         transition: border-color 0.2s ease;
       }
@@ -180,7 +169,7 @@
         border-bottom-color: var(--line);
       }
       .nav-inner {
-        height: 100%;
+        height: 60px;
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -189,475 +178,565 @@
       .brand {
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 9px;
         color: var(--ink);
       }
       .brand svg {
-        width: 26px;
-        height: 26px;
+        width: 22px;
+        height: 22px;
       }
       .brand span {
         font-family: var(--font-display);
-        font-size: 18px;
+        font-size: 17px;
         font-weight: 700;
-        letter-spacing: -0.4px;
+        letter-spacing: -0.3px;
       }
-      .nav-links {
+      .nav-right {
         display: flex;
         align-items: center;
-        gap: 28px;
+        gap: 26px;
+        font-family: var(--font-mono);
+        font-size: 12.5px;
       }
-      .nav-links a {
+      .nav-right a {
         color: var(--ink-subtle);
-        font-size: 14px;
       }
-      .nav-links a:hover {
+      .nav-right a:hover {
         color: var(--ink);
       }
-      .nav-cta {
-        padding: 7px 14px;
-        border: 1px solid var(--line-strong);
-        border-radius: 8px;
-        color: var(--ink) !important;
-        font-size: 14px;
-        font-weight: 500;
+      .nav-right .nav-dl {
+        color: var(--ink);
+        border-bottom: 1px solid var(--line-strong);
+        padding-bottom: 2px;
       }
-      .nav-cta:hover {
-        background: var(--surface-2);
-        border-color: #464b57;
+      .nav-right .nav-dl:hover {
+        border-bottom-color: var(--brand-2);
       }
-      @media (max-width: 720px) {
-        .nav-links .hide-sm {
+      @media (max-width: 700px) {
+        .nav-right .hide-sm {
           display: none;
         }
       }
 
       /* -------------------------------------------------------------- hero */
       .hero {
-        padding: 96px 0 0;
-        text-align: center;
+        padding: 104px 0 72px;
+        display: grid;
+        grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr);
+        gap: 56px;
+        align-items: end;
       }
       .hero h1 {
         font-family: var(--font-display);
-        font-size: 64px;
+        font-size: clamp(42px, 6.6vw, 86px);
         font-weight: 700;
-        line-height: 1.05;
-        letter-spacing: -2px;
-        margin: 20px auto 0;
-        max-width: 15ch;
+        line-height: 0.97;
+        letter-spacing: -0.045em;
+        margin: 0;
       }
-      .hero .sub {
-        font-size: 19px;
-        line-height: 1.55;
-        letter-spacing: -0.1px;
+      /* Deliberately NOT gradient-filled. Gradient display type is the single
+         most over-used move on generated landing pages; the headline stays
+         solid and the only colour on the page is functional — agent status in
+         the tree, the step numerals, the logo. */
+      .hero h1 em {
+        font-style: normal;
+        color: var(--ink);
+      }
+      .hero-side {
+        padding-bottom: 6px;
+      }
+      .hero-side p {
+        margin: 0;
+        font-size: 17px;
+        line-height: 1.6;
         color: var(--ink-subtle);
-        max-width: 60ch;
-        margin: 22px auto 0;
       }
-      .hero .sub b {
+      .hero-side p b {
         color: var(--ink-muted);
         font-weight: 500;
       }
+      .hero-side .label {
+        margin-bottom: 14px;
+      }
 
-      .cta-row {
+      .cta {
+        margin-top: 44px;
         display: flex;
-        justify-content: center;
+        align-items: center;
+        gap: 22px;
         flex-wrap: wrap;
-        gap: 12px;
-        margin-top: 34px;
       }
       .btn {
         display: inline-flex;
         align-items: center;
         gap: 9px;
-        height: 44px;
-        padding: 0 20px;
-        border-radius: 8px;
-        border: 1px solid var(--line-strong);
-        color: var(--ink);
+        height: 46px;
+        padding: 0 22px;
+        border-radius: 6px;
+        background: var(--ink);
+        color: var(--canvas);
         font-size: 15px;
-        font-weight: 500;
-        letter-spacing: 0;
-        transition: background 0.15s ease, border-color 0.15s ease;
+        font-weight: 600;
+        letter-spacing: -0.1px;
+        transition: background 0.15s ease;
+      }
+      .btn:hover {
+        background: #fff;
+        color: var(--canvas);
       }
       .btn svg {
         width: 16px;
         height: 16px;
         flex: none;
       }
-      .btn:hover {
-        background: var(--surface-2);
-        border-color: #464b57;
+      .btn-alt {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--ink-subtle);
+        border-bottom: 1px solid var(--line-strong);
+        padding-bottom: 3px;
       }
-      .btn--primary {
-        background: var(--cta-bg);
-        color: var(--cta-fg);
-        border-color: var(--cta-bg);
+      .btn-alt:hover {
+        color: var(--ink);
+        border-bottom-color: var(--ink-subtle);
       }
-      .btn--primary:hover {
-        background: #e6e8ec;
-        border-color: #e6e8ec;
-        color: var(--cta-fg);
-      }
-
-      .meta-line {
-        margin-top: 18px;
+      .cta-meta {
+        font-family: var(--font-mono);
+        font-size: 12.5px;
         color: var(--ink-faint);
       }
-      .meta-line b {
+      .cta-meta b {
         color: var(--ink-subtle);
         font-weight: 400;
       }
 
-      /* The only chromatic element in the page chrome. */
-      .brand-rule {
-        width: 180px;
-        height: 2px;
-        margin: 44px auto 0;
-        border-radius: 2px;
-        background: var(--brand-gradient);
+      @media (max-width: 900px) {
+        .hero {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 28px;
+          padding: 64px 0 48px;
+          align-items: start;
+        }
+        .hero-side {
+          padding-bottom: 0;
+        }
+      }
+
+      /* ------------------------------------------------------------ ticker */
+      .ticker {
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        overflow: hidden;
+        background: var(--canvas);
+      }
+      .ticker-track {
+        display: flex;
+        gap: 44px;
+        padding: 15px 0;
+        white-space: nowrap;
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+        width: max-content;
+        animation: slide 46s linear infinite;
+      }
+      .ticker-track span {
+        display: inline-flex;
+        align-items: center;
+        gap: 44px;
+      }
+      .ticker-track span::after {
+        content: '';
+        width: 3px;
+        height: 3px;
+        border-radius: 50%;
+        background: var(--line-strong);
+      }
+      @keyframes slide {
+        from {
+          transform: translateX(0);
+        }
+        to {
+          transform: translateX(-50%);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .ticker-track {
+          animation: none;
+        }
       }
 
       /* -------------------------------------------------------------- demo */
-      .demo-wrap {
-        margin-top: 56px;
+      .stage {
+        /* full-bleed band with a faint dot field, so the page has a spine */
+        position: relative;
+        padding: 72px 0 80px;
+        background-color: #0b0d12;
+        background-image: radial-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+        background-size: 22px 22px;
+        border-bottom: 1px solid var(--line);
       }
-      .demo-frame {
-        background: var(--surface-1);
-        border: 1px solid var(--line);
-        border-radius: 14px;
-        padding: 10px;
+      .stage::before,
+      .stage::after {
+        /* fade the dot field out at the edges */
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 14vw;
+        pointer-events: none;
       }
-      .demo-frame video {
+      .stage::before {
+        left: 0;
+        background: linear-gradient(90deg, var(--canvas), transparent);
+      }
+      .stage::after {
+        right: 0;
+        background: linear-gradient(270deg, var(--canvas), transparent);
+      }
+      .stage .wrap {
+        position: relative;
+        z-index: 1;
+      }
+      .stage-frame {
+        border: 1px solid var(--line-strong);
+        border-radius: 10px;
+        overflow: hidden;
+        background: #0b0d12;
+      }
+      .stage-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--line);
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--ink-faint);
+      }
+      .stage-bar i {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--line-strong);
+        display: inline-block;
+      }
+      .stage-bar .t {
+        margin-left: 10px;
+      }
+      .stage video {
         width: 100%;
-        border-radius: 8px;
         display: block;
       }
-      .demo-cap {
-        margin-top: 14px;
-        text-align: center;
+      .stage-cap {
+        margin: 18px 0 0;
+        font-family: var(--font-mono);
+        font-size: 12px;
         color: var(--ink-faint);
       }
 
-      /* ------------------------------------------------------- mechanism */
+      /* --------------------------------------------------------- mechanism */
       .mech {
-        margin-top: var(--rhythm);
+        padding: 96px 0 0;
+      }
+      .mech-grid {
+        margin-top: 40px;
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        border-top: 1px solid var(--line);
+        gap: 0;
       }
-      .mech > div {
-        padding: 40px 32px 8px;
+      .mech-grid > div {
+        padding: 0 36px;
         border-left: 1px solid var(--line);
       }
-      .mech > div:first-child {
+      .mech-grid > div:first-child {
         border-left: 0;
         padding-left: 0;
       }
-      .mech h3 {
-        font-size: 20px;
-        font-weight: 500;
-        line-height: 1.3;
-        letter-spacing: -0.3px;
-        margin: 14px 0 10px;
+      .mech-grid > div:last-child {
+        padding-right: 0;
       }
-      .mech p {
-        margin: 0;
-        color: var(--ink-subtle);
-        font-size: 15px;
-      }
-      @media (max-width: 860px) {
-        .mech {
-          grid-template-columns: 1fr;
-        }
-        .mech > div {
-          border-left: 0;
-          border-top: 1px solid var(--line);
-          padding: 32px 0 8px;
-        }
-        .mech > div:first-child {
-          border-top: 0;
-        }
-      }
-
-      /* ------------------------------------------------------- isolation */
-      .split {
-        margin-top: var(--rhythm);
-        display: grid;
-        grid-template-columns: minmax(0, 440px) minmax(0, 1fr);
-        gap: 64px;
-        align-items: center;
-      }
-      .split h2 {
-        font-size: 32px;
-        line-height: 1.15;
-        letter-spacing: -0.8px;
-        margin-top: 14px;
-      }
-      .split p {
-        color: var(--ink-subtle);
-        margin: 18px 0 0;
-      }
-      .split p b {
-        color: var(--ink-muted);
-        font-weight: 500;
-      }
-      @media (max-width: 900px) {
-        .split {
-          grid-template-columns: 1fr;
-          gap: 40px;
-        }
-      }
-
-      /* worktree diagram — hairlines and mono labels, no icons */
-      .diagram {
-        background: var(--surface-1);
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        padding: 28px 24px;
-      }
-      .node {
-        border: 1px solid var(--line-strong);
-        border-radius: 8px;
-        background: var(--surface-2);
-        padding: 12px 14px;
-        font-family: var(--font-mono);
-        font-size: 12.5px;
-        color: var(--ink-muted);
-      }
-      .node .tag {
-        display: block;
-        color: var(--ink-faint);
-        font-size: 11px;
-        letter-spacing: 0.6px;
-        text-transform: uppercase;
-        margin-bottom: 4px;
-      }
-      .node--repo {
-        text-align: center;
-      }
-      /* repo -> fan-out plumbing: one stem down, one rail across, one stub
-         into each worktree, all drawn with the same hairline as the borders */
-      .connector {
-        height: 14px;
-        border-left: 1px solid var(--line-strong);
-        width: 0;
-        margin: 0 auto;
-      }
-      .fanout {
-        position: relative;
-        margin-top: 14px;
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 10px;
-      }
-      .fanout::before {
-        content: '';
-        position: absolute;
-        top: -14px;
-        left: 16.66%;
-        right: 16.66%;
-        height: 1px;
-        background: var(--line-strong);
-      }
-      .fanout .node {
-        position: relative;
-      }
-      .fanout .node::before {
-        content: '';
-        position: absolute;
-        top: -14px;
-        left: 50%;
-        width: 1px;
-        height: 14px;
-        background: var(--line-strong);
-      }
-      .fanout .node {
-        text-align: center;
-      }
-      .fanout .node b {
-        color: var(--ink);
-        font-weight: 500;
-      }
-      .diagram-note {
-        margin: 18px 0 0;
-        text-align: center;
-        color: var(--ink-faint);
+      .mech-num {
         font-family: var(--font-mono);
         font-size: 12px;
-        line-height: 1.5;
+        color: var(--brand-2);
+        letter-spacing: 1px;
       }
-      .dot {
-        display: inline-block;
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: var(--success);
-        margin-right: 6px;
-        vertical-align: middle;
+      .mech-grid h3 {
+        font-family: var(--font-display);
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: -0.5px;
+        margin: 16px 0 12px;
+        line-height: 1.2;
+      }
+      .mech-grid p {
+        margin: 0;
+        font-size: 15px;
+        color: var(--ink-subtle);
+      }
+      @media (max-width: 880px) {
+        .mech-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .mech-grid > div {
+          border-left: 0;
+          border-top: 1px solid var(--line);
+          padding: 28px 0 0;
+        }
+        .mech-grid > div:first-child {
+          border-top: 0;
+          padding-top: 0;
+        }
       }
 
-      /* -------------------------------------------------------- download */
-      .download {
-        margin-top: var(--rhythm);
-        padding-top: 56px;
-        border-top: 1px solid var(--line);
+      /* --------------------------------------------------------- isolation */
+      .iso {
+        padding: 104px 0 0;
+        display: grid;
+        grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+        gap: 64px;
+        align-items: start;
       }
-      .download h2 {
-        font-size: 32px;
-        line-height: 1.15;
-        letter-spacing: -0.8px;
-        text-align: center;
+      h2 {
+        font-family: var(--font-display);
+        font-size: clamp(28px, 3.4vw, 44px);
+        font-weight: 700;
+        line-height: 1.04;
+        letter-spacing: -0.035em;
+        margin: 16px 0 0;
       }
-      .download > p.lede {
-        text-align: center;
+      .iso p {
         color: var(--ink-subtle);
-        max-width: 56ch;
-        margin: 16px auto 0;
+        margin: 22px 0 0;
+        font-size: 16px;
+      }
+      .iso p b {
+        color: var(--ink-muted);
+        font-weight: 500;
+      }
+      @media (max-width: 940px) {
+        .iso {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 36px;
+          padding-top: 72px;
+        }
+      }
+
+      /* the terminal tree — the page's one un-stock element */
+      .tree {
+        background: var(--surface-1);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      .tree-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 11px 16px;
+        border-bottom: 1px solid var(--line);
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--ink-faint);
+        letter-spacing: 0.4px;
+      }
+      .tree pre {
+        margin: 0;
+        padding: 22px 20px 24px;
+        font-family: var(--font-mono);
+        font-size: 13px;
+        line-height: 1.85;
+        color: var(--ink-subtle);
+        overflow-x: auto;
+        tab-size: 2;
+      }
+      .tree .dir {
+        color: var(--ink);
+      }
+      .tree .yours {
+        color: var(--amber);
+      }
+      .tree .note {
+        color: var(--ink-faint);
+      }
+      .tree .on {
+        color: var(--success);
+      }
+      .tree .wait {
+        color: var(--amber);
+      }
+      .tree-foot {
+        border-top: 1px solid var(--line);
+        padding: 13px 16px;
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--ink-faint);
+      }
+
+      /* ---------------------------------------------------------- download */
+      .dl {
+        padding: 112px 0 0;
+      }
+      .dl-head {
+        display: grid;
+        grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+        gap: 64px;
+        align-items: end;
+      }
+      .dl-head p {
+        margin: 0;
+        color: var(--ink-subtle);
+        font-size: 16px;
+      }
+      @media (max-width: 940px) {
+        .dl-head {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 20px;
+        }
       }
 
       .prereq {
-        margin: 36px 0 0;
-        background: var(--surface-1);
+        margin-top: 44px;
         border: 1px solid var(--line);
-        border-radius: 12px;
-        padding: 20px 24px;
-        display: flex;
-        gap: 16px;
-        align-items: flex-start;
-      }
-      .prereq .num {
-        font-family: var(--font-mono);
-        font-size: 12px;
-        color: var(--ink-faint);
-        padding-top: 2px;
-        flex: none;
-      }
-      .prereq p {
-        margin: 0;
+        border-left: 2px solid var(--brand-2);
+        border-radius: 0 8px 8px 0;
+        background: var(--surface-1);
+        padding: 18px 22px;
         font-size: 15px;
         color: var(--ink-subtle);
       }
-      .prereq strong {
+      .prereq b {
         color: var(--ink);
-        font-weight: 500;
-      }
-
-      .tiles {
-        margin-top: 16px;
-        display: grid;
-        /* minmax(0,…) rather than 1fr: the nowrap xattr command below would
-           otherwise inflate its own track and push the page sideways. */
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-        gap: 16px;
-      }
-      @media (max-width: 780px) {
-        .tiles {
-          grid-template-columns: minmax(0, 1fr);
-        }
-      }
-      .tile {
-        background: var(--surface-1);
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        padding: 24px;
-      }
-      .tile h3 {
-        font-size: 18px;
-        font-weight: 500;
-        letter-spacing: -0.3px;
-        display: flex;
-        align-items: center;
-        gap: 9px;
-        margin-bottom: 6px;
-      }
-      .tile h3 svg {
-        width: 16px;
-        height: 16px;
-        opacity: 0.8;
-      }
-      .tile .req {
-        font-family: var(--font-mono);
-        font-size: 12px;
-        color: var(--ink-faint);
-        margin: 0 0 18px;
-      }
-      .tile .note {
-        font-size: 14px;
-        color: var(--ink-subtle);
-        margin: 16px 0 0;
+        font-weight: 600;
       }
       code {
         font-family: var(--font-mono);
         font-size: 12.5px;
+        color: var(--ink-muted);
         background: var(--surface-2);
         border: 1px solid var(--line);
-        border-radius: 5px;
+        border-radius: 4px;
         padding: 1px 6px;
+      }
+
+      /* platform rows, not cards */
+      .plat {
+        margin-top: 12px;
+        border-top: 1px solid var(--line);
+      }
+      .plat-row {
+        display: grid;
+        grid-template-columns: 230px minmax(0, 1fr) auto;
+        gap: 32px;
+        align-items: center;
+        padding: 26px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .plat-name {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-family: var(--font-display);
+        font-size: 19px;
+        font-weight: 600;
+        color: var(--ink);
+        letter-spacing: -0.3px;
+      }
+      .plat-name svg {
+        width: 17px;
+        height: 17px;
+        opacity: 0.85;
+      }
+      .plat-meta {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--ink-faint);
+        margin-top: 3px;
+        letter-spacing: 0.3px;
+      }
+      .plat-note {
+        font-size: 14px;
+        color: var(--ink-subtle);
+        margin: 0;
+      }
+      .plat-note b {
         color: var(--ink-muted);
+        font-weight: 500;
       }
       .cmd {
-        margin: 10px 0 0;
+        margin-top: 9px;
         display: flex;
         align-items: center;
         gap: 10px;
         background: var(--canvas);
         border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 10px 12px;
+        border-radius: 6px;
+        padding: 8px 11px;
       }
       .cmd code {
         background: none;
         border: 0;
         padding: 0;
-        overflow-x: auto;
         white-space: nowrap;
+        overflow-x: auto;
         flex: 1;
-        min-width: 0; /* let it scroll inside the tile instead of widening it */
+        min-width: 0;
+        font-size: 12px;
       }
       .copy {
         flex: none;
         background: none;
         border: 1px solid var(--line-strong);
-        border-radius: 6px;
-        color: var(--ink-subtle);
+        border-radius: 4px;
+        color: var(--ink-faint);
         font-family: var(--font-mono);
-        font-size: 11px;
-        padding: 4px 8px;
+        font-size: 10.5px;
+        letter-spacing: 0.5px;
+        padding: 3px 7px;
         cursor: pointer;
       }
       .copy:hover {
         color: var(--ink);
-        border-color: #464b57;
+        border-color: var(--ink-faint);
+      }
+      @media (max-width: 820px) {
+        .plat-row {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 16px;
+          padding: 24px 0;
+        }
       }
 
-      .after-download {
-        margin: 24px 0 0;
-        text-align: center;
+      .dl-foot {
+        margin-top: 26px;
+        font-family: var(--font-mono);
+        font-size: 12px;
         color: var(--ink-faint);
-        font-size: 14px;
+        display: flex;
+        gap: 22px;
+        flex-wrap: wrap;
       }
-      .after-download a {
+      .dl-foot a {
         color: var(--ink-subtle);
-        text-decoration: underline;
-        text-underline-offset: 3px;
       }
-      .after-download a:hover {
+      .dl-foot a:hover {
         color: var(--ink);
       }
 
       /* ------------------------------------------------------------ footer */
       footer {
-        margin-top: 80px;
-        padding: 28px 0 48px;
+        margin-top: 104px;
         border-top: 1px solid var(--line);
+        padding: 26px 0 44px;
         display: flex;
         justify-content: space-between;
-        align-items: center;
         gap: 20px;
         flex-wrap: wrap;
         font-family: var(--font-mono);
-        font-size: 13px;
+        font-size: 12px;
         color: var(--ink-faint);
       }
       footer a {
@@ -665,63 +744,30 @@
       }
       footer .links {
         display: flex;
-        gap: 20px;
-      }
-
-      /* ------------------------------------------------------------ mobile */
-      @media (max-width: 720px) {
-        :root {
-          --rhythm: 64px;
-        }
-        .hero {
-          padding-top: 56px;
-        }
-        .hero h1 {
-          font-size: 34px;
-          letter-spacing: -1px;
-        }
-        .hero .sub {
-          font-size: 17px;
-        }
-        .cta-row .btn {
-          width: 100%;
-          justify-content: center;
-        }
-        .split h2,
-        .download h2 {
-          font-size: 26px;
-          letter-spacing: -0.5px;
-        }
-        .demo-wrap {
-          margin-top: 36px;
-        }
+        gap: 22px;
       }
 
       @media (prefers-reduced-motion: reduce) {
         html {
           scroll-behavior: auto;
         }
-        * {
-          animation: none !important;
-          transition: none !important;
-        }
       }
     </style>
   </head>
 
   <body>
-    <!-- The M-disc, rebuilt as vector: gradient disc with the mark knocked out
-         to the canvas beneath. The shipped PNG variants are near-white-on-white
-         and vanish against a dark page, so the site draws its own. -->
+    <!-- The M-disc as vector: gradient disc, mark knocked out to the page
+         beneath. The shipped PNG variants are a near-white mark on a
+         near-white disc and vanish on dark, so the site draws its own. -->
     <svg width="0" height="0" style="position: absolute" aria-hidden="true" focusable="false">
       <defs>
-        <linearGradient id="monad-grad" x1="5%" y1="8%" x2="95%" y2="95%">
+        <linearGradient id="mg" x1="5%" y1="8%" x2="95%" y2="95%">
           <stop offset="0%" stop-color="#ff6a5a" />
           <stop offset="42%" stop-color="#ff453a" />
           <stop offset="62%" stop-color="#8b46c9" />
           <stop offset="100%" stop-color="#3b5bd9" />
         </linearGradient>
-        <mask id="monad-knockout">
+        <mask id="mk">
           <circle cx="569" cy="470" r="400" fill="#fff" />
           <g fill="#000">
             <rect x="306" y="344" width="96" height="356" />
@@ -735,74 +781,85 @@
     </svg>
 
     <nav class="nav" id="nav">
-      <div class="container nav-inner">
+      <div class="wrap nav-inner">
         <a class="brand" href="#top" aria-label="Monad — home">
           <svg viewBox="169 70 800 800" aria-hidden="true" focusable="false">
-            <circle cx="569" cy="470" r="400" fill="url(#monad-grad)" mask="url(#monad-knockout)" />
+            <circle cx="569" cy="470" r="400" fill="url(#mg)" mask="url(#mk)" />
           </svg>
           <span>Monad</span>
         </a>
-        <div class="nav-links">
-          <a class="hide-sm" href="#isolation">How it works</a>
-          <a class="hide-sm" href="https://github.com/Serhii-Leniv/Monad/blob/main/docs/FAQ.md">FAQ</a>
-          <a class="hide-sm" href="https://github.com/Serhii-Leniv/Monad">GitHub</a>
-          <a class="nav-cta" href="#download">Download</a>
+        <div class="nav-right">
+          <a class="hide-sm" href="#isolation">how&nbsp;it&nbsp;works</a>
+          <a class="hide-sm" href="https://github.com/Serhii-Leniv/Monad/blob/main/docs/FAQ.md">faq</a>
+          <a class="hide-sm" href="https://github.com/Serhii-Leniv/Monad">github</a>
+          <a class="nav-dl" href="#download">download</a>
         </div>
       </div>
     </nav>
 
     <main id="top">
-      <div class="container">
-        <!-- ------------------------------------------------------- hero -->
+      <!-- ---------------------------------------------------------- hero -->
+      <div class="wrap">
         <header class="hero">
-          <p class="eyebrow">MIT-licensed · macOS &amp; Windows</p>
+          <div>
+            <h1>Run every agent in <em>its own worktree.</em></h1>
 
-          <h1>Run every agent in its own worktree.</h1>
-
-          <p class="sub">
-            Monad runs Claude Code, Codex, Gemini and any other terminal agent side by side — each
-            sealed in <b>its own git worktree</b>. Five agents, one repo, nothing trampled.
-          </p>
-
-          <div class="cta-row">
-            <a
-              id="dl-primary"
-              class="btn btn--primary"
-              href="https://github.com/Serhii-Leniv/Monad/releases/latest/download/Monad-macOS-arm64.dmg"
-            >
-              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
-                <path
-                  d="M16.4 1.6c.1 1-.3 2-.9 2.7-.6.8-1.6 1.4-2.6 1.3-.1-1 .4-2 .9-2.6.6-.8 1.7-1.3 2.6-1.4zM19 17.3c-.5 1.1-.7 1.6-1.3 2.6-.9 1.4-2.1 3.1-3.6 3.1-1.3 0-1.7-.8-3.4-.8-1.8 0-2.2.8-3.5.9-1.5 0-2.6-1.5-3.5-2.9C-.1 16.6-.6 11 1.6 8c1-1.4 2.6-2.3 4.1-2.3 1.5 0 2.5.9 3.7.9 1.2 0 1.9-.9 3.7-.9 1.3 0 2.7.7 3.7 2-3.2 1.7-2.7 6.2.5 7.6z"
-                />
-              </svg>
-              <span id="dl-primary-label">Download for macOS</span>
-            </a>
-            <a
-              id="dl-secondary"
-              class="btn"
-              href="https://github.com/Serhii-Leniv/Monad/releases/latest/download/Monad-Windows-Setup.exe"
-            >
-              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
-                <path d="M3 5.5 11 4.3v7.4H3V5.5zm0 13L11 19.7v-7.2H3v6zm9-14.4L21 3v8.7h-9V4.1zm0 8.4h9V21l-9-1.4v-7.1z" />
-              </svg>
-              <span id="dl-secondary-label">Download for Windows</span>
-            </a>
+            <div class="cta">
+              <a
+                id="dl-primary"
+                class="btn"
+                href="https://github.com/Serhii-Leniv/Monad/releases/latest/download/Monad-macOS-arm64.dmg"
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                  <path
+                    d="M16.4 1.6c.1 1-.3 2-.9 2.7-.6.8-1.6 1.4-2.6 1.3-.1-1 .4-2 .9-2.6.6-.8 1.7-1.3 2.6-1.4zM19 17.3c-.5 1.1-.7 1.6-1.3 2.6-.9 1.4-2.1 3.1-3.6 3.1-1.3 0-1.7-.8-3.4-.8-1.8 0-2.2.8-3.5.9-1.5 0-2.6-1.5-3.5-2.9C-.1 16.6-.6 11 1.6 8c1-1.4 2.6-2.3 4.1-2.3 1.5 0 2.5.9 3.7.9 1.2 0 1.9-.9 3.7-.9 1.3 0 2.7.7 3.7 2-3.2 1.7-2.7 6.2.5 7.6z"
+                  />
+                </svg>
+                <span id="dl-primary-label">Download for macOS</span>
+              </a>
+              <a
+                id="dl-secondary"
+                class="btn-alt"
+                href="https://github.com/Serhii-Leniv/Monad/releases/latest/download/Monad-Windows-Setup.exe"
+                ><span id="dl-secondary-label">or Windows</span></a
+              >
+              <span class="cta-meta">
+                <!-- Fallback only — the script below overwrites this from the
+                     Releases API. It is what visitors see when that fetch
+                     fails, most often the unauthenticated GitHub API's
+                     60 req/hr per-IP limit, so bump it at release time. -->
+                <span id="ver-text"><b>v0.1.27</b></span>
+              </span>
+            </div>
           </div>
 
-          <p class="mono meta-line">
-            <!-- Fallback only — the script below overwrites this from the Releases
-                 API. It's what visitors see when that fetch fails, most often the
-                 unauthenticated GitHub API's 60 req/hr per-IP limit, so bump it at
-                 release time instead of letting it drift versions behind. -->
-            <span id="ver-text"><b>v0.1.27</b></span> · free &amp; open source · runs on your own agent CLIs
-          </p>
-
-          <div class="brand-rule" aria-hidden="true"></div>
+          <div class="hero-side">
+            <p class="label">What it is</p>
+            <p>
+              A desktop app that runs Claude Code, Codex, Gemini and any other terminal agent side by
+              side — each sealed in <b>its own git worktree</b>, with diff and merge built in.
+              <b>Five agents, one repo, nothing trampled.</b>
+            </p>
+          </div>
         </header>
+      </div>
 
-        <!-- ------------------------------------------------------- demo -->
-        <section class="demo-wrap" aria-label="Monad in action">
-          <div class="demo-frame">
+      <!-- -------------------------------------------------------- ticker -->
+      <div class="ticker" aria-hidden="true">
+        <div class="ticker-track" id="ticker">
+          <span>Claude Code</span><span>Codex</span><span>Gemini</span><span>Cursor</span><span>Any terminal agent</span
+          ><span>Your own keys</span><span>No telemetry</span><span>No inference cost</span><span>MIT licensed</span>
+        </div>
+      </div>
+
+      <!-- ---------------------------------------------------------- demo -->
+      <section class="stage" aria-label="Monad in action">
+        <div class="wrap">
+          <div class="stage-frame">
+            <div class="stage-bar">
+              <i></i><i></i><i></i>
+              <span class="t">monad — 6 agents — storefront</span>
+            </div>
             <video
               class="demo"
               src="demo.mp4"
@@ -815,149 +872,164 @@
               aria-label="Six coding agents running in parallel in Monad, each in its own git worktree"
             ></video>
           </div>
-          <p class="mono demo-cap">Six agents working in parallel — each a real terminal, each on its own branch.</p>
+          <p class="stage-cap">Six agents in parallel — each a real terminal, each on its own branch.</p>
+        </div>
+      </section>
+
+      <div class="wrap">
+        <!-- ---------------------------------------------------- mechanism -->
+        <section class="mech">
+          <p class="label">The shape of it</p>
+          <div class="mech-grid">
+            <div>
+              <span class="mech-num">01</span>
+              <h3>A branch and a worktree each</h3>
+              <p>
+                Every agent gets its own private checkout, so parallel edits can't collide. Agents are
+                pinned to their worktree after spawn — even a shell profile that jumps directories
+                can't walk one into your real working tree.
+              </p>
+            </div>
+            <div>
+              <span class="mech-num">02</span>
+              <h3>Up to nine live terminals</h3>
+              <p>
+                Real terminals, tiled automatically. Start a swarm and watch them all at once, drag to
+                reorder, and get a desktop ping when a backgrounded agent finishes or needs you.
+              </p>
+            </div>
+            <div>
+              <span class="mech-num">03</span>
+              <h3>Merge, apply, or discard</h3>
+              <p>
+                Read an agent's diff against your base branch and merge it, take just the files you
+                want onto your branch, or throw the whole branch away — without leaving the app.
+              </p>
+            </div>
+          </div>
         </section>
 
-        <!-- -------------------------------------------------- mechanism -->
-        <section class="mech" aria-label="How Monad works">
+        <!-- ---------------------------------------------------- isolation -->
+        <section class="iso" id="isolation">
           <div>
-            <p class="eyebrow">Isolation</p>
-            <h3>A branch and a worktree each</h3>
-            <p>
-              Every agent gets its own private checkout, so parallel edits can't collide. An agent is
-              pinned to its worktree after spawn — even a shell profile that jumps directories can't
-              walk it into your real working tree.
-            </p>
-          </div>
-          <div>
-            <p class="eyebrow">Parallel</p>
-            <h3>Up to nine live terminals</h3>
-            <p>
-              Real terminals, tiled automatically. Start a swarm and watch them all at once, drag to
-              reorder, and get a desktop ping when a backgrounded agent finishes or needs you.
-            </p>
-          </div>
-          <div>
-            <p class="eyebrow">Landing</p>
-            <h3>Merge, apply, or discard</h3>
-            <p>
-              Read an agent's diff against your base branch and merge it, take just the files you
-              want onto your branch, or throw the whole branch away — without leaving the app.
-            </p>
-          </div>
-        </section>
-
-        <!-- -------------------------------------------------- isolation -->
-        <section class="split" id="isolation">
-          <div>
-            <p class="eyebrow">Why it's safe</p>
-            <h2>Five agents. One repo. Nothing trampled.</h2>
+            <p class="label">Why it's safe</p>
+            <h2>Five agents. One repo. Nothing&nbsp;trampled.</h2>
             <p>
               Running several agents on one checkout normally means they overwrite each other's edits
               — and yours. Monad gives each agent <b>its own branch and its own git worktree</b>: a
               real, separate directory on disk, backed by the same repository.
             </p>
             <p>
-              Your working tree is never one of them. Agents can't see it, can't reach it, and can't
-              be tricked into it. When one gets the answer right, you review its diff and land it
-              deliberately — <b>nothing reaches your branch until you say so</b>.
+              Your working tree is never one of them. When an agent gets it right you review the diff
+              and land it deliberately — <b>nothing reaches your branch until you say so</b>.
             </p>
           </div>
 
-          <div class="diagram" aria-hidden="true">
-            <div class="node node--repo">
-              <span class="tag">your repository</span>
-              main — untouched
+          <div class="tree">
+            <div class="tree-head">
+              <span>~/code/storefront</span>
+              <span>on disk</span>
             </div>
-            <div class="connector"></div>
-            <div class="fanout">
-              <div class="node"><span class="tag">worktree</span><b>claude</b></div>
-              <div class="node"><span class="tag">worktree</span><b>codex</b></div>
-              <div class="node"><span class="tag">worktree</span><b>gemini</b></div>
-            </div>
-            <p class="diagram-note"><span class="dot"></span>three checkouts, three branches, zero collisions</p>
+            <pre><span class="dir">storefront/</span>
+├─ <span class="dir">.git/</span>
+├─ <span class="yours">src/</span>                     <span class="note">← your working tree, untouched</span>
+├─ <span class="yours">package.json</span>
+└─ <span class="dir">.monad-worktrees/</span>
+   ├─ <span class="dir">claude/</span>              <span class="on">● working</span>
+   ├─ <span class="dir">codex/</span>               <span class="wait">● waiting for you</span>
+   └─ <span class="dir">gemini/</span>              <span class="note">● idle</span></pre>
+            <div class="tree-foot">three checkouts · three branches · zero collisions</div>
           </div>
         </section>
 
-        <!-- --------------------------------------------------- download -->
-        <section class="download" id="download">
-          <h2>Get Monad</h2>
-          <p class="lede">
-            Free and MIT-licensed. Runs on your machine against your repo — no account, no telemetry,
-            and no inference cost, because it drives the agent CLIs you already pay for.
-          </p>
-
-          <div class="prereq">
-            <span class="num">01</span>
+        <!-- ----------------------------------------------------- download -->
+        <section class="dl" id="download">
+          <div class="dl-head">
+            <div>
+              <p class="label">Get it</p>
+              <h2>Download Monad</h2>
+            </div>
             <p>
-              <strong>Install an agent CLI first.</strong> Monad orchestrates the tools you already
-              run — it doesn't ship a model of its own. Have at least one of <code>claude</code>,
-              <code>codex</code>, <code>gemini</code> or <code>cursor-agent</code> on your PATH, then
-              open a git repo and add your first agent.
+              Free and MIT-licensed. Runs on your machine against your repo — no account, no
+              telemetry, and no inference cost, because it drives the agent CLIs you already pay for.
             </p>
           </div>
 
-          <div class="tiles">
-            <div class="tile">
-              <h3>
-                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
-                  <path
-                    d="M16.4 1.6c.1 1-.3 2-.9 2.7-.6.8-1.6 1.4-2.6 1.3-.1-1 .4-2 .9-2.6.6-.8 1.7-1.3 2.6-1.4zM19 17.3c-.5 1.1-.7 1.6-1.3 2.6-.9 1.4-2.1 3.1-3.6 3.1-1.3 0-1.7-.8-3.4-.8-1.8 0-2.2.8-3.5.9-1.5 0-2.6-1.5-3.5-2.9C-.1 16.6-.6 11 1.6 8c1-1.4 2.6-2.3 4.1-2.3 1.5 0 2.5.9 3.7.9 1.2 0 1.9-.9 3.7-.9 1.3 0 2.7.7 3.7 2-3.2 1.7-2.7 6.2.5 7.6z"
-                  />
-                </svg>
-                macOS
-              </h3>
-              <p class="req">Apple silicon · .dmg</p>
+          <div class="prereq">
+            <b>Install an agent CLI first.</b> Monad orchestrates the tools you already run — it
+            doesn't ship a model of its own. Have at least one of <code>claude</code>,
+            <code>codex</code>, <code>gemini</code> or <code>cursor-agent</code> on your PATH, then
+            open a git repo and add your first agent.
+          </div>
+
+          <div class="plat">
+            <div class="plat-row">
+              <div>
+                <div class="plat-name">
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                    <path
+                      d="M16.4 1.6c.1 1-.3 2-.9 2.7-.6.8-1.6 1.4-2.6 1.3-.1-1 .4-2 .9-2.6.6-.8 1.7-1.3 2.6-1.4zM19 17.3c-.5 1.1-.7 1.6-1.3 2.6-.9 1.4-2.1 3.1-3.6 3.1-1.3 0-1.7-.8-3.4-.8-1.8 0-2.2.8-3.5.9-1.5 0-2.6-1.5-3.5-2.9C-.1 16.6-.6 11 1.6 8c1-1.4 2.6-2.3 4.1-2.3 1.5 0 2.5.9 3.7.9 1.2 0 1.9-.9 3.7-.9 1.3 0 2.7.7 3.7 2-3.2 1.7-2.7 6.2.5 7.6z"
+                    />
+                  </svg>
+                  macOS
+                </div>
+                <div class="plat-meta" id="mac-meta">apple silicon · dmg</div>
+              </div>
+              <div>
+                <p class="plat-note">
+                  Drag Monad to Applications, then run this once — macOS marks unsigned downloads
+                  &ldquo;damaged&rdquo; until the quarantine flag is cleared.
+                </p>
+                <div class="cmd">
+                  <code id="mac-cmd">xattr -dr com.apple.quarantine /Applications/Monad.app</code>
+                  <button class="copy" type="button" data-copy="mac-cmd">copy</button>
+                </div>
+              </div>
               <a
                 id="dl-mac-install"
-                class="btn btn--primary"
+                class="btn"
                 href="https://github.com/Serhii-Leniv/Monad/releases/latest/download/Monad-macOS-arm64.dmg"
-                >Download .dmg</a
+                >Download</a
               >
-              <p class="note">
-                Drag Monad to Applications, then run this once. macOS flags unsigned downloads as
-                &ldquo;damaged&rdquo;; this clears the quarantine flag.
-              </p>
-              <div class="cmd">
-                <code id="mac-cmd">xattr -dr com.apple.quarantine /Applications/Monad.app</code>
-                <button class="copy" type="button" data-copy="mac-cmd">copy</button>
-              </div>
             </div>
 
-            <div class="tile">
-              <h3>
-                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
-                  <path d="M3 5.5 11 4.3v7.4H3V5.5zm0 13L11 19.7v-7.2H3v6zm9-14.4L21 3v8.7h-9V4.1zm0 8.4h9V21l-9-1.4v-7.1z" />
-                </svg>
-                Windows
-              </h3>
-              <p class="req">x64 · installer</p>
+            <div class="plat-row">
+              <div>
+                <div class="plat-name">
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                    <path d="M3 5.5 11 4.3v7.4H3V5.5zm0 13L11 19.7v-7.2H3v6zm9-14.4L21 3v8.7h-9V4.1zm0 8.4h9V21l-9-1.4v-7.1z" />
+                  </svg>
+                  Windows
+                </div>
+                <div class="plat-meta" id="win-meta">x64 · installer</div>
+              </div>
+              <div>
+                <p class="plat-note">
+                  Run the installer. If SmartScreen appears, choose <b>More info → Run anyway</b> —
+                  the build isn't code-signed yet. Updates install themselves in place from then on.
+                </p>
+              </div>
               <a
                 id="dl-win-install"
-                class="btn btn--primary"
+                class="btn"
                 href="https://github.com/Serhii-Leniv/Monad/releases/latest/download/Monad-Windows-Setup.exe"
-                >Download installer</a
+                >Download</a
               >
-              <p class="note">
-                Run the installer. If SmartScreen appears, choose <b>More info → Run anyway</b> — the
-                build isn't code-signed yet.
-              </p>
-              <p class="note">Updates install themselves in place from then on — no reinstall needed.</p>
             </div>
           </div>
 
-          <p class="after-download">
-            <a href="https://github.com/Serhii-Leniv/Monad/releases">All releases &amp; checksums</a> ·
-            <a href="https://github.com/Serhii-Leniv/Monad/blob/main/docs/FAQ.md">FAQ</a> ·
-            <a href="https://github.com/Serhii-Leniv/Monad/issues">Report a bug</a>
-          </p>
+          <div class="dl-foot">
+            <a href="https://github.com/Serhii-Leniv/Monad/releases">all releases &amp; checksums</a>
+            <a href="https://github.com/Serhii-Leniv/Monad/blob/main/docs/FAQ.md">faq</a>
+            <a href="https://github.com/Serhii-Leniv/Monad/issues">report a bug</a>
+          </div>
         </section>
 
         <footer>
           <span>Built by Serhii Leniv · MIT</span>
           <span class="links">
-            <a href="https://github.com/Serhii-Leniv/Monad">GitHub</a>
-            <a href="https://github.com/Serhii-Leniv/Monad/releases">Changelog</a>
+            <a href="https://github.com/Serhii-Leniv/Monad">github</a>
+            <a href="https://github.com/Serhii-Leniv/Monad/releases">changelog</a>
           </span>
         </footer>
       </div>
@@ -969,10 +1041,9 @@
         var REPO = 'Serhii-Leniv/Monad';
         var base = 'https://github.com/' + REPO + '/releases/latest/download/';
         var assets = {
-          mac: { url: base + 'Monad-macOS-arm64.dmg', label: 'Download for macOS', os: 'mac' },
-          win: { url: base + 'Monad-Windows-Setup.exe', label: 'Download for Windows', os: 'win' }
+          mac: { url: base + 'Monad-macOS-arm64.dmg', label: 'Download for macOS', alt: 'or Windows', os: 'mac' },
+          win: { url: base + 'Monad-Windows-Setup.exe', label: 'Download for Windows', alt: 'or macOS', os: 'win' }
         };
-        // platform glyphs, so the icon always matches the button's OS
         var ICONS = {
           mac: '<path d="M16.4 1.6c.1 1-.3 2-.9 2.7-.6.8-1.6 1.4-2.6 1.3-.1-1 .4-2 .9-2.6.6-.8 1.7-1.3 2.6-1.4zM19 17.3c-.5 1.1-.7 1.6-1.3 2.6-.9 1.4-2.1 3.1-3.6 3.1-1.3 0-1.7-.8-3.4-.8-1.8 0-2.2.8-3.5.9-1.5 0-2.6-1.5-3.5-2.9C-.1 16.6-.6 11 1.6 8c1-1.4 2.6-2.3 4.1-2.3 1.5 0 2.5.9 3.7.9 1.2 0 1.9-.9 3.7-.9 1.3 0 2.7.7 3.7 2-3.2 1.7-2.7 6.2.5 7.6z"/>',
           win: '<path d="M3 5.5 11 4.3v7.4H3V5.5zm0 13L11 19.7v-7.2H3v6zm9-14.4L21 3v8.7h-9V4.1zm0 8.4h9V21l-9-1.4v-7.1z"/>'
@@ -982,25 +1053,30 @@
         var plat = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
         var isWin = /win/i.test(plat) || /Windows/i.test(ua);
 
-        // Both buttons are always visible and always explicitly labelled, so a
-        // visitor on Linux — where neither branch matches — is never handed the
-        // wrong installer under a generic "Download" label. They just pick one.
+        // The alternate is always named explicitly ("or Windows"), so a visitor
+        // on Linux — where the check simply doesn't match — is never handed the
+        // wrong installer behind a generic label.
         var primary = isWin ? assets.win : assets.mac;
         var secondary = primary === assets.mac ? assets.win : assets.mac;
 
-        function setBtn(id, labelId, a) {
-          var el = document.getElementById(id);
-          var lab = document.getElementById(labelId);
-          if (!el || !a) return;
-          el.href = a.url;
-          if (lab) lab.textContent = a.label;
-          var svg = el.querySelector('svg');
-          if (svg && ICONS[a.os]) svg.innerHTML = ICONS[a.os];
-        }
-        setBtn('dl-primary', 'dl-primary-label', primary);
-        setBtn('dl-secondary', 'dl-secondary-label', secondary);
+        var pEl = document.getElementById('dl-primary');
+        var pLab = document.getElementById('dl-primary-label');
+        var sEl = document.getElementById('dl-secondary');
+        var sLab = document.getElementById('dl-secondary-label');
 
-        // ---- Live version + size from the GitHub Releases API (graceful fallback) ----
+        function paint() {
+          if (pEl) {
+            pEl.href = primary.url;
+            var svg = pEl.querySelector('svg');
+            if (svg && ICONS[primary.os]) svg.innerHTML = ICONS[primary.os];
+          }
+          if (pLab) pLab.textContent = primary.label;
+          if (sEl) sEl.href = secondary.url;
+          if (sLab) sLab.textContent = primary.alt;
+        }
+        paint();
+
+        // ---- Live version + sizes from the Releases API (graceful fallback) ----
         function fmtSize(b) {
           return b ? (b / 1048576).toFixed(0) + ' MB' : '';
         }
@@ -1015,7 +1091,7 @@
             var vt = document.getElementById('ver-text');
             if (vt) vt.innerHTML = '<b>' + rel.tag_name + '</b>';
 
-            // Resolve download links from the live asset list by suffix, so the
+            // Resolve links from the live asset list by filename suffix, so the
             // hardcoded fallbacks survive an artifact rename.
             var live = { mac: '', win: '' };
             var size = { mac: '', win: '' };
@@ -1031,21 +1107,26 @@
             });
             if (live.mac) assets.mac.url = live.mac;
             if (live.win) assets.win.url = live.win;
-
-            setBtn('dl-primary', 'dl-primary-label', primary);
-            setBtn('dl-secondary', 'dl-secondary-label', secondary);
+            paint();
 
             var mi = document.getElementById('dl-mac-install');
             if (mi && live.mac) mi.href = live.mac;
             var wi = document.getElementById('dl-win-install');
             if (wi && live.win) wi.href = live.win;
 
-            // annotate the platform tiles with the real asset sizes
-            var reqs = document.querySelectorAll('.tile .req');
-            if (reqs[0] && size.mac) reqs[0].textContent = 'Apple silicon · .dmg · ' + size.mac;
-            if (reqs[1] && size.win) reqs[1].textContent = 'x64 · installer · ' + size.win;
+            var mm = document.getElementById('mac-meta');
+            if (mm && size.mac) mm.textContent = 'apple silicon · dmg · ' + size.mac;
+            var wm = document.getElementById('win-meta');
+            if (wm && size.win) wm.textContent = 'x64 · installer · ' + size.win;
           })
           .catch(function () {});
+      })();
+
+      // ---- Ticker: duplicate the track so the -50% loop is seamless ----
+      (function () {
+        var t = document.getElementById('ticker');
+        if (!t) return;
+        t.innerHTML = t.innerHTML + t.innerHTML;
       })();
 
       // ---- Respect reduced-motion: hold the demo on its poster frame ----
@@ -1065,7 +1146,7 @@
         var nav = document.getElementById('nav');
         if (!nav) return;
         var tick = function () {
-          nav.classList.toggle('scrolled', window.scrollY > 24);
+          nav.classList.toggle('scrolled', window.scrollY > 20);
         };
         tick();
         window.addEventListener('scroll', tick, { passive: true });
