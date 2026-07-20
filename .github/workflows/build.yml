@@ -48,8 +48,8 @@ jobs:
           # offers Apple Silicon + Windows. Re-add
           # `{ name: macOS (Intel), os: macos-13, script: package:mac }` to ship Intel.
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
       # .npmrc pins runtime=electron target=29.4.6 so the right prebuilt
