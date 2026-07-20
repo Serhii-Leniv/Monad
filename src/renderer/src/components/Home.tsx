@@ -1,4 +1,3 @@
-import Logo from './Logo'
 import { useStore } from '../store'
 import { openProjectInteractive, openProjectByPath } from '../openProject'
 import { emblemStyle } from '../projectColor'
@@ -26,8 +25,12 @@ export default function Home(): JSX.Element {
   return (
     <div className="home">
       <div className="home__hero">
-        <Logo size={76} />
-        <h1 className="home__title">Monad</h1>
+        {/* The handwritten wordmark IS the title — masked rather than an <img>
+            so it inherits the sheen gradient and follows the theme colour. The
+            text stays for screen readers and window/page titles. */}
+        <h1 className="home__wordmark">
+          <span className="sr-only">Monad</span>
+        </h1>
         <p className="home__tag">
           Run your AI coding agents in parallel.
         </p>

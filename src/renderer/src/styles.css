@@ -4284,6 +4284,76 @@ body.has-wallpaper .vec-pane__term {
     -webkit-text-fill-color: CanvasText;
   }
 }
+
+/* Screen-reader-only text: keeps an accessible name on elements whose visual
+   form is an image or mask (e.g. the wordmark heading). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* The handwritten wordmark, painted as a mask so the gradient below shows
+   through it — that keeps the old title's drifting sheen and lets the colour
+   follow the theme instead of being baked into the asset. Ratio is the traced
+   SVG's viewBox (627x291); aspect-ratio holds the box before the mask loads,
+   so the hero never reflows. */
+.home__wordmark {
+  margin: 4px 0 14px;
+  width: clamp(210px, 26vw, 330px);
+  aspect-ratio: 627 / 291;
+  -webkit-mask: url('./assets/wordmark.svg') center / contain no-repeat;
+  mask: url('./assets/wordmark.svg') center / contain no-repeat;
+  background: linear-gradient(
+    100deg,
+    #ffffff 0%,
+    #ffffff 38%,
+    var(--accent-2) 50%,
+    #ffffff 62%,
+    #ffffff 100%
+  );
+  background-size: 220% 100%;
+  /* Both animations live here: a separate `.home__hero > .home__wordmark` rule
+     would outrank this one and silently drop the sheen. Filter runs after the
+     mask, so the glow traces the letterforms rather than a box. */
+  filter: drop-shadow(0 0 34px rgba(var(--accent-rgb), 0.5));
+  animation:
+    title-sheen 9s ease-in-out infinite,
+    home-float 6s ease-in-out infinite;
+  will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+  .home__wordmark {
+    animation: none;
+  }
+}
+/* Forced colours drop the background gradient, which IS the wordmark's ink —
+   the mask would leave an empty box. Fall back to the real heading text. */
+@media (forced-colors: active) {
+  .home__wordmark {
+    mask: none;
+    -webkit-mask: none;
+    width: auto;
+    aspect-ratio: auto;
+    filter: none;
+    font-family: var(--font-display);
+    font-size: clamp(34px, 5vw, 48px);
+    color: CanvasText;
+  }
+  .home__wordmark .sr-only {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    clip: auto;
+  }
+}
 /* Explicit dismiss for sticky toasts (errors + actionful) that no longer close on
    a stray body click. */
 .toast__close {
@@ -5126,6 +5196,21 @@ body.has-wallpaper .vec-pane__term {
 }
 
 /* ---- Home / empty state ---- */
+/* Wordmark inverts on light: near-black ink, accent sheen still sweeping.
+   background-size must be restated — the shorthand above would reset it. */
+:root[data-theme='light'] .home__wordmark {
+  background: linear-gradient(
+    100deg,
+    #1a1d24 0%,
+    #1a1d24 38%,
+    var(--accent) 50%,
+    #1a1d24 62%,
+    #1a1d24 100%
+  );
+  background-size: 220% 100%;
+  /* The dark theme's white glow reads as haze on a light background. */
+  filter: drop-shadow(0 0 24px rgba(var(--accent-rgb), 0.28));
+}
 /* Wordmark inverts: near-black letters, the accent sheen still sweeps across.
    background-size must be restated — the shorthand here would reset it. */
 :root[data-theme='light'] .home__title {
