@@ -13,7 +13,7 @@ const { join } = require('path')
 const os = require('os')
 const fs = require('fs')
 const { execFileSync } = require('child_process')
-const { registerIpc } = require(join(__dirname, '..', 'out', 'main', 'ipc.js'))
+const { registerIpc } = require(join(__dirname, '..', '..', 'out', 'main', 'ipc.js'))
 
 app.disableHardwareAcceleration()
 const USERDATA = join(os.tmpdir(), 'monad-af-ud-' + process.pid)
@@ -74,7 +74,7 @@ app.whenReady().then(async () => {
     width: 1200,
     height: 800,
     webPreferences: {
-      preload: join(__dirname, '..', 'out', 'preload', 'index.js'),
+      preload: join(__dirname, '..', '..', 'out', 'preload', 'index.js'),
       sandbox: false,
       contextIsolation: true
     }
@@ -83,7 +83,7 @@ app.whenReady().then(async () => {
     if (level >= 3) errors.push(message)
   })
   registerIpc(() => win)
-  await win.loadFile(join(__dirname, '..', 'out', 'renderer', 'index.html'))
+  await win.loadFile(join(__dirname, '..', '..', 'out', 'renderer', 'index.html'))
   await sleep(700)
 
   await run(`${store}.setSetting('defaultIsolation','worktree')`)

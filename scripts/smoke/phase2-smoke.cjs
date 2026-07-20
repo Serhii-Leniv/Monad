@@ -9,7 +9,7 @@ const { join } = require('path')
 const os = require('os')
 const fs = require('fs')
 const { execFileSync } = require('child_process')
-const { registerIpc } = require(join(__dirname, '..', 'out', 'main', 'ipc.js'))
+const { registerIpc } = require(join(__dirname, '..', '..', 'out', 'main', 'ipc.js'))
 
 app.disableHardwareAcceleration()
 
@@ -43,7 +43,7 @@ app.whenReady().then(async () => {
   const win = new BrowserWindow({
     show: false,
     webPreferences: {
-      preload: join(__dirname, '..', 'out', 'preload', 'index.js'),
+      preload: join(__dirname, '..', '..', 'out', 'preload', 'index.js'),
       sandbox: false,
       contextIsolation: true
     }
@@ -52,7 +52,7 @@ app.whenReady().then(async () => {
     if (level >= 3) errors.push(message)
   })
   registerIpc(() => win)
-  await win.loadFile(join(__dirname, '..', 'out', 'renderer', 'index.html'))
+  await win.loadFile(join(__dirname, '..', '..', 'out', 'renderer', 'index.html'))
 
   const createScript = `(async () => {
     const runIn = (cwd, cmd, marker, t=8000) => new Promise((resolve) => {

@@ -4,7 +4,7 @@ const { app, BrowserWindow } = require('electron')
 const { join } = require('path')
 const os = require('os')
 const fs = require('fs')
-const { registerIpc } = require(join(__dirname, '..', 'out', 'main', 'ipc.js'))
+const { registerIpc } = require(join(__dirname, '..', '..', 'out', 'main', 'ipc.js'))
 
 const TMP = os.tmpdir()
 const SHOT = join(os.tmpdir(), 'monad-shot.png')
@@ -20,7 +20,7 @@ app.whenReady().then(async () => {
     titleBarStyle: 'hidden',
     titleBarOverlay: { color: '#00000000', symbolColor: '#e6e9f0', height: 44 },
     webPreferences: {
-      preload: join(__dirname, '..', 'out', 'preload', 'index.js'),
+      preload: join(__dirname, '..', '..', 'out', 'preload', 'index.js'),
       sandbox: false,
       contextIsolation: true
     }
@@ -28,7 +28,7 @@ app.whenReady().then(async () => {
   registerIpc(() => win)
 
   try {
-    await win.loadFile(join(__dirname, '..', 'out', 'renderer', 'index.html'))
+    await win.loadFile(join(__dirname, '..', '..', 'out', 'renderer', 'index.html'))
   } catch (e) {
     console.log('[diag] could not load renderer:', e.message)
     process.exit(9)

@@ -11,7 +11,7 @@ const { app, BrowserWindow } = require('electron')
 const { join } = require('path')
 const os = require('os')
 const fs = require('fs')
-const { registerIpc } = require(join(__dirname, '..', 'out', 'main', 'ipc.js'))
+const { registerIpc } = require(join(__dirname, '..', '..', 'out', 'main', 'ipc.js'))
 
 app.disableHardwareAcceleration()
 
@@ -39,7 +39,7 @@ app.whenReady().then(async () => {
   const win = new BrowserWindow({
     show: false,
     webPreferences: {
-      preload: join(__dirname, '..', 'out', 'preload', 'index.js'),
+      preload: join(__dirname, '..', '..', 'out', 'preload', 'index.js'),
       sandbox: false,
       contextIsolation: true,
       nodeIntegration: false
@@ -52,7 +52,7 @@ app.whenReady().then(async () => {
   win.webContents.on('render-process-gone', (_e, d) => errors.push('render-gone: ' + d.reason))
 
   registerIpc(() => win)
-  await win.loadFile(join(__dirname, '..', 'out', 'renderer', 'index.html'))
+  await win.loadFile(join(__dirname, '..', '..', 'out', 'renderer', 'index.html'))
 
   const ROOT = JSON.stringify(TMP)
   const script = `(async () => {

@@ -13,7 +13,7 @@ const { join } = require('path')
 const os = require('os')
 const fs = require('fs')
 const { execFileSync } = require('child_process')
-const { registerIpc } = require(join(__dirname, '..', 'out', 'main', 'ipc.js'))
+const { registerIpc } = require(join(__dirname, '..', '..', 'out', 'main', 'ipc.js'))
 
 app.disableHardwareAcceleration()
 const USERDATA = join(os.tmpdir(), 'monad-wsp-ud-' + process.pid)
@@ -73,7 +73,7 @@ app.whenReady().then(async () => {
     width: 1200,
     height: 800,
     webPreferences: {
-      preload: join(__dirname, '..', 'out', 'preload', 'index.js'),
+      preload: join(__dirname, '..', '..', 'out', 'preload', 'index.js'),
       sandbox: false,
       contextIsolation: true
     }
@@ -82,7 +82,7 @@ app.whenReady().then(async () => {
     if (level >= 3) errors.push(message)
   })
   registerIpc(() => win)
-  await win.loadFile(join(__dirname, '..', 'out', 'renderer', 'index.html'))
+  await win.loadFile(join(__dirname, '..', '..', 'out', 'renderer', 'index.html'))
   await sleep(700)
 
   // --- Build a session: one folder workspace + one folder-less, renamed. -----
@@ -128,13 +128,27 @@ app.whenReady().then(async () => {
   const othersKept = (await run(`${store}.liveWorkspaces.length`)) === 2
 
   // --- Migration: no app-data file, but legacy localStorage + canvas.json. ---
+  // Stop the renderer persisting first: relaunch() reloads the page, and the
+  // app's flush-on-unload would otherwise rewrite the file we're about to delete
+  // (correct app behaviour — it's how a quit keeps the last layout).
+  await run('window.__monadDisablePersist()')
   fs.rmSync(STORE_FILE, { force: true })
   await run(
     `localStorage.setItem('vectro.openWorkspaces', JSON.stringify({paths:[${JSON.stringify(A)}],active:${JSON.stringify(A)}}))`
   )
-  // Seed a canvas.json the migration should pick the agents up from.
-  await run(
-    `window.api.project.save(${JSON.stringify(A)}, {layoutMode:'grid',agents:[{id:'mig-1',label:'migrated',x:0,y:0,w:520,h:360,isolation:'shared'}]})`
+  // Seed a canvas.json the migration should pick the agents up from. Written
+  // here rather than through the app: canvas.json is legacy read-only now (there
+  // is no project.save), so an old build is exactly who would have left this.
+  fs.mkdirSync(join(A, '.monad'), { recursive: true })
+  fs.writeFileSync(
+    join(A, '.monad', 'canvas.json'),
+    JSON.stringify({
+      layoutMode: 'grid',
+      agents: [
+        { id: 'mig-1', label: 'migrated', x: 0, y: 0, w: 520, h: 360, isolation: 'shared' }
+      ]
+    }),
+    'utf8'
   )
   await relaunch()
   const migrated = await run(

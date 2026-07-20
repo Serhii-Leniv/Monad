@@ -10,7 +10,7 @@ const { join } = require('path')
 const os = require('os')
 const fs = require('fs')
 const { execFileSync } = require('child_process')
-const { registerIpc } = require(join(__dirname, '..', 'out', 'main', 'ipc.js'))
+const { registerIpc } = require(join(__dirname, '..', '..', 'out', 'main', 'ipc.js'))
 
 app.disableHardwareAcceleration()
 // Isolate localStorage/userData so a real install's persisted tabs don't leak in.
@@ -61,7 +61,7 @@ app.whenReady().then(async () => {
     width: 1200,
     height: 800,
     webPreferences: {
-      preload: join(__dirname, '..', 'out', 'preload', 'index.js'),
+      preload: join(__dirname, '..', '..', 'out', 'preload', 'index.js'),
       sandbox: false,
       contextIsolation: true
     }
@@ -70,7 +70,7 @@ app.whenReady().then(async () => {
     if (level >= 3) errors.push(message)
   })
   registerIpc(() => win)
-  await win.loadFile(join(__dirname, '..', 'out', 'renderer', 'index.html'))
+  await win.loadFile(join(__dirname, '..', '..', 'out', 'renderer', 'index.html'))
   await sleep(700) // let the app boot (restoreWorkspaces is a no-op on empty userData)
 
   // --- 1. A folder-less workspace can be created and is named for you. -------

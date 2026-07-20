@@ -4,7 +4,7 @@ const { app, BrowserWindow } = require('electron')
 const { join } = require('path')
 const os = require('os')
 const fs = require('fs')
-const { registerIpc } = require(join(__dirname, '..', 'out', 'main', 'ipc.js'))
+const { registerIpc } = require(join(__dirname, '..', '..', 'out', 'main', 'ipc.js'))
 
 const TMP = os.tmpdir()
 const SHOT = join(os.tmpdir(), 'monad-shot.png')
@@ -18,7 +18,7 @@ app.whenReady().then(async () => {
     titleBarStyle: 'hidden',
     titleBarOverlay: { color: '#00000000', symbolColor: '#e6e9f0', height: 40 },
     webPreferences: {
-      preload: join(__dirname, '..', 'out', 'preload', 'index.js'),
+      preload: join(__dirname, '..', '..', 'out', 'preload', 'index.js'),
       sandbox: false,
       contextIsolation: true
     }
@@ -28,7 +28,7 @@ app.whenReady().then(async () => {
     if (level >= 3) errors.push(message)
   })
   registerIpc(() => win)
-  await win.loadFile(join(__dirname, '..', 'out', 'renderer', 'index.html'))
+  await win.loadFile(join(__dirname, '..', '..', 'out', 'renderer', 'index.html'))
 
   const script = `(async () => {
     const store = window.__agentStore

@@ -1,18 +1,28 @@
 // Phase 1 integration smoke test. Loads the BUILT renderer in a hidden window
 // and drives the real preload bridge:
 //   1. window.api.{pty,project} exist and React mounted (#root has children)
-//   2. project.save -> project.load roundtrip writes/reads .monad/canvas.json
+//   2. project.load reads a legacy .monad/canvas.json written by an older build
+//      (there is no project.save any more — canvas.json is read-only legacy and
+//      workspaces.json is the source of truth, so the fixture is written here)
 //   3. a PTY spawned from the renderer echoes through a real shell
 const { app, BrowserWindow } = require('electron')
 const { join } = require('path')
 const os = require('os')
 const fs = require('fs')
-const { registerIpc } = require(join(__dirname, '..', 'out', 'main', 'ipc.js'))
+const { registerIpc } = require(join(__dirname, '..', '..', 'out', 'main', 'ipc.js'))
 
 app.disableHardwareAcceleration()
 
 const TMP = join(os.tmpdir(), 'monad-smoke-' + process.pid)
 fs.mkdirSync(TMP, { recursive: true })
+
+// Stand in for a canvas.json left behind by a pre-workspaces build. The app no
+// longer writes this file, so the fixture has to come from here.
+const LEGACY_CANVAS = {
+  agents: [{ id: 't1', agentType: 'claude', label: 'Claude Code 1', x: 11, y: 22, w: 480, h: 340 }]
+}
+fs.mkdirSync(join(TMP, '.monad'), { recursive: true })
+fs.writeFileSync(join(TMP, '.monad', 'canvas.json'), JSON.stringify(LEGACY_CANVAS), 'utf8')
 
 const errors = []
 
@@ -20,7 +30,7 @@ app.whenReady().then(async () => {
   const win = new BrowserWindow({
     show: false,
     webPreferences: {
-      preload: join(__dirname, '..', 'out', 'preload', 'index.js'),
+      preload: join(__dirname, '..', '..', 'out', 'preload', 'index.js'),
       sandbox: false,
       contextIsolation: true,
       nodeIntegration: false
@@ -35,13 +45,11 @@ app.whenReady().then(async () => {
   // Register the REAL main-process handlers against this hidden window.
   registerIpc(() => win)
 
-  await win.loadFile(join(__dirname, '..', 'out', 'renderer', 'index.html'))
+  await win.loadFile(join(__dirname, '..', '..', 'out', 'renderer', 'index.html'))
 
   const script = `(async () => {
     const hasApi = !!(window.api && window.api.pty && window.api.project)
     const rootChildren = document.getElementById('root')?.childElementCount ?? 0
-    const sample = { agents: [{ id: 't1', agentType: 'claude', label: 'Claude Code 1', x: 11, y: 22, w: 480, h: 340 }] }
-    const saved = await window.api.project.save(${JSON.stringify(TMP)}, sample)
     const loaded = await window.api.project.load(${JSON.stringify(TMP)})
     const roundtrip = !!loaded && loaded.agents?.[0]?.id === 't1' && loaded.agents[0].x === 11
     const ptyEcho = await new Promise((resolve) => {
@@ -55,7 +63,7 @@ app.whenReady().then(async () => {
         window.api.pty.write(pid, 'echo HELLO_P1\\r')
       })
     })
-    return { hasApi, rootChildren, saved, roundtrip, ptyEcho }
+    return { hasApi, rootChildren, roundtrip, ptyEcho }
   })()`
 
   let result
@@ -72,9 +80,8 @@ app.whenReady().then(async () => {
 
   console.log('[p1] preload api present : ' + result.hasApi)
   console.log('[p1] react mounted (#root): ' + (result.rootChildren > 0) + ' (' + result.rootChildren + ' children)')
-  console.log('[p1] project save ok      : ' + result.saved)
   console.log('[p1] canvas.json on disk  : ' + fileExists)
-  console.log('[p1] save/load roundtrip  : ' + result.roundtrip)
+  console.log('[p1] legacy canvas load   : ' + result.roundtrip)
   console.log('[p1] renderer pty echo    : ' + result.ptyEcho)
   console.log('[p1] console errors       : ' + (errors.length ? errors.join(' | ') : 'none'))
 
@@ -87,7 +94,6 @@ app.whenReady().then(async () => {
   const pass =
     result.hasApi &&
     result.rootChildren > 0 &&
-    result.saved &&
     fileExists &&
     result.roundtrip &&
     result.ptyEcho &&
