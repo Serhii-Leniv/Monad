@@ -1,5 +1,6 @@
 import { app, ipcMain, BrowserWindow } from 'electron'
 import { autoUpdater } from 'electron-updater'
+import log from 'electron-log/main'
 
 // Installers are published as GitHub Releases on this repo (Serhii-Leniv/Monad,
 // public) — its releases/latest is the app's version feed. CI attaches them on
@@ -88,7 +89,11 @@ export function initAutoUpdate(getWindow: () => BrowserWindow | null): void {
     autoUpdater.forceDevUpdateConfig = true
     autoUpdater.updateConfigPath = process.env.MONAD_DEV_UPDATE_CONFIG
   }
-  autoUpdater.logger = console
+  // A file logger, not console: in a packaged app stdout goes nowhere, and a
+  // failed update is precisely the thing you need a post-mortem for.
+  // Written to the per-OS log dir (app.getPath('logs')).
+  log.transports.file.level = 'info'
+  autoUpdater.logger = log
   autoUpdater.autoDownload = true
   // Even if the user never clicks "Restart to update", the pending version
   // installs on normal quit, so the next launch is current.
@@ -103,7 +108,7 @@ export function initAutoUpdate(getWindow: () => BrowserWindow | null): void {
   autoUpdater.on('error', (e) => {
     // An update must never surface as an app error — log, tell the renderer so
     // the banner falls back to the download-site button, and move on.
-    console.warn('[monad] auto-update error:', e?.message ?? e)
+    log.warn('[monad] auto-update error:', e?.message ?? e)
     sendState({ status: 'error', message: String(e?.message ?? e) })
   })
 }
@@ -135,11 +140,26 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
       if (!latest || !isNewer(latest, current)) return null
       return { current, latest, url: DOWNLOAD_URL }
     } catch (e) {
-      console.warn('[monad] auto-update check failed:', e)
-      return null
+      // Deliberately fall through to the REST check rather than returning null.
+      // A broken feed (corrupt latest.yml, 404, throttled CDN) used to mean the
+      // banner never rendered at all — the user sat on a stale version forever
+      // with no signal. The REST path answers the only question the banner
+      // needs ("is there a newer version?") and degrades to the download-site
+      // button, which is the same fallback the 'error' event aims for.
+      log.warn('[monad] auto-update check failed, falling back to releases API:', e)
     }
   }
 
+  return checkViaReleasesApi()
+}
+
+/**
+ * Version check straight off the GitHub Releases API. The only path on macOS and
+ * Linux, and the fallback when electron-updater's own check fails on Windows.
+ * Returns null on any failure — a check that can't reach the network must stay
+ * silent rather than nag about a problem the user can't act on.
+ */
+async function checkViaReleasesApi(): Promise<UpdateInfo | null> {
   if (!app.isPackaged && process.env.MONAD_UPDATE_CHECK !== '1') return null
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), 8000)
@@ -154,20 +174,20 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
       signal: ctrl.signal
     })
     if (!res.ok) {
-      console.warn(`[monad] update check failed: HTTP ${res.status} from ${RELEASES_API}`)
+      log.warn(`[monad] update check failed: HTTP ${res.status} from ${RELEASES_API}`)
       return null
     }
     const json = (await res.json()) as { tag_name?: unknown }
     const latest = typeof json.tag_name === 'string' ? json.tag_name.replace(/^v/i, '') : ''
     const current = app.getVersion()
     if (!parseVersion(latest)) {
-      console.warn(`[monad] update check: unparsable tag_name ${JSON.stringify(json.tag_name)}`)
+      log.warn(`[monad] update check: unparsable tag_name ${JSON.stringify(json.tag_name)}`)
       return null
     }
     if (!isNewer(latest, current)) return null
     return { current, latest, url: DOWNLOAD_URL }
   } catch (e) {
-    console.warn('[monad] update check failed:', e)
+    log.warn('[monad] update check failed:', e)
     return null
   } finally {
     clearTimeout(timer)

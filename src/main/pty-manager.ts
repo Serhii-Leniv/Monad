@@ -28,16 +28,19 @@ export class PtyManager {
 
   spawn(opts: SpawnOptions): string {
     const id = randomUUID()
-    const shell =
-      opts.shell ||
-      (process.platform === 'win32' ? 'powershell.exe' : process.env.SHELL || 'bash')
+    const isWin = process.platform === 'win32'
+    const shell = opts.shell || (isWin ? 'powershell.exe' : process.env.SHELL || 'bash')
+    // This branch bypasses shells.ts (it fires when a workspace saved on another
+    // machine names a shellId we don't have), so it needs the login flag too —
+    // otherwise those panes silently lose ~/.zprofile and every PATH it sets.
+    const args = opts.args ?? (isWin || opts.shell ? [] : ['-l'])
 
     let proc: pty.IPty
     try {
       // xterm.js renders truecolor; advertise it. "xterm-color" claimed a
       // 16-colour terminal from the 90s and made agent CLIs (Claude Code,
       // aider…) silently degrade their palettes and TUI rendering.
-      proc = pty.spawn(shell, opts.args ?? [], {
+      proc = pty.spawn(shell, args, {
         name: 'xterm-256color',
         cols: opts.cols ?? 80,
         rows: opts.rows ?? 24,

@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { registerIpc } from './ipc'
 import { installMacMenu } from './menu'
 import { migrateUserDataFromVectro } from './migrate-userdata'
+import { applyResolvedPath } from './env-path'
 import type { PtyManager } from './pty-manager'
 
 const isDev = !!process.env['ELECTRON_RENDERER_URL']
@@ -211,6 +212,9 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   app.whenReady().then(() => {
+  // Before anything detects or spawns: recover the user's real PATH. A Finder or
+  // Dock launch on macOS gets launchd's minimal PATH, which hides every agent CLI.
+  applyResolvedPath()
   applyProductionCsp()
   ptyManager = registerIpc(() => win)
   // macOS needs an explicit menu so ⌘C/⌘V/⌘A reach the terminal instead of being
