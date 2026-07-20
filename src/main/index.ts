@@ -34,8 +34,8 @@ if (userDataArg) {
 // duplicate it.
 if (!userDataArg) migrateUserDataFromVectro()
 
-// App emblem (Monad's spirograph mark on the brand off-white). build/icon.png is also what electron-builder
-// uses to generate the packaged .icns / .ico icons.
+// App emblem (the Monad "M" disc, inset to 92% of the canvas). build/icon.png is
+// also what electron-builder uses to generate the packaged .icns / .ico icons.
 const iconPng = join(__dirname, '../../build/icon.png')
 
 // --- Window size/position persistence (survives restarts) ---
