@@ -1,6 +1,6 @@
 {
   "name": "monad",
-  "version": "0.1.26",
+  "version": "0.1.27",
   "description": "Monad — a cross-platform canvas for running terminals and AI agents in parallel",
   "main": "./out/main/index.js",
   "author": "Serhii Leniv",
@@ -50,6 +50,7 @@
     "@xterm/addon-unicode11": "^0.9.0",
     "@xterm/addon-web-links": "^0.11.0",
     "@xterm/xterm": "^5.5.0",
+    "electron-log": "^5.4.4",
     "electron-updater": "^6.8.9",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

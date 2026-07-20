@@ -1,5 +1,6 @@
 import { existsSync } from 'fs'
 import { join } from 'path'
+import { resolvedPath } from './env-path'
 
 export interface ShellInfo {
   id: string
@@ -11,8 +12,10 @@ export interface ShellInfo {
 /** Resolve an executable on PATH (Windows-aware extensions). */
 function onPath(exe: string): string | null {
   const sep = process.platform === 'win32' ? ';' : ':'
-  const exts = process.platform === 'win32' ? ['.exe', '.cmd', ''] : ['']
-  for (const dir of (process.env.PATH || '').split(sep)) {
+  const exts = process.platform === 'win32' ? ['.exe', '.cmd', '.bat', ''] : ['']
+  // resolvedPath(), not process.env.PATH: on macOS a Finder/Dock launch inherits
+  // launchd's minimal PATH and would miss every Homebrew/nvm/~/.local install.
+  for (const dir of resolvedPath().split(sep)) {
     if (!dir) continue
     for (const ext of exts) {
       const full = join(dir, exe + ext)
@@ -53,8 +56,21 @@ export function detectAgents(): AgentCli[] {
   return out
 }
 
-/** Detect the shells/terminals actually installed on this machine. */
-export function detectShells(): ShellInfo[] {
+/**
+ * Login flag for POSIX shells. zsh, bash, and fish all accept -l, and node-pty
+ * gives the shell a TTY so it is interactive regardless — meaning both halves
+ * of the rc chain (.zprofile + .zshrc) get sourced, as in a real terminal.
+ */
+export const POSIX_LOGIN_FLAG = '-l'
+
+/**
+ * Detect the shells/terminals actually installed on this machine.
+ *
+ * `exists` is injected so tests can exercise the POSIX branch from a Windows
+ * dev box and from CI — mocking `fs` doesn't reach here, since vitest
+ * externalizes node builtins.
+ */
+export function detectShells(exists: (p: string) => boolean = existsSync): ShellInfo[] {
   const shells: ShellInfo[] = []
 
   if (process.platform === 'win32') {
@@ -63,13 +79,13 @@ export function detectShells(): ShellInfo[] {
     shells.push({
       id: 'powershell',
       label: 'PowerShell',
-      command: existsSync(psPath) ? psPath : 'powershell.exe',
+      command: exists(psPath) ? psPath : 'powershell.exe',
       args: []
     })
 
     const pwsh =
       onPath('pwsh') ||
-      (existsSync('C:\\Program Files\\PowerShell\\7\\pwsh.exe')
+      (exists('C:\\Program Files\\PowerShell\\7\\pwsh.exe')
         ? 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
         : null)
     if (pwsh) shells.push({ id: 'pwsh', label: 'PowerShell 7', command: pwsh, args: [] })
@@ -85,18 +101,23 @@ export function detectShells(): ShellInfo[] {
       process.env.ProgramFiles ? join(process.env.ProgramFiles, 'Git', 'bin', 'bash.exe') : '',
       'C:\\Program Files\\Git\\bin\\bash.exe',
       'C:\\Program Files (x86)\\Git\\bin\\bash.exe'
-    ].find((p) => p && existsSync(p))
+    ].find((p) => p && exists(p))
     if (gitBash) shells.push({ id: 'gitbash', label: 'Git Bash', command: gitBash, args: ['-l', '-i'] })
 
     const wsl = join(sysRoot, 'System32', 'wsl.exe')
-    if (existsSync(wsl)) shells.push({ id: 'wsl', label: 'WSL', command: wsl, args: [] })
+    if (exists(wsl)) shells.push({ id: 'wsl', label: 'WSL', command: wsl, args: [] })
   } else {
     // macOS / Linux
     const seen = new Set<string>()
     const add = (id: string, label: string, command: string): void => {
-      if (command && existsSync(command) && !seen.has(command)) {
+      if (command && exists(command) && !seen.has(command)) {
         seen.add(command)
-        shells.push({ id, label, command, args: [] })
+        // -l (login) is what makes a pane behave like an iTerm/Ghostty/Terminal
+        // tab, all of which spawn login shells. Homebrew's own install docs put
+        // `eval "$(brew shellenv)"` in ~/.zprofile — login-only — as do most
+        // nvm/conda setups, so a non-login shell never sees /opt/homebrew/bin
+        // and `claude` is missing inside Monad while working everywhere else.
+        shells.push({ id, label, command, args: [POSIX_LOGIN_FLAG] })
       }
     }
     const sh = process.env.SHELL

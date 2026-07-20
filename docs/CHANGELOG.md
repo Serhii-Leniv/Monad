@@ -6,6 +6,20 @@ Notable changes per release. Installers for every version are on the
 This file was reconstructed from git history at v0.1.25; entries before then are summarised rather
 than exhaustive.
 
+## v0.1.27
+
+- **Fixed: no agents found on macOS.** Claude Code, Codex, and the rest showed as "not installed"
+  when Monad was opened from Finder or the Dock. A GUI launch inherits a minimal `PATH` and never
+  reads your shell config, so anything installed via Homebrew, nvm, or the native installer was
+  invisible. Monad now asks your login shell for its real `PATH`, and checks the usual install
+  locations as a backstop.
+- **Fixed: agent commands failing inside a pane but working in Terminal.** Panes ran a non-login
+  shell, which skips `~/.zprofile` — where Homebrew and most version managers put their setup. Panes
+  now start login shells, matching iTerm, Ghostty, and Terminal.app.
+- **Fixed: the update notice never appearing when a check failed.** A failed update check produced no
+  banner and no error, leaving you on an old version with no signal. A failed check now falls back to
+  a direct release lookup, and update diagnostics are written to a log file.
+
 ## v0.1.26
 
 - **Fixed: agents silently lost worktree isolation after every restart.** Restoring a session read
