@@ -83,6 +83,20 @@ Get the latest build for your platform:
 | **macOS** (Apple Silicon) | [Monad&#8209;macOS&#8209;arm64.dmg](https://github.com/Serhii-Leniv/Monad/releases/latest/download/Monad-macOS-arm64.dmg) |
 | **Windows** (x64) | [Monad&#8209;Windows&#8209;Setup.exe](https://github.com/Serhii-Leniv/Monad/releases/latest/download/Monad-Windows-Setup.exe) |
 
+> [!IMPORTANT]
+> **macOS — one extra step on first launch.** Monad isn't signed with a paid Apple
+> Developer certificate yet, so macOS quarantines it and reports the app as
+> *"damaged and can't be opened."* It isn't damaged. After dragging Monad to
+> Applications, clear the quarantine flag once:
+>
+> ```bash
+> xattr -dr com.apple.quarantine /Applications/Monad.app
+> ```
+>
+> Windows shows a comparable one-time SmartScreen prompt (**More info → Run anyway**).
+> Signing and notarization are on the roadmap — the source is here if you'd rather
+> [build it yourself](#build-from-source).
+
 Or head to **[the download page](https://serhii-leniv.github.io/Monad/)** for install notes and
 older versions. Monad checks for new releases on launch and points you here when one's ready.
 

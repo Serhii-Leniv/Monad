@@ -44,8 +44,10 @@ mac:
     - dmg
   category: public.app-category.developer-tools
   icon: build/icon.png
-  # Unsigned for now (no Apple Developer cert). Gatekeeper will warn; the user
-  # opens via right-click → Open the first time. Signing/notarization later.
+  # No paid Apple Developer cert, so electron-builder skips real signing and the
+  # afterPack hook ad-hoc signs instead. Downloaded builds are still quarantined
+  # and unnotarized → macOS says "damaged"; users clear it with `xattr -dr
+  # com.apple.quarantine`. See scripts/afterPack.cjs. Notarization later.
   identity: null
 
 # Fixed (version-less) names so the site can link to a stable
