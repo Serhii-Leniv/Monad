@@ -1,0 +1,42 @@
+name: Feature request
+description: Suggest a capability or a workflow improvement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The most useful requests describe the workflow you were trying to complete, not just the
+        feature name — that usually surfaces a better solution than the one originally imagined.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What were you trying to do?
+      description: The task or workflow that Monad made hard, slow, or impossible.
+      placeholder: I wanted to compare two agents' diffs side by side before merging, but...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to see?
+      description: Your proposed solution, if you have one in mind.
+    validations:
+      required: false
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: How are you working around it today?
+      description: Useful for judging how painful the gap actually is.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Would you be interested in implementing this?
+      options:
+        - label: I'd be willing to open a pull request for this
+          required: false

@@ -112,51 +112,13 @@ binary (see `.npmrc`, which pins the Electron ABI).
 
 ## Under the hood
 
-```
-src/
-  main/        Electron main process
-    index.ts       window + production CSP
-    ipc.ts         IPC handlers (pty / project / git / worktree / diff-merge / update)
-    pty-manager.ts node-pty session manager
-    git.ts         git + worktree + diff/merge
-    update.ts      newer-release check against the release feed
-  preload/     contextBridge API (window.api.{pty,project,git,worktree,update,platform})
-  renderer/    React + Zustand; xterm.js terminals on an auto-tiling stage
-    components/  Stage, TerminalPane, Rail, CommandPalette, DiffPanel, Settings
-```
-
-- **Terminals** — xterm.js ↔ `node-pty` (prebuilt) over IPC.
+- **Terminals** — xterm.js ↔ `node-pty` (prebuilt) over IPC, with output batched before it crosses the boundary.
 - **Isolation** — `git worktree add` per agent (branch `canvas/<id>`), kept in a sibling `.monad-worktrees/` folder; agents are cwd-pinned after spawn so a shell profile can't move them out of their worktree.
-- **Persistence** — the whole tab set lives in `workspaces.json` in the app's user-data folder, written atomically. (Older builds kept one canvas per project in `<project>/.monad/canvas.json`; that file is still read once to migrate you, then ignored.)
+- **Persistence** — the whole tab set lives in `workspaces.json` in the app's user-data folder, written atomically.
 - **Updates** — on launch the app checks the [release feed](https://github.com/Serhii-Leniv/Monad/releases) and shows an in-app notice when a newer version is out.
 
-<details>
-<summary>Tests</summary>
-
-Two layers, both run in CI on every push (see `.github/workflows/ci.yml`), and packaging
-is gated on them:
-
-```bash
-npm run typecheck
-npm run lint        # bug-focused rules (react-hooks + a small correctness set)
-npm run test        # fast unit tests: tiling math, shell quoting, git path decoding
-```
-
-Integration smoke tests drive the real built bundles + IPC under a headless Electron:
-
-```bash
-npm run smoke:pty          # PTY loads under Electron ABI + shell echo
-npm run smoke:p1           # preload bridge, legacy canvas load, renderer PTY
-npm run smoke:p2           # git detect, worktree isolation, pty fan-out, teardown
-npm run smoke:p3           # diff sees changes, merge lands work on base branch
-npm run smoke:file         # file tree/read/save + path-traversal guard
-npm run smoke:ws           # workspace store
-npm run smoke:tabs         # tab behaviour
-npm run smoke:wspersist    # workspace persistence + legacy migration
-npm run smoke:agentfolder  # per-agent folders
-```
-
-</details>
+Full details — process split, security posture, and the two test layers — are in
+**[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 ## FAQ
 
@@ -205,15 +167,20 @@ no account, no telemetry, and no background service.
 
 ## Contributing
 
-Issues and pull requests are welcome. A good first step is running the app from source (see
-[Build from source](#build-from-source)) and checking that `npm run typecheck` plus the smoke tests
-pass before opening a PR. For larger changes, open an issue first so we can agree on the approach.
-
-## Feedback
+Issues and pull requests are welcome — see **[CONTRIBUTING.md](CONTRIBUTING.md)** for how to get
+set up, which checks to run, and PR guidelines. For larger changes, open an issue first so we can
+agree on the approach.
 
 Monad is in active development and every report helps —
-[open an issue](https://github.com/Serhii-Leniv/Monad/issues) with ideas, bugs, or feature
-requests.
+[open an issue](https://github.com/Serhii-Leniv/Monad/issues/new/choose) with bugs or feature
+requests. Found a security problem? Please report it privately via
+[SECURITY.md](SECURITY.md).
+
+## Docs
+
+- [Architecture](docs/ARCHITECTURE.md) — how the main/preload/renderer split works, and the tests
+- [Changelog](docs/CHANGELOG.md) — what changed in each release
+- [Releasing](docs/RELEASING.md) — cutting a build and publishing installers
 
 ## License
 

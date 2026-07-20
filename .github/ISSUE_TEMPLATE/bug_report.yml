@@ -1,0 +1,87 @@
+name: Bug report
+description: Something in Monad is broken or behaving unexpectedly
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Terminal, PTY and git-worktree bugs are highly platform-dependent,
+        so the details below genuinely decide whether this is fixable.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what did you get instead?
+      placeholder: I clicked Merge on an agent card and...
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a git repo
+        2. Add two Claude Code agents
+        3. ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Monad version
+      description: Settings → About, or the title bar
+      placeholder: v0.1.25
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows 11
+        - Windows 10
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Which agent CLI were you running?
+      multiple: true
+      options:
+        - Claude Code (claude)
+        - Codex (codex)
+        - Gemini (gemini)
+        - Cursor (cursor-agent)
+        - A plain shell
+        - Other / not applicable
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install Monad?
+      options:
+        - Installer from the releases page
+        - Built from source
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console output or screenshots
+      description: >
+        Anything from the devtools console (View → Toggle Developer Tools) helps a lot.
+        This is automatically formatted as code — no backticks needed.
+      render: shell
+    validations:
+      required: false
