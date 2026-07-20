@@ -3,784 +3,974 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Monad — run every AI coding agent at once</title>
+    <title>Monad — run every coding agent in its own worktree</title>
     <meta
       name="description"
-      content="Monad is a desktop canvas for parallel AI coding agents. Run Claude Code, Codex, Gemini and more as live terminal cards — each in its own git worktree — and review, merge, or discard their work without leaving the app. Local, private, bring your own CLIs."
+      content="Monad is a desktop app that runs Claude Code, Codex, Gemini and any other CLI coding agent side by side — each sealed in its own git worktree, with diff and merge built in. Free, MIT-licensed, bring your own CLIs."
     />
-    <link rel="icon" href="icon.png" />
+    <link rel="canonical" href="https://serhii-leniv.github.io/Monad/" />
+    <meta name="theme-color" content="#0a0c10" />
+
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Monad — run every AI coding agent at once" />
+    <meta property="og:site_name" content="Monad" />
+    <meta property="og:title" content="Monad — run every coding agent in its own worktree" />
     <meta
       property="og:description"
-      content="A canvas of live terminals. Run your AI coding agents in parallel — isolated git worktrees, live status, diff & merge built in. Bring your own CLIs."
+      content="Five agents, one repo, nothing trampled. Run your AI coding agents in parallel — isolated git worktrees, live status, diff and merge built in. Bring your own CLIs."
     />
     <meta property="og:url" content="https://serhii-leniv.github.io/Monad/" />
     <meta property="og:image" content="https://serhii-leniv.github.io/Monad/og-image.png" />
-    <meta property="og:image:width" content="2400" />
-    <meta property="og:image:height" content="1260" />
-    <meta property="og:image:alt" content="Monad — run every coding agent at once" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:image" content="https://serhii-leniv.github.io/Monad/og-image.png" />
+
+    <link rel="icon" href="icon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="icon.png" />
+    <link rel="preload" as="font" type="font/woff2" href="fonts/inter-var.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="fonts/space-grotesk-var.woff2" crossorigin />
 
     <style>
-      /* ---- Monad type system (same faces as the app) ---- */
+      /* ------------------------------------------------------------------
+         Monad — landing page.
+
+         House rules, and the reason this page doesn't look generated:
+           1. No box-shadow. Anywhere. Depth comes from the surface ladder
+              (--canvas -> --surface-1 -> --surface-2) plus 1px hairlines.
+           2. The brand gradient appears exactly twice: the logo mark and the
+              rule under the hero. Buttons are white. Everything else is grey.
+           3. The demo is the largest, brightest thing on the page. Every
+              other element steps back so it reads first.
+         ------------------------------------------------------------------ */
+
       @font-face {
-        font-family: 'Monad Sans';
+        font-family: 'Inter';
         src: url('fonts/inter-var.woff2') format('woff2');
         font-weight: 100 900;
         font-display: swap;
+        font-style: normal;
       }
       @font-face {
-        font-family: 'Monad Serif';
-        src: url('fonts/lora-var.woff2') format('woff2');
+        font-family: 'Space Grotesk';
+        src: url('fonts/space-grotesk-var.woff2') format('woff2');
         font-weight: 400 700;
         font-display: swap;
-      }
-      @font-face {
-        font-family: 'Monad Serif';
-        src: url('fonts/lora-var-italic.woff2') format('woff2');
-        font-weight: 400 700;
-        font-style: italic;
-        font-display: swap;
+        font-style: normal;
       }
 
       :root {
-        --accent-rgb: 255, 69, 58;
-        --accent: rgb(var(--accent-rgb));
-        --accent-2: #ff7269;
-        --text: rgba(255, 255, 255, 0.96);
-        --muted: rgba(235, 235, 245, 0.58);
-        --faint: rgba(235, 235, 245, 0.4);
-        --line: rgba(255, 255, 255, 0.1);
-        --line-2: rgba(255, 255, 255, 0.16);
-        --glass: rgba(255, 255, 255, 0.04);
-        --working: #3b82f6;
-        --idle: #8a93a6;
-        --attn: #ff9f0a;
-        --done: #30d158;
-        /* Serif identity, matching the app: Lora everywhere, Inter as fallback. */
-        --font-serif: 'Monad Serif', 'Monad Sans', Georgia, 'Times New Roman', serif;
-        --font-ui: var(--font-serif);
-        --font-display: var(--font-serif);
-        --font-mono: 'Cascadia Code', 'JetBrains Mono', 'SF Mono', Consolas, ui-monospace, monospace;
-        --maxw: 1080px;
+        /* Surface ladder — depth via steps, never shadows */
+        --canvas: #0a0c10;
+        --surface-1: #12151b;
+        --surface-2: #1a1d24;
+
+        /* Hairlines */
+        --line: #23262d;
+        --line-strong: #32363f;
+
+        /* Text ramp — four steps, used rigorously */
+        --ink: #f2f5fa;
+        --ink-muted: #cdd6e4;
+        --ink-subtle: #8b94a5;
+        --ink-faint: #5c6472;
+
+        /* Brand gradient — lifted from build/logo-mark-gradient.svg */
+        --brand-gradient: linear-gradient(115deg, #ff6a5a 0%, #ff453a 42%, #8b46c9 62%, #3b5bd9 100%);
+
+        --success: #34c08a;
+
+        --cta-bg: #ffffff;
+        --cta-fg: #0a0c10;
+
+        --font-display: 'Space Grotesk', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+        --container: 1120px;
+        --rhythm: 112px;
       }
-      * {
+
+      *,
+      *::before,
+      *::after {
         box-sizing: border-box;
+        box-shadow: none; /* rule 1 — deliberate, don't "improve" this away */
       }
+
       html {
         scroll-behavior: smooth;
       }
-      html,
+
       body {
         margin: 0;
-      }
-      body {
-        font-family: var(--font-ui);
-        color: var(--text);
-        background:
-          radial-gradient(1100px 680px at 50% -12%, rgba(var(--accent-rgb), 0.26), transparent 60%),
-          radial-gradient(900px 600px at 86% 8%, rgba(109, 139, 255, 0.12), transparent 55%),
-          radial-gradient(820px 600px at 6% 38%, rgba(122, 92, 222, 0.1), transparent 55%),
-          linear-gradient(180deg, #0a0c12, #07090d);
-        background-attachment: fixed;
-        min-height: 100vh;
+        background: var(--canvas);
+        color: var(--ink-muted);
+        font-family: var(--font-body);
+        font-size: 16px;
+        line-height: 1.6;
+        letter-spacing: -0.05px;
         -webkit-font-smoothing: antialiased;
-        text-rendering: optimizeLegibility;
-        line-height: 1.55;
+        -moz-osx-font-smoothing: grayscale;
+        font-feature-settings: 'kern', 'liga', 'calt';
       }
-      /* faint grain to kill gradient banding */
-      body::before {
-        content: '';
-        position: fixed;
-        inset: 0;
-        z-index: -1;
-        pointer-events: none;
-        opacity: 0.035;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-      }
-      .wrap {
-        max-width: var(--maxw);
-        margin: 0 auto;
-        padding: 0 24px;
-      }
+
       a {
-        color: inherit;
+        color: var(--ink);
+        text-decoration: none;
       }
+      a:hover {
+        color: #fff;
+      }
+
+      img,
+      svg,
+      video {
+        max-width: 100%;
+        display: block;
+      }
+
       h1,
       h2,
       h3 {
-        font-family: var(--font-display);
+        color: var(--ink);
+        margin: 0;
         font-weight: 600;
       }
 
-      /* ---- top nav ---- */
-      nav {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 22px 0;
+      :focus-visible {
+        outline: 2px solid #8b8fff;
+        outline-offset: 3px;
+        border-radius: 4px;
+      }
+
+      .container {
+        width: 100%;
+        max-width: var(--container);
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+
+      .mono {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        letter-spacing: 0;
+      }
+
+      .eyebrow {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1.3;
+        letter-spacing: 0.9px;
+        text-transform: uppercase;
+        color: var(--ink-subtle);
+        margin: 0;
+      }
+
+      /* ---------------------------------------------------------------- nav */
+      .nav {
         position: sticky;
         top: 0;
         z-index: 50;
-        backdrop-filter: blur(14px) saturate(150%);
-        -webkit-backdrop-filter: blur(14px) saturate(150%);
+        height: 64px;
+        background: rgba(10, 12, 16, 0.72);
+        backdrop-filter: saturate(160%) blur(12px);
+        -webkit-backdrop-filter: saturate(160%) blur(12px);
+        border-bottom: 1px solid transparent;
+        transition: border-color 0.2s ease;
+      }
+      .nav.scrolled {
+        border-bottom-color: var(--line);
+      }
+      .nav-inner {
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
       }
       .brand {
         display: flex;
         align-items: center;
         gap: 10px;
-        font-family: var(--font-display);
-        font-weight: 600;
-        font-size: 18px;
-        letter-spacing: 0;
+        color: var(--ink);
       }
-      .brand img {
-        height: 22px;
-        width: auto;
-        object-fit: contain;
+      .brand svg {
+        width: 26px;
+        height: 26px;
+      }
+      .brand span {
+        font-family: var(--font-display);
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: -0.4px;
       }
       .nav-links {
         display: flex;
         align-items: center;
-        gap: 26px;
-        font-size: 14px;
+        gap: 28px;
       }
       .nav-links a {
-        color: var(--muted);
-        text-decoration: none;
-        transition: color 0.15s ease;
+        color: var(--ink-subtle);
+        font-size: 14px;
       }
       .nav-links a:hover {
-        color: var(--text);
+        color: var(--ink);
       }
-      .nav-links .nav-dl {
-        color: var(--text);
-        padding: 8px 16px;
-        border-radius: 10px;
-        background: rgba(var(--accent-rgb), 0.16);
-        border: 1px solid rgba(var(--accent-rgb), 0.4);
+      .nav-cta {
+        padding: 7px 14px;
+        border: 1px solid var(--line-strong);
+        border-radius: 8px;
+        color: var(--ink) !important;
+        font-size: 14px;
+        font-weight: 500;
       }
-      .nav-links .nav-dl:hover {
-        background: rgba(var(--accent-rgb), 0.26);
+      .nav-cta:hover {
+        background: var(--surface-2);
+        border-color: #464b57;
       }
-      @media (max-width: 640px) {
-        .nav-links a:not(.nav-dl) {
+      @media (max-width: 720px) {
+        .nav-links .hide-sm {
           display: none;
         }
       }
 
-      /* ---- hero ---- */
-      header {
-        padding: 56px 0 8px;
+      /* -------------------------------------------------------------- hero */
+      .hero {
+        padding: 96px 0 0;
         text-align: center;
       }
-      /* The handwritten wordmark opens the page, painted as a mask over the same
-         gradient `h1 .grad` uses so the two read as one lockup. A mask keys off
-         the SVG's alpha, so the file's own black fill is irrelevant. */
-      .hero-wordmark {
-        width: min(360px, 56vw);
-        aspect-ratio: 627 / 291;
-        margin: 0 auto 10px;
-        background: linear-gradient(110deg, #fff 25%, var(--accent-2) 80%);
-        -webkit-mask: url('wordmark.svg') center / contain no-repeat;
-        mask: url('wordmark.svg') center / contain no-repeat;
+      .hero h1 {
+        font-family: var(--font-display);
+        font-size: 64px;
+        font-weight: 700;
+        line-height: 1.05;
+        letter-spacing: -2px;
+        margin: 20px auto 0;
+        max-width: 15ch;
       }
-      /* Forced colours drop background images, and that gradient IS the ink here
-         — without this the wordmark disappears rather than degrading. */
-      @media (forced-colors: active) {
-        .hero-wordmark {
-          background: CanvasText;
-        }
+      .hero .sub {
+        font-size: 19px;
+        line-height: 1.55;
+        letter-spacing: -0.1px;
+        color: var(--ink-subtle);
+        max-width: 60ch;
+        margin: 22px auto 0;
       }
-      .eyebrow {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 12.5px;
-        font-weight: 600;
-        letter-spacing: 0.04em;
-        color: var(--accent-2);
-        margin-bottom: 20px;
-        padding: 6px 14px;
-        border-radius: 999px;
-        background: rgba(var(--accent-rgb), 0.1);
-        border: 1px solid rgba(var(--accent-rgb), 0.25);
-      }
-      .eyebrow .pulse {
-        width: 7px;
-        height: 7px;
-        border-radius: 50%;
-        background: var(--done);
-        box-shadow: 0 0 8px var(--done);
-      }
-      h1 {
-        font-size: clamp(44px, 7.6vw, 76px);
-        letter-spacing: -0.015em;
-        margin: 6px 0 20px;
-        line-height: 1.02;
-      }
-      h1 .grad {
-        background: linear-gradient(110deg, #fff 25%, var(--accent-2) 80%);
-        -webkit-background-clip: text;
-        background-clip: text;
-        -webkit-text-fill-color: transparent;
-      }
-      .tag {
-        font-size: clamp(17px, 2.1vw, 21px);
-        color: var(--muted);
-        max-width: 640px;
-        margin: 0 auto;
-      }
-      .tag b {
-        color: var(--text);
-        font-weight: 600;
+      .hero .sub b {
+        color: var(--ink-muted);
+        font-weight: 500;
       }
 
-      .downloads {
+      .cta-row {
         display: flex;
+        justify-content: center;
         flex-wrap: wrap;
         gap: 12px;
-        justify-content: center;
-        margin: 34px 0 12px;
+        margin-top: 34px;
       }
       .btn {
         display: inline-flex;
         align-items: center;
-        gap: 10px;
-        padding: 14px 22px;
-        border-radius: 13px;
+        gap: 9px;
+        height: 44px;
+        padding: 0 20px;
+        border-radius: 8px;
+        border: 1px solid var(--line-strong);
+        color: var(--ink);
         font-size: 15px;
-        font-weight: 600;
-        text-decoration: none;
-        color: var(--text);
-        background: var(--glass);
-        border: 1px solid var(--line-2);
-        transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
-      }
-      .btn:hover {
-        transform: translateY(-2px);
-        background: rgba(255, 255, 255, 0.08);
-      }
-      .btn--primary {
-        color: #fff;
-        background: linear-gradient(180deg, var(--accent-2), var(--accent));
-        border-color: rgba(255, 255, 255, 0.22);
-        box-shadow:
-          0 0 26px rgba(var(--accent-rgb), 0.5),
-          0 8px 24px rgba(var(--accent-rgb), 0.3);
-      }
-      .btn--primary:hover {
-        filter: brightness(1.07);
+        font-weight: 500;
+        letter-spacing: 0;
+        transition: background 0.15s ease, border-color 0.15s ease;
       }
       .btn svg {
-        width: 18px;
-        height: 18px;
-        flex: 0 0 18px;
+        width: 16px;
+        height: 16px;
+        flex: none;
       }
-      .btn .sub {
-        opacity: 0.72;
+      .btn:hover {
+        background: var(--surface-2);
+        border-color: #464b57;
+      }
+      .btn--primary {
+        background: var(--cta-bg);
+        color: var(--cta-fg);
+        border-color: var(--cta-bg);
+      }
+      .btn--primary:hover {
+        background: #e6e8ec;
+        border-color: #e6e8ec;
+        color: var(--cta-fg);
+      }
+
+      .meta-line {
+        margin-top: 18px;
+        color: var(--ink-faint);
+      }
+      .meta-line b {
+        color: var(--ink-subtle);
+        font-weight: 400;
+      }
+
+      /* The only chromatic element in the page chrome. */
+      .brand-rule {
+        width: 180px;
+        height: 2px;
+        margin: 44px auto 0;
+        border-radius: 2px;
+        background: var(--brand-gradient);
+      }
+
+      /* -------------------------------------------------------------- demo */
+      .demo-wrap {
+        margin-top: 56px;
+      }
+      .demo-frame {
+        background: var(--surface-1);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 10px;
+      }
+      .demo-frame video {
+        width: 100%;
+        border-radius: 8px;
+        display: block;
+      }
+      .demo-cap {
+        margin-top: 14px;
+        text-align: center;
+        color: var(--ink-faint);
+      }
+
+      /* ------------------------------------------------------- mechanism */
+      .mech {
+        margin-top: var(--rhythm);
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        border-top: 1px solid var(--line);
+      }
+      .mech > div {
+        padding: 40px 32px 8px;
+        border-left: 1px solid var(--line);
+      }
+      .mech > div:first-child {
+        border-left: 0;
+        padding-left: 0;
+      }
+      .mech h3 {
+        font-size: 20px;
+        font-weight: 500;
+        line-height: 1.3;
+        letter-spacing: -0.3px;
+        margin: 14px 0 10px;
+      }
+      .mech p {
+        margin: 0;
+        color: var(--ink-subtle);
+        font-size: 15px;
+      }
+      @media (max-width: 860px) {
+        .mech {
+          grid-template-columns: 1fr;
+        }
+        .mech > div {
+          border-left: 0;
+          border-top: 1px solid var(--line);
+          padding: 32px 0 8px;
+        }
+        .mech > div:first-child {
+          border-top: 0;
+        }
+      }
+
+      /* ------------------------------------------------------- isolation */
+      .split {
+        margin-top: var(--rhythm);
+        display: grid;
+        grid-template-columns: minmax(0, 440px) minmax(0, 1fr);
+        gap: 64px;
+        align-items: center;
+      }
+      .split h2 {
+        font-size: 32px;
+        line-height: 1.15;
+        letter-spacing: -0.8px;
+        margin-top: 14px;
+      }
+      .split p {
+        color: var(--ink-subtle);
+        margin: 18px 0 0;
+      }
+      .split p b {
+        color: var(--ink-muted);
         font-weight: 500;
       }
-      .alt-dl {
-        font-size: 13px;
-        color: var(--faint);
-      }
-      .alt-dl a {
-        color: var(--muted);
-        text-decoration: none;
-        border-bottom: 1px solid var(--line-2);
-        padding-bottom: 1px;
-      }
-      .alt-dl a:hover {
-        color: var(--text);
-      }
-      .note {
-        text-align: center;
-        color: var(--faint);
-        font-size: 13px;
-        margin-top: 14px;
-        line-height: 1.7;
-      }
-      .note b {
-        color: var(--muted);
-      }
-      code {
-        font-family: var(--font-mono);
-        font-size: 0.92em;
-        background: rgba(255, 255, 255, 0.06);
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        padding: 1px 6px;
+      @media (max-width: 900px) {
+        .split {
+          grid-template-columns: 1fr;
+          gap: 40px;
+        }
       }
 
-      /* ---- product mockup ---- */
-      .shot-wrap {
-        position: relative;
-        margin: 56px auto 0;
-        max-width: 940px;
+      /* worktree diagram — hairlines and mono labels, no icons */
+      .diagram {
+        background: var(--surface-1);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 28px 24px;
       }
-      .shot-wrap::after {
+      .node {
+        border: 1px solid var(--line-strong);
+        border-radius: 8px;
+        background: var(--surface-2);
+        padding: 12px 14px;
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        color: var(--ink-muted);
+      }
+      .node .tag {
+        display: block;
+        color: var(--ink-faint);
+        font-size: 11px;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+      }
+      .node--repo {
+        text-align: center;
+      }
+      /* repo -> fan-out plumbing: one stem down, one rail across, one stub
+         into each worktree, all drawn with the same hairline as the borders */
+      .connector {
+        height: 14px;
+        border-left: 1px solid var(--line-strong);
+        width: 0;
+        margin: 0 auto;
+      }
+      .fanout {
+        position: relative;
+        margin-top: 14px;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .fanout::before {
         content: '';
         position: absolute;
-        inset: 8% 12% -6%;
-        z-index: -1;
-        background: radial-gradient(60% 60% at 50% 40%, rgba(var(--accent-rgb), 0.35), transparent 70%);
-        filter: blur(40px);
+        top: -14px;
+        left: 16.66%;
+        right: 16.66%;
+        height: 1px;
+        background: var(--line-strong);
       }
-      .shot {
-        border-radius: 18px;
-        border: 1px solid var(--line-2);
-        background: linear-gradient(160deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
-        box-shadow:
-          0 40px 120px rgba(0, 0, 0, 0.62),
-          0 0 0 1px rgba(255, 255, 255, 0.03) inset;
-        overflow: hidden;
+      .fanout .node {
+        position: relative;
       }
-      .demo {
-        display: block;
-        width: 100%;
-        height: auto;
-        border-radius: 18px;
+      .fanout .node::before {
+        content: '';
+        position: absolute;
+        top: -14px;
+        left: 50%;
+        width: 1px;
+        height: 14px;
+        background: var(--line-strong);
       }
-      /* ---- shift band ---- */
-      .shift {
+      .fanout .node {
         text-align: center;
-        max-width: 720px;
-        margin: 100px auto;
       }
-      .shift h2 {
-        font-size: clamp(27px, 4vw, 40px);
-        letter-spacing: -0.025em;
-        margin: 0 0 14px;
-        line-height: 1.12;
+      .fanout .node b {
+        color: var(--ink);
+        font-weight: 500;
       }
-      .shift p {
-        font-size: 18px;
-        color: var(--muted);
-        margin: 0;
+      .diagram-note {
+        margin: 18px 0 0;
+        text-align: center;
+        color: var(--ink-faint);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .dot {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--success);
+        margin-right: 6px;
+        vertical-align: middle;
       }
 
-      /* ---- sections ---- */
-      .sec-h {
+      /* -------------------------------------------------------- download */
+      .download {
+        margin-top: var(--rhythm);
+        padding-top: 56px;
+        border-top: 1px solid var(--line);
+      }
+      .download h2 {
+        font-size: 32px;
+        line-height: 1.15;
+        letter-spacing: -0.8px;
         text-align: center;
-        margin: 0 0 40px;
       }
-      .sec-h h2 {
-        font-size: clamp(27px, 4vw, 38px);
-        letter-spacing: -0.025em;
-        margin: 0 0 10px;
-      }
-      .sec-h p {
-        color: var(--muted);
-        margin: 0;
-        font-size: 16px;
-      }
-      section.block {
-        margin: 104px 0;
+      .download > p.lede {
+        text-align: center;
+        color: var(--ink-subtle);
+        max-width: 56ch;
+        margin: 16px auto 0;
       }
 
-      .steps {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 18px;
-      }
-      .step {
-        padding: 26px;
-        border-radius: 16px;
-        background: var(--glass);
+      .prereq {
+        margin: 36px 0 0;
+        background: var(--surface-1);
         border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 20px 24px;
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
       }
-      .step .n {
-        width: 34px;
-        height: 34px;
-        display: grid;
-        place-items: center;
-        border-radius: 10px;
-        font-family: var(--font-display);
-        font-weight: 600;
+      .prereq .num {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--ink-faint);
+        padding-top: 2px;
+        flex: none;
+      }
+      .prereq p {
+        margin: 0;
         font-size: 15px;
-        color: #fff;
-        background: linear-gradient(180deg, var(--accent-2), var(--accent));
-        box-shadow: 0 0 18px rgba(var(--accent-rgb), 0.4);
-        margin-bottom: 16px;
+        color: var(--ink-subtle);
       }
-      .step h3 {
-        margin: 0 0 7px;
-        font-size: 17px;
-      }
-      .step p {
-        margin: 0;
-        color: var(--muted);
-        font-size: 14.5px;
+      .prereq strong {
+        color: var(--ink);
+        font-weight: 500;
       }
 
-      .features {
+      .tiles {
+        margin-top: 16px;
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-        gap: 14px;
+        /* minmax(0,…) rather than 1fr: the nowrap xattr command below would
+           otherwise inflate its own track and push the page sideways. */
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 16px;
       }
-      .card {
-        padding: 24px;
-        border-radius: 16px;
-        background: var(--glass);
+      @media (max-width: 780px) {
+        .tiles {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .tile {
+        background: var(--surface-1);
         border: 1px solid var(--line);
-        transition: transform 0.18s ease, border-color 0.18s ease;
+        border-radius: 12px;
+        padding: 24px;
       }
-      .card:hover {
-        transform: translateY(-3px);
-        border-color: var(--line-2);
-      }
-      .card h3 {
-        margin: 0 0 9px;
-        font-size: 16px;
+      .tile h3 {
+        font-size: 18px;
+        font-weight: 500;
+        letter-spacing: -0.3px;
         display: flex;
         align-items: center;
         gap: 9px;
+        margin-bottom: 6px;
       }
-      .card .dot {
-        width: 9px;
-        height: 9px;
-        border-radius: 50%;
-        background: var(--accent);
-        box-shadow: 0 0 10px var(--accent);
-        flex: 0 0 9px;
+      .tile h3 svg {
+        width: 16px;
+        height: 16px;
+        opacity: 0.8;
       }
-      .card p {
-        margin: 0;
-        color: var(--muted);
-        font-size: 14.5px;
+      .tile .req {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--ink-faint);
+        margin: 0 0 18px;
+      }
+      .tile .note {
+        font-size: 14px;
+        color: var(--ink-subtle);
+        margin: 16px 0 0;
+      }
+      code {
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        background: var(--surface-2);
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        padding: 1px 6px;
+        color: var(--ink-muted);
+      }
+      .cmd {
+        margin: 10px 0 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: var(--canvas);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 10px 12px;
+      }
+      .cmd code {
+        background: none;
+        border: 0;
+        padding: 0;
+        overflow-x: auto;
+        white-space: nowrap;
+        flex: 1;
+        min-width: 0; /* let it scroll inside the tile instead of widening it */
+      }
+      .copy {
+        flex: none;
+        background: none;
+        border: 1px solid var(--line-strong);
+        border-radius: 6px;
+        color: var(--ink-subtle);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        padding: 4px 8px;
+        cursor: pointer;
+      }
+      .copy:hover {
+        color: var(--ink);
+        border-color: #464b57;
       }
 
-      /* ---- trust ---- */
-      .trust {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 16px;
+      .after-download {
+        margin: 24px 0 0;
         text-align: center;
-      }
-      .trust div {
-        padding: 22px;
-      }
-      .trust h3 {
-        margin: 0 0 8px;
-        font-size: 16px;
-      }
-      .trust p {
-        margin: 0;
-        color: var(--muted);
+        color: var(--ink-faint);
         font-size: 14px;
       }
+      .after-download a {
+        color: var(--ink-subtle);
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+      .after-download a:hover {
+        color: var(--ink);
+      }
 
-      /* ---- final cta ---- */
-      .cta {
-        text-align: center;
-        padding: 60px 28px;
-        border-radius: 24px;
-        background:
-          radial-gradient(600px 300px at 50% 0%, rgba(var(--accent-rgb), 0.24), transparent 70%),
-          var(--glass);
-        border: 1px solid var(--line-2);
-      }
-      .cta h2 {
-        font-size: clamp(28px, 4.5vw, 44px);
-        letter-spacing: -0.025em;
-        margin: 0 0 12px;
-      }
-      .cta p {
-        color: var(--muted);
-        margin: 0 0 28px;
-        font-size: 17px;
-      }
-      .ver {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        margin-top: 18px;
-        padding: 5px 14px;
-        border-radius: 999px;
-        font-size: 12.5px;
-        font-weight: 600;
-        color: var(--muted);
-        background: var(--glass);
-        border: 1px solid var(--line);
-      }
-      .ver b {
-        color: var(--accent-2);
-      }
-      .ver a {
-        color: var(--muted);
-        text-decoration: none;
-        border-bottom: 1px solid var(--line-2);
-      }
-      .ver a:hover {
-        color: var(--text);
-      }
+      /* ------------------------------------------------------------ footer */
       footer {
-        text-align: center;
-        color: var(--faint);
-        font-size: 13px;
-        padding: 44px 0 60px;
-        margin-top: 84px;
+        margin-top: 80px;
+        padding: 28px 0 48px;
         border-top: 1px solid var(--line);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 20px;
+        flex-wrap: wrap;
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--ink-faint);
       }
       footer a {
-        color: var(--muted);
-        text-decoration: none;
+        color: var(--ink-subtle);
       }
-      footer a:hover {
-        color: var(--text);
+      footer .links {
+        display: flex;
+        gap: 20px;
       }
 
-      /* ---- scroll reveal ---- */
-      .reveal {
-        opacity: 0;
-        transform: translateY(16px);
-        transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      /* ------------------------------------------------------------ mobile */
+      @media (max-width: 720px) {
+        :root {
+          --rhythm: 64px;
+        }
+        .hero {
+          padding-top: 56px;
+        }
+        .hero h1 {
+          font-size: 34px;
+          letter-spacing: -1px;
+        }
+        .hero .sub {
+          font-size: 17px;
+        }
+        .cta-row .btn {
+          width: 100%;
+          justify-content: center;
+        }
+        .split h2,
+        .download h2 {
+          font-size: 26px;
+          letter-spacing: -0.5px;
+        }
+        .demo-wrap {
+          margin-top: 36px;
+        }
       }
-      .reveal.in {
-        opacity: 1;
-        transform: none;
-      }
+
       @media (prefers-reduced-motion: reduce) {
         html {
           scroll-behavior: auto;
         }
-        .reveal {
-          opacity: 1;
-          transform: none;
-          transition: none;
+        * {
+          animation: none !important;
+          transition: none !important;
         }
       }
     </style>
   </head>
+
   <body>
-    <div class="wrap">
-      <nav>
-        <div class="brand"><img src="logo-mark-white.png" alt="" />Monad</div>
+    <!-- The M-disc, rebuilt as vector: gradient disc with the mark knocked out
+         to the canvas beneath. The shipped PNG variants are near-white-on-white
+         and vanish against a dark page, so the site draws its own. -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true" focusable="false">
+      <defs>
+        <linearGradient id="monad-grad" x1="5%" y1="8%" x2="95%" y2="95%">
+          <stop offset="0%" stop-color="#ff6a5a" />
+          <stop offset="42%" stop-color="#ff453a" />
+          <stop offset="62%" stop-color="#8b46c9" />
+          <stop offset="100%" stop-color="#3b5bd9" />
+        </linearGradient>
+        <mask id="monad-knockout">
+          <circle cx="569" cy="470" r="400" fill="#fff" />
+          <g fill="#000">
+            <rect x="306" y="344" width="96" height="356" />
+            <rect x="622" y="344" width="96" height="356" />
+            <polygon points="306,344 402,344 560,566 464,566" />
+            <polygon points="718,344 622,344 464,566 560,566" />
+            <circle cx="782" cy="300" r="50" />
+          </g>
+        </mask>
+      </defs>
+    </svg>
+
+    <nav class="nav" id="nav">
+      <div class="container nav-inner">
+        <a class="brand" href="#top" aria-label="Monad — home">
+          <svg viewBox="169 70 800 800" aria-hidden="true" focusable="false">
+            <circle cx="569" cy="470" r="400" fill="url(#monad-grad)" mask="url(#monad-knockout)" />
+          </svg>
+          <span>Monad</span>
+        </a>
         <div class="nav-links">
-          <a href="#how">How it works</a>
-          <a href="#features">Features</a>
-          <a class="nav-dl" href="#download">Download</a>
+          <a class="hide-sm" href="#isolation">How it works</a>
+          <a class="hide-sm" href="https://github.com/Serhii-Leniv/Monad/blob/main/docs/FAQ.md">FAQ</a>
+          <a class="hide-sm" href="https://github.com/Serhii-Leniv/Monad">GitHub</a>
+          <a class="nav-cta" href="#download">Download</a>
         </div>
-      </nav>
+      </div>
+    </nav>
 
-      <header id="download">
-        <div class="hero-wordmark" role="img" aria-label="Monad"></div>
-        <span class="eyebrow"><span class="pulse"></span>The agentic coding canvas</span>
-        <h1>Run <span class="grad">every coding agent</span><br />at once.</h1>
-        <p class="tag">
-          Monad turns one screen into a canvas of live terminals — Claude Code, Codex, Gemini and
-          more working <b>in parallel</b>, each sealed in its own git worktree, with diff &amp; merge
-          built in. <b>Bring your own CLIs.</b>
-        </p>
+    <main id="top">
+      <div class="container">
+        <!-- ------------------------------------------------------- hero -->
+        <header class="hero">
+          <p class="eyebrow">MIT-licensed · macOS &amp; Windows</p>
 
-        <div class="downloads">
-          <a id="dl-primary" class="btn btn--primary" href="https://github.com/Serhii-Leniv/Monad/releases/latest">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 1.6c.1 1-.3 2-.9 2.7-.6.8-1.6 1.4-2.6 1.3-.1-1 .4-2 .9-2.6.6-.8 1.7-1.3 2.6-1.4zM19 17.3c-.5 1.1-.7 1.6-1.3 2.6-.9 1.4-2.1 3.1-3.6 3.1-1.3 0-1.7-.8-3.4-.8-1.8 0-2.2.8-3.5.9-1.5 0-2.6-1.5-3.5-2.9C-.1 16.6-.6 11 1.6 8c1-1.4 2.6-2.3 4.1-2.3 1.5 0 2.5.9 3.7.9 1.2 0 1.9-.9 3.7-.9 1.3 0 2.7.7 3.7 2-3.2 1.7-2.7 6.2.5 7.6z"/></svg>
-            <span id="dl-primary-label">Download</span>
-          </a>
-          <a id="dl-secondary" class="btn" href="https://github.com/Serhii-Leniv/Monad/releases/latest/download/Monad-Windows-Setup.exe">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5 11 4.3v7.4H3V5.5zm0 13L11 19.7v-7.2H3v6zm9-14.4L21 3v8.7h-9V4.1zm0 8.4h9V21l-9-1.4v-7.1z"/></svg>
-            <span id="dl-secondary-label">Download for Windows</span>
-          </a>
-        </div>
-        <p class="alt-dl">
-          <a id="dl-other" href="#install">macOS · Windows · install notes →</a>
-        </p>
-        <p class="note">
-          Free · runs on your machine with your own agent CLIs (<code>claude</code>, <code>codex</code>,
-          <code>gemini</code>…).<br />
-          Unsigned beta — first launch: <b>one Terminal command</b> (macOS, see
-          <a href="#install" style="color: var(--muted)">install notes</a>) /
-          <b>More info → Run anyway</b> (Windows).
-        </p>
+          <h1>Run every agent in its own worktree.</h1>
 
-        <!-- product demo (real Monad canvas, recorded) -->
-        <div class="shot-wrap reveal">
-          <div class="shot">
+          <p class="sub">
+            Monad runs Claude Code, Codex, Gemini and any other terminal agent side by side — each
+            sealed in <b>its own git worktree</b>. Five agents, one repo, nothing trampled.
+          </p>
+
+          <div class="cta-row">
+            <a
+              id="dl-primary"
+              class="btn btn--primary"
+              href="https://github.com/Serhii-Leniv/Monad/releases/latest/download/Monad-macOS-arm64.dmg"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                <path
+                  d="M16.4 1.6c.1 1-.3 2-.9 2.7-.6.8-1.6 1.4-2.6 1.3-.1-1 .4-2 .9-2.6.6-.8 1.7-1.3 2.6-1.4zM19 17.3c-.5 1.1-.7 1.6-1.3 2.6-.9 1.4-2.1 3.1-3.6 3.1-1.3 0-1.7-.8-3.4-.8-1.8 0-2.2.8-3.5.9-1.5 0-2.6-1.5-3.5-2.9C-.1 16.6-.6 11 1.6 8c1-1.4 2.6-2.3 4.1-2.3 1.5 0 2.5.9 3.7.9 1.2 0 1.9-.9 3.7-.9 1.3 0 2.7.7 3.7 2-3.2 1.7-2.7 6.2.5 7.6z"
+                />
+              </svg>
+              <span id="dl-primary-label">Download for macOS</span>
+            </a>
+            <a
+              id="dl-secondary"
+              class="btn"
+              href="https://github.com/Serhii-Leniv/Monad/releases/latest/download/Monad-Windows-Setup.exe"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                <path d="M3 5.5 11 4.3v7.4H3V5.5zm0 13L11 19.7v-7.2H3v6zm9-14.4L21 3v8.7h-9V4.1zm0 8.4h9V21l-9-1.4v-7.1z" />
+              </svg>
+              <span id="dl-secondary-label">Download for Windows</span>
+            </a>
+          </div>
+
+          <p class="mono meta-line">
+            <!-- Fallback only — the script below overwrites this from the Releases
+                 API. It's what visitors see when that fetch fails, most often the
+                 unauthenticated GitHub API's 60 req/hr per-IP limit, so bump it at
+                 release time instead of letting it drift versions behind. -->
+            <span id="ver-text"><b>v0.1.27</b></span> · free &amp; open source · runs on your own agent CLIs
+          </p>
+
+          <div class="brand-rule" aria-hidden="true"></div>
+        </header>
+
+        <!-- ------------------------------------------------------- demo -->
+        <section class="demo-wrap" aria-label="Monad in action">
+          <div class="demo-frame">
             <video
               class="demo"
+              src="demo.mp4"
+              poster="demo-poster.jpg"
               autoplay
               loop
               muted
               playsinline
-              poster="demo-poster.jpg"
-              aria-label="Monad running six coding agents in parallel — Claude Code, Codex and Gemini, each isolated in its own git worktree"
-            >
-              <source src="demo.mp4" type="video/mp4" />
-              <img src="demo-poster.jpg" alt="Monad running six coding agents in parallel — Claude Code, Codex and Gemini, each isolated in its own git worktree, with diff and merge built in." class="demo" />
-            </video>
+              preload="metadata"
+              aria-label="Six coding agents running in parallel in Monad, each in its own git worktree"
+            ></video>
           </div>
-        </div>
-      </header>
+          <p class="mono demo-cap">Six agents working in parallel — each a real terminal, each on its own branch.</p>
+        </section>
 
-      <div class="shift reveal">
-        <h2>One agent at a time is the bottleneck.</h2>
-        <p>
-          You can only babysit one terminal while it thinks. Monad lets you start five, keep them
-          from stepping on each other, and merge the one that got it right.
-        </p>
-      </div>
-
-      <section class="block" id="how">
-        <div class="sec-h reveal">
-          <h2>How it works</h2>
-          <p>From a cold repo to merged work in three moves.</p>
-        </div>
-        <div class="steps">
-          <div class="step reveal">
-            <div class="n">1</div>
-            <h3>Open your repo</h3>
-            <p>Point Monad at any git project. Your canvas and terminals are saved per project — reopen and your agents come back up, not just empty shells.</p>
-          </div>
-          <div class="step reveal">
-            <div class="n">2</div>
-            <h3>Spin up agents</h3>
-            <p>Each terminal runs your own CLI in its own branch + git worktree — up to nine, tiled automatically. Drag to reorder; the grid re-flows itself.</p>
-          </div>
-          <div class="step reveal">
-            <div class="n">3</div>
-            <h3>Review &amp; merge</h3>
-            <p>See who's working, idle, or waiting on you. Read each agent's diff and merge into your base — or discard the branch — without leaving the canvas.</p>
-          </div>
-        </div>
-      </section>
-
-      <section class="block" id="features">
-        <div class="sec-h reveal">
-          <h2>A control room for parallel AI coding</h2>
-          <p>Not another terminal emulator — a place to run a whole team of agents at once.</p>
-        </div>
-        <div class="features">
-          <div class="card reveal">
-            <h3><span class="dot"></span>Parallel by design</h3>
-            <p>A canvas of live terminals with automatic tiling. Start a swarm and watch them all at once — no tab-juggling.</p>
-          </div>
-          <div class="card reveal">
-            <h3><span class="dot"></span>True isolation</h3>
-            <p>A dedicated branch and git worktree per agent, so parallel edits never clobber each other or your working tree.</p>
-          </div>
-          <div class="card reveal">
-            <h3><span class="dot"></span>Diff &amp; merge in-app</h3>
-            <p>Review an agent's changes against your base branch and land them — or throw the branch away — without breaking focus.</p>
-          </div>
-          <div class="card reveal">
-            <h3><span class="dot"></span>Knows who needs you</h3>
-            <p>Live per-agent status — working, idle, or waiting for input — plus a desktop ping when a backgrounded agent finishes or gets stuck.</p>
-          </div>
-          <div class="card reveal">
-            <h3><span class="dot"></span>Picks up where you left off</h3>
-            <p>Close the app and reopen later: each terminal restores in place and relaunches its agent, so you're back exactly where you stopped.</p>
-          </div>
-          <div class="card reveal">
-            <h3><span class="dot"></span>Yours to theme</h3>
-            <p>A liquid-glass interface with your own accent colour, wallpaper, and adjustable terminal transparency.</p>
-          </div>
-        </div>
-      </section>
-
-      <section class="block">
-        <div class="trust">
-          <div class="reveal">
-            <h3>Local &amp; private</h3>
-            <p>Runs on your machine, against your repo. No code leaves your computer — agents use your own keys.</p>
-          </div>
-          <div class="reveal">
-            <h3>Bring your own agents</h3>
-            <p>Claude Code, Codex, Gemini, or any CLI you already run. Monad orchestrates — it never locks you in.</p>
-          </div>
-          <div class="reveal">
-            <h3>No inference cost</h3>
-            <p>Monad just spawns the agents you've already installed. No middleman, no markup, no extra subscription.</p>
-          </div>
-        </div>
-      </section>
-
-      <section class="block" id="install">
-        <div class="sec-h reveal">
-          <h2>Download &amp; install</h2>
-          <p>Pick your platform. Monad is an unsigned beta, so there's a one-time OS prompt — here's the 30-second bypass.</p>
-        </div>
-        <div class="steps">
-          <div class="step reveal">
-            <div class="n">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M16.4 1.6c.1 1-.3 2-.9 2.7-.6.8-1.6 1.4-2.6 1.3-.1-1 .4-2 .9-2.6.6-.8 1.7-1.3 2.6-1.4zM19 17.3c-.5 1.1-.7 1.6-1.3 2.6-.9 1.4-2.1 3.1-3.6 3.1-1.3 0-1.7-.8-3.4-.8-1.8 0-2.2.8-3.5.9-1.5 0-2.6-1.5-3.5-2.9C-.1 16.6-.6 11 1.6 8c1-1.4 2.6-2.3 4.1-2.3 1.5 0 2.5.9 3.7.9 1.2 0 1.9-.9 3.7-.9 1.3 0 2.7.7 3.7 2-3.2 1.7-2.7 6.2.5 7.6z"/></svg>
-            </div>
-            <h3>macOS</h3>
-            <p style="margin-bottom: 14px">
-              <a id="dl-mac-install" class="btn" style="padding:9px 14px;font-size:13.5px" href="https://github.com/Serhii-Leniv/Monad/releases/latest/download/Monad-macOS-arm64.dmg">Apple Silicon · .dmg</a>
-            </p>
-            <p style="margin-bottom: 10px">Open the <code>.dmg</code>, drag <b>Monad</b> to Applications, then run once in Terminal:</p>
-            <p style="margin-bottom: 10px"><code>xattr -cr /Applications/Monad.app</code></p>
-            <p>macOS flags unsigned downloads as “damaged” — this clears it.</p>
-          </div>
-          <div class="step reveal">
-            <div class="n">
-              <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor"><path d="M3 5.5 11 4.3v7.4H3V5.5zm0 13L11 19.7v-7.2H3v6zm9-14.4L21 3v8.7h-9V4.1zm0 8.4h9V21l-9-1.4v-7.1z"/></svg>
-            </div>
-            <h3>Windows</h3>
-            <p style="margin-bottom: 14px">
-              <a id="dl-win-install" class="btn" style="padding:9px 14px;font-size:13.5px" href="https://github.com/Serhii-Leniv/Monad/releases/latest/download/Monad-Windows-Setup.exe">Windows x64 · .exe</a>
-            </p>
-            <p>Run the installer. If SmartScreen appears, click <b>More info → Run anyway</b>.</p>
-          </div>
-          <div class="step reveal">
-            <div class="n">3</div>
-            <h3>Before you start</h3>
+        <!-- -------------------------------------------------- mechanism -->
+        <section class="mech" aria-label="How Monad works">
+          <div>
+            <p class="eyebrow">Isolation</p>
+            <h3>A branch and a worktree each</h3>
             <p>
-              Monad runs the agent CLIs you already have. Install at least one —
-              <code>claude</code>, <code>codex</code>, or <code>gemini</code> — then open a git repo
-              and add a terminal.
+              Every agent gets its own private checkout, so parallel edits can't collide. An agent is
+              pinned to its worktree after spawn — even a shell profile that jumps directories can't
+              walk it into your real working tree.
             </p>
           </div>
-        </div>
-        <p class="note" style="margin-top: 22px">
-          <b>Stays current:</b> Monad checks for new releases on launch and shows an in-app notice
-          when an update is ready — no background downloads, just a pointer back to this page.<br />
-          Older versions &amp; checksums on
-          <a href="https://github.com/Serhii-Leniv/Monad/releases" style="color: var(--accent-2)">GitHub Releases</a>.
-          Hit a bug? <b>Open an issue</b> —
-          <a href="https://github.com/Serhii-Leniv/Monad/issues" style="color: var(--accent-2)">it's a free beta and every report helps</a>.
-        </p>
-      </section>
+          <div>
+            <p class="eyebrow">Parallel</p>
+            <h3>Up to nine live terminals</h3>
+            <p>
+              Real terminals, tiled automatically. Start a swarm and watch them all at once, drag to
+              reorder, and get a desktop ping when a backgrounded agent finishes or needs you.
+            </p>
+          </div>
+          <div>
+            <p class="eyebrow">Landing</p>
+            <h3>Merge, apply, or discard</h3>
+            <p>
+              Read an agent's diff against your base branch and merge it, take just the files you
+              want onto your branch, or throw the whole branch away — without leaving the app.
+            </p>
+          </div>
+        </section>
 
-      <section class="cta reveal">
-        <h2>Give your agents room to work.</h2>
-        <p>Download Monad and run your first parallel agents in under a minute.</p>
-        <div class="downloads" style="margin-bottom: 0">
-          <a id="dl-primary-2" class="btn btn--primary" href="https://github.com/Serhii-Leniv/Monad/releases/latest">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 1.6c.1 1-.3 2-.9 2.7-.6.8-1.6 1.4-2.6 1.3-.1-1 .4-2 .9-2.6.6-.8 1.7-1.3 2.6-1.4zM19 17.3c-.5 1.1-.7 1.6-1.3 2.6-.9 1.4-2.1 3.1-3.6 3.1-1.3 0-1.7-.8-3.4-.8-1.8 0-2.2.8-3.5.9-1.5 0-2.6-1.5-3.5-2.9C-.1 16.6-.6 11 1.6 8c1-1.4 2.6-2.3 4.1-2.3 1.5 0 2.5.9 3.7.9 1.2 0 1.9-.9 3.7-.9 1.3 0 2.7.7 3.7 2-3.2 1.7-2.7 6.2.5 7.6z"/></svg>
-            <span id="dl-primary-2-label">Download</span>
-          </a>
-          <a class="btn" href="#install">
-            All platforms
-          </a>
-        </div>
-        <div class="ver">
-          <!-- Fallback only — the script below overwrites this from the Releases
-               API. It's what visitors see when that fetch fails, most often the
-               unauthenticated GitHub API's 60 req/hr per-IP limit, so bump it at
-               release time instead of letting it drift versions behind. -->
-          <span id="ver-text">Latest release · <b>v0.1.26</b></span>
-          · <a href="https://github.com/Serhii-Leniv/Monad/releases" target="_blank" rel="noopener">changelog</a>
-        </div>
-      </section>
+        <!-- -------------------------------------------------- isolation -->
+        <section class="split" id="isolation">
+          <div>
+            <p class="eyebrow">Why it's safe</p>
+            <h2>Five agents. One repo. Nothing trampled.</h2>
+            <p>
+              Running several agents on one checkout normally means they overwrite each other's edits
+              — and yours. Monad gives each agent <b>its own branch and its own git worktree</b>: a
+              real, separate directory on disk, backed by the same repository.
+            </p>
+            <p>
+              Your working tree is never one of them. Agents can't see it, can't reach it, and can't
+              be tricked into it. When one gets the answer right, you review its diff and land it
+              deliberately — <b>nothing reaches your branch until you say so</b>.
+            </p>
+          </div>
 
-      <footer>
-        Built by Serhii Leniv · BYO agents, your machine, your repo
-      </footer>
-    </div>
+          <div class="diagram" aria-hidden="true">
+            <div class="node node--repo">
+              <span class="tag">your repository</span>
+              main — untouched
+            </div>
+            <div class="connector"></div>
+            <div class="fanout">
+              <div class="node"><span class="tag">worktree</span><b>claude</b></div>
+              <div class="node"><span class="tag">worktree</span><b>codex</b></div>
+              <div class="node"><span class="tag">worktree</span><b>gemini</b></div>
+            </div>
+            <p class="diagram-note"><span class="dot"></span>three checkouts, three branches, zero collisions</p>
+          </div>
+        </section>
+
+        <!-- --------------------------------------------------- download -->
+        <section class="download" id="download">
+          <h2>Get Monad</h2>
+          <p class="lede">
+            Free and MIT-licensed. Runs on your machine against your repo — no account, no telemetry,
+            and no inference cost, because it drives the agent CLIs you already pay for.
+          </p>
+
+          <div class="prereq">
+            <span class="num">01</span>
+            <p>
+              <strong>Install an agent CLI first.</strong> Monad orchestrates the tools you already
+              run — it doesn't ship a model of its own. Have at least one of <code>claude</code>,
+              <code>codex</code>, <code>gemini</code> or <code>cursor-agent</code> on your PATH, then
+              open a git repo and add your first agent.
+            </p>
+          </div>
+
+          <div class="tiles">
+            <div class="tile">
+              <h3>
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                  <path
+                    d="M16.4 1.6c.1 1-.3 2-.9 2.7-.6.8-1.6 1.4-2.6 1.3-.1-1 .4-2 .9-2.6.6-.8 1.7-1.3 2.6-1.4zM19 17.3c-.5 1.1-.7 1.6-1.3 2.6-.9 1.4-2.1 3.1-3.6 3.1-1.3 0-1.7-.8-3.4-.8-1.8 0-2.2.8-3.5.9-1.5 0-2.6-1.5-3.5-2.9C-.1 16.6-.6 11 1.6 8c1-1.4 2.6-2.3 4.1-2.3 1.5 0 2.5.9 3.7.9 1.2 0 1.9-.9 3.7-.9 1.3 0 2.7.7 3.7 2-3.2 1.7-2.7 6.2.5 7.6z"
+                  />
+                </svg>
+                macOS
+              </h3>
+              <p class="req">Apple silicon · .dmg</p>
+              <a
+                id="dl-mac-install"
+                class="btn btn--primary"
+                href="https://github.com/Serhii-Leniv/Monad/releases/latest/download/Monad-macOS-arm64.dmg"
+                >Download .dmg</a
+              >
+              <p class="note">
+                Drag Monad to Applications, then run this once. macOS flags unsigned downloads as
+                &ldquo;damaged&rdquo;; this clears the quarantine flag.
+              </p>
+              <div class="cmd">
+                <code id="mac-cmd">xattr -dr com.apple.quarantine /Applications/Monad.app</code>
+                <button class="copy" type="button" data-copy="mac-cmd">copy</button>
+              </div>
+            </div>
+
+            <div class="tile">
+              <h3>
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                  <path d="M3 5.5 11 4.3v7.4H3V5.5zm0 13L11 19.7v-7.2H3v6zm9-14.4L21 3v8.7h-9V4.1zm0 8.4h9V21l-9-1.4v-7.1z" />
+                </svg>
+                Windows
+              </h3>
+              <p class="req">x64 · installer</p>
+              <a
+                id="dl-win-install"
+                class="btn btn--primary"
+                href="https://github.com/Serhii-Leniv/Monad/releases/latest/download/Monad-Windows-Setup.exe"
+                >Download installer</a
+              >
+              <p class="note">
+                Run the installer. If SmartScreen appears, choose <b>More info → Run anyway</b> — the
+                build isn't code-signed yet.
+              </p>
+              <p class="note">Updates install themselves in place from then on — no reinstall needed.</p>
+            </div>
+          </div>
+
+          <p class="after-download">
+            <a href="https://github.com/Serhii-Leniv/Monad/releases">All releases &amp; checksums</a> ·
+            <a href="https://github.com/Serhii-Leniv/Monad/blob/main/docs/FAQ.md">FAQ</a> ·
+            <a href="https://github.com/Serhii-Leniv/Monad/issues">Report a bug</a>
+          </p>
+        </section>
+
+        <footer>
+          <span>Built by Serhii Leniv · MIT</span>
+          <span class="links">
+            <a href="https://github.com/Serhii-Leniv/Monad">GitHub</a>
+            <a href="https://github.com/Serhii-Leniv/Monad/releases">Changelog</a>
+          </span>
+        </footer>
+      </div>
+    </main>
 
     <script>
-      // ---- Download UX: detect OS, label the primary button, fill the secondary ----
+      // ---- Download UX: detect OS, order the buttons, resolve live assets ----
       (function () {
         var REPO = 'Serhii-Leniv/Monad';
         var base = 'https://github.com/' + REPO + '/releases/latest/download/';
         var assets = {
-          macArm: { url: base + 'Monad-macOS-arm64.dmg', label: 'Download for macOS', sub: 'Apple Silicon', os: 'mac' },
-          win: { url: base + 'Monad-Windows-Setup.exe', label: 'Download for Windows', sub: '', os: 'win' }
+          mac: { url: base + 'Monad-macOS-arm64.dmg', label: 'Download for macOS', os: 'mac' },
+          win: { url: base + 'Monad-Windows-Setup.exe', label: 'Download for Windows', os: 'win' }
         };
         // platform glyphs, so the icon always matches the button's OS
         var ICONS = {
@@ -790,85 +980,111 @@
 
         var ua = navigator.userAgent || '';
         var plat = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '';
-        var isMac = /mac/i.test(plat) || /Mac OS X/i.test(ua);
         var isWin = /win/i.test(plat) || /Windows/i.test(ua);
 
-        var primary = isMac ? assets.macArm : assets.win;
-        var secondary = isMac ? assets.win : assets.macArm;
+        // Both buttons are always visible and always explicitly labelled, so a
+        // visitor on Linux — where neither branch matches — is never handed the
+        // wrong installer under a generic "Download" label. They just pick one.
+        var primary = isWin ? assets.win : assets.mac;
+        var secondary = primary === assets.mac ? assets.win : assets.mac;
 
         function setBtn(id, labelId, a) {
           var el = document.getElementById(id);
           var lab = document.getElementById(labelId);
           if (!el || !a) return;
           el.href = a.url;
-          if (lab) lab.innerHTML = a.label + (a.sub ? ' <span class="sub">' + a.sub + '</span>' : '');
+          if (lab) lab.textContent = a.label;
           var svg = el.querySelector('svg');
           if (svg && ICONS[a.os]) svg.innerHTML = ICONS[a.os];
         }
         setBtn('dl-primary', 'dl-primary-label', primary);
         setBtn('dl-secondary', 'dl-secondary-label', secondary);
-        setBtn('dl-primary-2', 'dl-primary-2-label', primary);
 
         // ---- Live version + size from the GitHub Releases API (graceful fallback) ----
-        function fmtSize(b) { return b ? (b / 1048576).toFixed(0) + ' MB' : ''; }
+        function fmtSize(b) {
+          return b ? (b / 1048576).toFixed(0) + ' MB' : '';
+        }
         fetch('https://api.github.com/repos/' + REPO + '/releases/latest', {
           headers: { Accept: 'application/vnd.github+json' }
         })
-          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (r) {
+            return r.ok ? r.json() : null;
+          })
           .then(function (rel) {
             if (!rel || !rel.tag_name) return;
-            var date = rel.published_at ? new Date(rel.published_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '';
             var vt = document.getElementById('ver-text');
-            if (vt) vt.innerHTML = 'Latest release · <b>' + rel.tag_name + '</b>' + (date ? ' · ' + date : '');
+            if (vt) vt.innerHTML = '<b>' + rel.tag_name + '</b>';
+
             // Resolve download links from the live asset list by suffix, so the
-            // hardcoded fallbacks survive the Vectro → Monad artifact rename.
+            // hardcoded fallbacks survive an artifact rename.
             var live = { mac: '', win: '' };
+            var size = { mac: '', win: '' };
             (rel.assets || []).forEach(function (as) {
-              if (/macOS-arm64\.dmg$/.test(as.name)) live.mac = as.browser_download_url;
-              if (/Windows-Setup\.exe$/.test(as.name)) live.win = as.browser_download_url;
+              if (/macOS-arm64\.dmg$/.test(as.name)) {
+                live.mac = as.browser_download_url;
+                size.mac = fmtSize(as.size);
+              }
+              if (/Windows-Setup\.exe$/.test(as.name)) {
+                live.win = as.browser_download_url;
+                size.win = fmtSize(as.size);
+              }
             });
-            if (live.mac) assets.macArm.url = live.mac;
+            if (live.mac) assets.mac.url = live.mac;
             if (live.win) assets.win.url = live.win;
+
             setBtn('dl-primary', 'dl-primary-label', primary);
             setBtn('dl-secondary', 'dl-secondary-label', secondary);
-            setBtn('dl-primary-2', 'dl-primary-2-label', primary);
+
             var mi = document.getElementById('dl-mac-install');
             if (mi && live.mac) mi.href = live.mac;
             var wi = document.getElementById('dl-win-install');
             if (wi && live.win) wi.href = live.win;
-            // annotate the primary button with the matching asset size
-            var match = isMac ? /macOS-arm64\.dmg$/ : /Windows-Setup\.exe$/;
-            var size = '';
-            (rel.assets || []).forEach(function (as) { if (match.test(as.name)) size = fmtSize(as.size); });
-            if (size) {
-              var lab = document.getElementById('dl-primary-label');
-              if (lab && primary.sub) lab.innerHTML = primary.label + ' <span class="sub">' + primary.sub + ' · ' + size + '</span>';
-              else if (lab) lab.innerHTML = primary.label + ' <span class="sub">' + size + '</span>';
-            }
+
+            // annotate the platform tiles with the real asset sizes
+            var reqs = document.querySelectorAll('.tile .req');
+            if (reqs[0] && size.mac) reqs[0].textContent = 'Apple silicon · .dmg · ' + size.mac;
+            if (reqs[1] && size.win) reqs[1].textContent = 'x64 · installer · ' + size.win;
           })
           .catch(function () {});
       })();
 
-      // ---- Respect reduced-motion: hold the demo on its first frame ----
+      // ---- Respect reduced-motion: hold the demo on its poster frame ----
       (function () {
         if (!window.matchMedia) return;
         if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
         var v = document.querySelector('video.demo');
-        if (v) { v.autoplay = false; v.removeAttribute('autoplay'); v.pause(); }
+        if (v) {
+          v.autoplay = false;
+          v.removeAttribute('autoplay');
+          v.pause();
+        }
       })();
 
-      // ---- Scroll reveal ----
+      // ---- Hairline under the nav, only once you've scrolled ----
       (function () {
-        if (!('IntersectionObserver' in window)) {
-          document.querySelectorAll('.reveal').forEach(function (e) { e.classList.add('in'); });
-          return;
-        }
-        var io = new IntersectionObserver(function (entries) {
-          entries.forEach(function (en) {
-            if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); }
+        var nav = document.getElementById('nav');
+        if (!nav) return;
+        var tick = function () {
+          nav.classList.toggle('scrolled', window.scrollY > 24);
+        };
+        tick();
+        window.addEventListener('scroll', tick, { passive: true });
+      })();
+
+      // ---- Copy button for the macOS quarantine command ----
+      (function () {
+        document.querySelectorAll('.copy').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var src = document.getElementById(btn.getAttribute('data-copy'));
+            if (!src || !navigator.clipboard) return;
+            navigator.clipboard.writeText(src.textContent.trim()).then(function () {
+              btn.textContent = 'copied';
+              setTimeout(function () {
+                btn.textContent = 'copy';
+              }, 1600);
+            });
           });
-        }, { threshold: 0.12 });
-        document.querySelectorAll('.reveal').forEach(function (e) { io.observe(e); });
+        });
       })();
     </script>
   </body>
