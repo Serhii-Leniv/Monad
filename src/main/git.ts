@@ -85,37 +85,91 @@ export interface WorktreeResult {
   created: boolean
 }
 
+/** True only if `path` is a worktree git itself has registered for this repo.
+ *  A bare existsSync() isn't enough: a leftover directory from a partial removal
+ *  (or a user-deleted .git file) would be reused as-is and the agent would run
+ *  in a plain folder while the UI reported `isolated: true` — every later diff
+ *  and merge against it then fails or targets the wrong tree. */
+async function isRegisteredWorktree(repoRoot: string, path: string): Promise<boolean> {
+  try {
+    const out = await git(repoRoot, ['worktree', 'list', '--porcelain'])
+    const norm = (p: string): string => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+    const target = norm(path)
+    return out
+      .split('\n')
+      .filter((l) => l.startsWith('worktree '))
+      .some((l) => norm(l.slice('worktree '.length).trim()) === target)
+  } catch {
+    return false
+  }
+}
+
+/** Serializes worktree creation per repo. Every pane's mount effect calls this
+ *  in parallel on restore, and concurrent `git worktree add` against one repo
+ *  contends for .git/index.lock. The loser used to throw, get swallowed into
+ *  `isolated: false`, and leave the agent writing to the user's REAL working
+ *  tree while the UI still claimed isolation. */
+const worktreeLocks = new Map<string, Promise<unknown>>()
+
+function withRepoLock<T>(repoRoot: string, fn: () => Promise<T>): Promise<T> {
+  const key = repoRoot.replace(/\\/g, '/').toLowerCase()
+  const prev = worktreeLocks.get(key) ?? Promise.resolve()
+  const next = prev.then(fn, fn)
+  // Keep the chain alive on failure, and drop the entry once it's the tail so
+  // the map doesn't grow for the life of the process.
+  worktreeLocks.set(
+    key,
+    next.catch(() => undefined)
+  )
+  void next.catch(() => undefined).then(() => {
+    if (worktreeLocks.get(key) === next) worktreeLocks.delete(key)
+  })
+  return next
+}
+
 /** Create (or reuse) a git worktree + branch for an agent. Branches off the
  *  repo's current HEAD. Throws if the repo has no commits yet. */
 export async function createWorktree(repoRoot: string, agentId: string): Promise<WorktreeResult> {
   const { path, branch } = worktreeInfo(repoRoot, agentId)
-  if (existsSync(path)) return { path, branch, created: false }
-  try {
-    await git(repoRoot, ['worktree', 'add', path, '-b', branch])
-  } catch {
-    // Branch already exists from a previous session — attach to it.
-    await git(repoRoot, ['worktree', 'add', path, branch])
-  }
-  return { path, branch, created: true }
+  return withRepoLock(repoRoot, async () => {
+    if (existsSync(path)) {
+      if (await isRegisteredWorktree(repoRoot, path)) return { path, branch, created: false }
+      // Stale directory squatting on the path — clear git's view of it and let
+      // the add below recreate it properly.
+      await git(repoRoot, ['worktree', 'prune']).catch(() => undefined)
+      await fsp.rm(path, { recursive: true, force: true }).catch(() => undefined)
+    }
+    try {
+      await git(repoRoot, ['worktree', 'add', path, '-b', branch])
+    } catch {
+      // Branch already exists from a previous session — attach to it.
+      await git(repoRoot, ['worktree', 'add', path, branch])
+    }
+    return { path, branch, created: true }
+  })
 }
 
 export async function removeWorktree(repoRoot: string, agentId: string): Promise<void> {
   const { path, branch } = worktreeInfo(repoRoot, agentId)
-  try {
-    await git(repoRoot, ['worktree', 'remove', '--force', path])
-  } catch {
-    /* not registered / already gone */
-  }
-  try {
-    await git(repoRoot, ['branch', '-D', branch])
-  } catch {
-    /* branch already deleted */
-  }
-  try {
-    await git(repoRoot, ['worktree', 'prune'])
-  } catch {
-    /* ignore */
-  }
+  // Same lock as createWorktree — a remove landing between another agent's
+  // `worktree add` and its metadata write would corrupt git's worktree list.
+  await withRepoLock(repoRoot, async () => {
+    try {
+      await git(repoRoot, ['worktree', 'remove', '--force', path])
+    } catch {
+      /* not registered / already gone */
+    }
+    try {
+      await git(repoRoot, ['branch', '-D', branch])
+    } catch {
+      /* branch already deleted */
+    }
+    try {
+      await git(repoRoot, ['worktree', 'prune'])
+    } catch {
+      /* ignore */
+    }
+  })
 }
 
 export async function listWorktrees(repoRoot: string): Promise<string[]> {
@@ -318,7 +372,8 @@ export interface DiffResult {
 /** Git's porcelain output wraps paths containing spaces/quotes/non-ASCII in
  *  double quotes with C-style escapes (\", \\, \t, \303\251 …). Decode them —
  *  octal escapes are UTF-8 bytes, so collect bytes and decode once at the end. */
-function unquoteGitPath(raw: string): string {
+/** Exported for unit tests. */
+export function unquoteGitPath(raw: string): string {
   if (!raw.startsWith('"') || !raw.endsWith('"')) return raw
   const inner = raw.slice(1, -1)
   const bytes: number[] = []

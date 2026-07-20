@@ -242,6 +242,9 @@ function TerminalPane({
   // Whether this pane's workspace is the one on screen — gates DOM-focus grabs so
   // a hidden background pane never steals keyboard focus from the active canvas.
   const isActive = useStore((s) => s.activeWorkspaceId === workspaceId)
+  // Spawning is held until shell detection resolves — see the guard in the mount
+  // effect below.
+  const shellsLoaded = useStore((s) => s.shellsLoaded)
   const selected = useStore((s) => wsById(s, workspaceId)?.selectedIds.includes(id) ?? false)
   const closing = useStore((s) => wsById(s, workspaceId)?.closingIds.includes(id) ?? false)
   const removeAgent = useStore((s) => s.removeAgent)
@@ -299,12 +302,18 @@ function TerminalPane({
   // Ctrl/⌘-V and the context-menu Paste both route through the shared paste
   // routine (see terminalRegistry.pasteIntoTerminal).
   const pasteFromClipboard = async (): Promise<void> => {
-    if (termRef.current) await pasteIntoTerminal(termRef.current)
+    if (termRef.current) await pasteIntoTerminal(termRef.current, agent.shellId)
   }
 
   useEffect(() => {
     const host = termHostRef.current
     if (!host) return
+    // Wait for shell detection. Restored panes mount the instant
+    // hydrateWorkspaces lands, which is usually BEFORE shells:list resolves — so
+    // the lookup below found nothing and the pty quietly fell back to the
+    // platform default, ignoring the user's Git Bash / WSL / pwsh choice. This
+    // effect re-runs when the flag flips, and does nothing until then.
+    if (!shellsLoaded) return
     setSpawnError(null)
 
     const term = new Terminal({
@@ -514,6 +523,11 @@ function TerminalPane({
     const doFit = (): void => {
       cancelAnimationFrame(raf)
       raf = requestAnimationFrame(() => {
+        // A pane in a background workspace has no layout box (its layer is
+        // content-visibility:hidden), so fit() would propose nonsense and we'd
+        // resize the pty to a degenerate size — reflowing the agent's TUI for
+        // no reason. Keep the last good geometry; App refits on activation.
+        if (host.offsetWidth === 0 || host.offsetHeight === 0) return
         try {
           fit.fit()
         } catch {
@@ -559,6 +573,8 @@ function TerminalPane({
     // occurs (evaluateIdle), so a later burst is tracked from scratch.
     let steady = false
     let idleTimer: ReturnType<typeof setTimeout> | undefined
+    /** Quiet-boot reveal timer (see the boot state machine below). */
+    let bootTimer = 0
     // True once any burst has run long enough to count as a task. Survives the
     // short output gaps inside an agent run, so the eventual real finish still
     // notifies even when the final burst itself was brief.
@@ -830,7 +846,9 @@ function TerminalPane({
       let booting = !!cdCmd || hideAgent
       let bootPhase: 'cwd' | 'agent' = cdCmd ? 'cwd' : 'agent'
       let bootAccum = ''
-      let bootTimer = 0
+      // Assigned, not declared — the holder lives at effect scope so the unmount
+      // cleanup can clear it (it was the one timer the cleanup missed).
+      bootTimer = 0
       let startupSent = false
       const stripSeq = (x: string): string => x.replace(CURSOR_STYLE_SEQ, '')
       const sendStartup = (): void => {
@@ -1030,6 +1048,7 @@ function TerminalPane({
       clearTimeout(idleTimer)
       clearTimeout(doneConfirmTimer)
       clearTimeout(selTimer)
+      window.clearTimeout(bootTimer)
       themeObserver.disconnect()
       host.removeEventListener('mousedown', onTermMouseDown, true)
       window.removeEventListener('mouseup', onWinMouseUp, true)
@@ -1050,7 +1069,7 @@ function TerminalPane({
       term.dispose()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [retryNonce])
+  }, [retryNonce, shellsLoaded])
 
   // Entering focus (maximize) also hands over KEYBOARD focus — same for a
   // notification click — so you can type immediately without clicking in. Only
@@ -1399,7 +1418,7 @@ function TerminalPane({
                 .map((f) => window.api.getPathForFile(f))
                 .filter(Boolean)
               if (paths.length) {
-                termRef.current?.paste(quotePaths(paths))
+                termRef.current?.paste(quotePaths(paths, agent.shellId))
                 termRef.current?.focus()
               }
             }}

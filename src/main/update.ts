@@ -49,7 +49,8 @@ function parseVersion(v: string): number[] | null {
   return m.split('.').map(Number)
 }
 
-function isNewer(latest: string, current: string): boolean {
+/** Exported for unit tests. */
+export function isNewer(latest: string, current: string): boolean {
   const a = parseVersion(latest)
   const b = parseVersion(current)
   if (!a || !b) return false

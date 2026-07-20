@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { getRecent, type RecentProject } from './recent'
 import { sanitizeTheme, type ThemePreference } from './theme'
+import { samePath } from './pathUtil'
 
 export type Isolation = 'worktree' | 'shared'
 export type LayoutMode = 'grid' | 'columns'
@@ -219,6 +220,11 @@ interface AppState {
   liveWorkspaces: WorkspaceSession[]
   /** The workspace currently on screen (visible + interactive), or null (Home). */
   activeWorkspaceId: string | null
+  /** Saved workspaces beyond MAX_LIVE_WORKSPACES, held verbatim and never
+   *  rendered. They exist purely so the next autosave writes them back: the
+   *  restore used to slice() them off, and the following save then persisted the
+   *  truncated set — permanently deleting tabs the user still had. */
+  parkedWorkspaces: PersistedWorkspace[]
   /** Recently-opened folders, newest first — the +/dropdown's recents list. */
   workspaces: Workspace[]
   canvasW: number
@@ -226,6 +232,12 @@ interface AppState {
   /** True once the stage has been measured at least once (real viewport size). */
   canvasReady: boolean
   shells: ShellInfo[]
+  /** True once shells:list has resolved (even to an empty list). Panes wait for
+   *  this before spawning: detection is async, but restored panes mount as soon
+   *  as hydrateWorkspaces lands, so `shells` was often still [] and the agent's
+   *  chosen shell (Git Bash, WSL, pwsh) silently fell back to the platform
+   *  default with no error shown. */
+  shellsLoaded: boolean
   agentClis: AgentCli[]
   /** True once detectAgents has returned — gates the "no CLIs" first-run hint so
    *  it never flashes during the initial async detect. */
@@ -503,7 +515,9 @@ const BOTTOM_INSET = 14 // bottom margin for the tiled panes (symmetric with the
  * count never leaves an awkward hole — e.g. 3 → row of 2 + a full-width row of 1,
  * 5 → 3 over 2. Columns mode is just a single full-height row.
  */
-function laidOut(
+// Exported for unit tests — the tiling math is the most invariant-heavy pure
+// function in the app and nothing else should call it from outside.
+export function laidOut(
   agents: AgentInstance[],
   mode: LayoutMode,
   W: number,
@@ -524,7 +538,10 @@ function laidOut(
 
   // Integer pixel geometry: fractional tile coords put the terminal between
   // device pixels and the compositor resamples it — text and borders go soft.
-  const ch = Math.round((availH - GAP * (rows - 1)) / rows)
+  // Clamped: with a viewport smaller than the insets + gaps (a canvas tiled
+  // before its first real measurement lands), the gap subtraction went negative
+  // and panes got negative width/height, which CSS renders as a collapsed card.
+  const ch = Math.max(1, Math.round((availH - GAP * (rows - 1)) / rows))
   const out: AgentInstance[] = []
   let i = 0
   for (let r = 0; r < rows; r++) {
@@ -533,15 +550,17 @@ function laidOut(
     // than equally; which cards land in which row stays purely count-based above.
     const rowAgents = agents.slice(i, i + cols)
     const totalWeight = rowAgents.reduce((sum, a) => sum + (a.wide ? 2 : 1), 0)
-    const inner = availW - GAP * (cols - 1)
+    const inner = Math.max(cols, availW - GAP * (cols - 1))
     let x = RAIL_INSET
     let used = 0
     for (let c = 0; c < cols; c++) {
       const a = agents[i++]
       // Integer widths (crisp glyphs, see above); the LAST card in a row absorbs
       // the rounding remainder so every row still fills the full width exactly.
-      const cw =
+      const cw = Math.max(
+        1,
         c === cols - 1 ? inner - used : Math.round((inner * (a.wide ? 2 : 1)) / totalWeight)
+      )
       const y = Math.round(PAD + r * (ch + GAP))
       // The dragged card keeps its position constant so React never fights
       // Moveable for its transform — it follows the cursor; its slot stays an
@@ -737,11 +756,13 @@ function newSession(init: Partial<WorkspaceSession> & { name: string }): Workspa
 export const useStore = create<AppState>((set, get) => ({
   liveWorkspaces: [],
   activeWorkspaceId: null,
+  parkedWorkspaces: [],
   workspaces: getRecent(),
   canvasW: 1200,
   canvasH: 800,
   canvasReady: false,
   shells: [],
+  shellsLoaded: false,
   agentClis: [],
   agentClisLoaded: false,
   settings: loadSettings(),
@@ -763,7 +784,9 @@ export const useStore = create<AppState>((set, get) => ({
   openWorkspace: (ref, saved, git) =>
     set((s) => {
       // Same folder already live → just bring its tab forward (never duplicate).
-      const existing = s.liveWorkspaces.find((w) => w.defaultPath === ref.path)
+      // Compared with samePath so separator/case variants of one folder can't
+      // slip through as two tabs sharing a worktree container.
+      const existing = s.liveWorkspaces.find((w) => samePath(w.defaultPath, ref.path))
       if (existing) return { activeWorkspaceId: existing.id }
 
       const loaded = hydrateAgents(saved?.agents)
@@ -786,7 +809,17 @@ export const useStore = create<AppState>((set, get) => ({
 
   hydrateWorkspaces: (records, activeId) =>
     set((s) => {
-      const liveWorkspaces = records.slice(0, MAX_LIVE_WORKSPACES).map((r) => {
+      // If the saved set exceeds the cap, keep the one the user was last looking
+      // at rather than blindly taking the first N — otherwise restoring drops
+      // you into a tab you didn't leave open.
+      const ordered = [...records]
+      const activeIdx = activeId ? ordered.findIndex((r) => r.id === activeId) : -1
+      if (activeIdx >= MAX_LIVE_WORKSPACES) {
+        ordered.splice(MAX_LIVE_WORKSPACES - 1, 0, ...ordered.splice(activeIdx, 1))
+      }
+      // The overflow is parked, not discarded (see parkedWorkspaces).
+      const parkedWorkspaces = ordered.slice(MAX_LIVE_WORKSPACES)
+      const liveWorkspaces = ordered.slice(0, MAX_LIVE_WORKSPACES).map((r) => {
         const loaded = hydrateAgents(r.agents)
         const mode: LayoutMode = r.layoutMode === 'columns' ? 'columns' : 'grid'
         return newSession({
@@ -800,6 +833,7 @@ export const useStore = create<AppState>((set, get) => ({
       })
       return {
         liveWorkspaces,
+        parkedWorkspaces,
         // Fall back to the first tab if the saved active id is gone (e.g. it was
         // past the cap) — never leave a non-empty set with nothing on screen.
         activeWorkspaceId:
@@ -918,9 +952,9 @@ export const useStore = create<AppState>((set, get) => ({
       if (!s.settings.defaultShellId && shells[0]) {
         const settings = { ...s.settings, defaultShellId: shells[0].id }
         saveSettings(settings)
-        return { shells, settings }
+        return { shells, settings, shellsLoaded: true }
       }
-      return { shells }
+      return { shells, shellsLoaded: true }
     }),
 
   setAgentClis: (agentClis) => set({ agentClis, agentClisLoaded: true }),
@@ -1181,6 +1215,21 @@ export const useStore = create<AppState>((set, get) => ({
     const ws = wsOfAgent(get(), id)
     if (!ws) return
     if (ws.closingIds.includes(id) || !ws.agents.some((a) => a.id === id)) return
+    // Resolve the cleanup target NOW, not inside the timeout. If the owning
+    // workspace is closed during the 180ms collapse animation, wsById() below
+    // returns undefined and the worktree removal used to be skipped entirely —
+    // leaking the worktree to the orphan sweeper.
+    const closingAgent = ws.agents.find((a) => a.id === id)
+    const closingRepo = closingAgent ? agentPath(ws, closingAgent) : null
+    // keepWorktree leaves the branch + worktree on disk (recoverable work).
+    // Must remove from the agent's OWN repo — with per-agent folders the
+    // workspace default may be a different repo entirely, and removing
+    // there would silently fail to clean up (or hit the wrong worktree).
+    const cleanupWorktree = (): void => {
+      if (!opts?.keepWorktree && closingAgent?.isolation === 'worktree' && closingRepo) {
+        void window.api.worktree.remove(closingRepo, id)
+      }
+    }
     set((s) => ({
       liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({
         ...w,
@@ -1188,20 +1237,15 @@ export const useStore = create<AppState>((set, get) => ({
       }))
     }))
     setTimeout(() => {
+      let removed = false
       set((s) => {
         const w = wsById(s, ws.id)
         if (!w) return {}
         const agent = w.agents.find((a) => a.id === id)
         const closingIds = w.closingIds.filter((c) => c !== id)
         if (!agent) return { liveWorkspaces: mapWs(s.liveWorkspaces, w.id, (x) => ({ ...x, closingIds })) }
-        // keepWorktree leaves the branch + worktree on disk (recoverable work).
-        // Must remove from the agent's OWN repo — with per-agent folders the
-        // workspace default may be a different repo entirely, and removing
-        // there would silently fail to clean up (or hit the wrong worktree).
-        const repo = agentPath(w, agent)
-        if (!opts?.keepWorktree && agent.isolation === 'worktree' && repo) {
-          void window.api.worktree.remove(repo, id)
-        }
+        removed = true
+        cleanupWorktree()
         const rest = w.agents.filter((a) => a.id !== id)
         let selectedIds = w.selectedIds.filter((sid) => sid !== id)
         // Closing the active terminal shouldn't leave the canvas inert — hand
@@ -1229,6 +1273,10 @@ export const useStore = create<AppState>((set, get) => ({
           }))
         }
       })
+      // The workspace (or the agent) vanished mid-animation, so the updater
+      // above bailed before cleaning up. Do it here — the worktree is on disk
+      // either way and nothing else will remove it.
+      if (!removed) cleanupWorktree()
     }, 180)
   },
 

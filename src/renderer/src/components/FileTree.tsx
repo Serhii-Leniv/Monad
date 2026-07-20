@@ -61,26 +61,32 @@ export default function FileTree({ root, selectedPath, onOpen, refreshNonce }: F
   }, [refreshNonce])
 
   const toggleDir = (rel: string): void => {
+    // The directory read and the loading-set update used to live INSIDE the
+    // setExpanded updater. A state updater must be pure — React may invoke it
+    // more than once for a single update (concurrent replay, StrictMode), which
+    // double-fired the IPC read. Decide first, then act.
+    const isOpening = !expanded.has(rel)
     setExpanded((prev) => {
       const next = new Set(prev)
-      if (next.has(rel)) {
-        next.delete(rel)
-        return next
-      }
-      next.add(rel)
-      if (!cache.has(rel) && !loading.has(rel)) {
-        setLoading((l) => new Set(l).add(rel))
-        window.api.file.tree(root, rel).then((r) => {
-          setCache((c) => new Map(c).set(rel, r.entries))
-          setLoading((l) => {
-            const n = new Set(l)
-            n.delete(rel)
-            return n
-          })
-        })
-      }
+      if (next.has(rel)) next.delete(rel)
+      else next.add(rel)
       return next
     })
+    if (!isOpening || cache.has(rel) || loading.has(rel)) return
+    setLoading((l) => new Set(l).add(rel))
+    window.api.file
+      .tree(root, rel)
+      .then((r) => setCache((c) => new Map(c).set(rel, r.entries)))
+      .catch(() => {
+        /* unreadable dir — leave it uncached so a retry can re-read it */
+      })
+      .finally(() =>
+        setLoading((l) => {
+          const n = new Set(l)
+          n.delete(rel)
+          return n
+        })
+      )
   }
 
   const renderEntries = (entries: FileEntry[], parentRel: string, depth: number): JSX.Element[] =>

@@ -61,9 +61,50 @@ export function broadcastToAgents(ids: string[], data: string): void {
   }
 }
 
-/** Paths → one shell-ready string: quoted when they contain tricky chars. */
-export function quotePaths(paths: string[]): string {
-  return paths.map((p) => (/[\s"'`$&;()[\]{}]/.test(p) ? `"${p}"` : p)).join(' ')
+type ShellFamily = 'posix' | 'powershell' | 'cmd'
+
+/** Map a shell id from `shells:list` onto its quoting rules. */
+export function shellFamily(shellId?: string): ShellFamily {
+  switch (shellId) {
+    case 'powershell':
+    case 'pwsh':
+      return 'powershell'
+    case 'cmd':
+      return 'cmd'
+    case 'gitbash':
+    case 'wsl':
+    case 'bash':
+    case 'bash-opt':
+    case 'zsh':
+      return 'posix'
+    default:
+      // Unknown/'default' — assume the platform's usual shell.
+      return window.api.platform === 'win32' ? 'powershell' : 'posix'
+  }
+}
+
+/**
+ * Paths → one shell-ready string.
+ *
+ * This must ESCAPE, not merely detect. The previous version wrapped anything
+ * containing `$`, a backtick or a quote in DOUBLE quotes — which is exactly where
+ * those characters still expand. A file innocently named `` `id`.txt `` or
+ * `$(whoami).txt`, dropped onto a pane, would execute on the agent's command line.
+ *
+ * Single quotes are the safe container in both posix and PowerShell; only the
+ * quote character itself needs escaping, and each family does it differently.
+ * cmd.exe has no escape at all, so double quotes are the best available and any
+ * embedded quote is dropped rather than left to break out.
+ */
+export function quotePaths(paths: string[], shellId?: string): string {
+  const fam = shellFamily(shellId)
+  return paths
+    .map((p) => {
+      if (fam === 'cmd') return `"${p.replace(/"/g, '')}"`
+      if (fam === 'powershell') return `'${p.replace(/'/g, "''")}'`
+      return `'${p.replace(/'/g, `'\\''`)}'`
+    })
+    .join(' ')
 }
 
 /**
@@ -74,7 +115,7 @@ export function quotePaths(paths: string[]): string {
  * window isn't focused, which made paste silently no-op. term.paste() applies
  * bracketed-paste + \r\n cleanup so TUIs/agents receive the text correctly.
  */
-export async function pasteIntoTerminal(term: Terminal): Promise<void> {
+export async function pasteIntoTerminal(term: Terminal, shellId?: string): Promise<void> {
   try {
     const t = await window.api.clipboard.read()
     if (t) {
@@ -84,7 +125,7 @@ export async function pasteIntoTerminal(term: Terminal): Promise<void> {
     // No text — copied files paste as quoted paths, like any terminal.
     const files = await window.api.clipboard.readFiles()
     if (files.length) {
-      term.paste(quotePaths(files))
+      term.paste(quotePaths(files, shellId))
       return
     }
     // A screenshot: a pty can't carry pixels, so forward the raw Ctrl+V byte so

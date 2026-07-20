@@ -22,8 +22,14 @@ on:
 concurrency: release-${{ github.ref_name }}
 
 jobs:
+  # Gate: packaging used to run NO checks at all, so tagging could ship code that
+  # never passed CI. Reuses ci.yml verbatim rather than duplicating its steps.
+  validate:
+    uses: ./.github/workflows/ci.yml
+
   build:
     name: ${{ matrix.name }}
+    needs: validate
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write # create/update the Release on this repo via GITHUB_TOKEN

@@ -463,6 +463,15 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
           send('file:changed', { root })
         }, 300)
       })
+      // An FSWatcher can emit 'error' asynchronously long after a successful
+      // create (watched path deleted, network share dropped, Windows handle
+      // exhaustion). EventEmitter THROWS an unhandled 'error' event, which only
+      // the global uncaughtException guard would catch — and would leave
+      // fileWatcher pointing at a dead watcher for file:unwatch to close.
+      fileWatcher.on('error', (err) => {
+        console.error('[monad] file watcher error:', err)
+        closeFileWatcher()
+      })
     } catch {
       // Recursive watch unsupported / path gone — degrade to no live updates.
       fileWatcher = null
@@ -497,22 +506,10 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
     }
   })
 
-  ipcMain.handle(
-    'project:save',
-    async (_e, { projectPath, data }: { projectPath: string; data: unknown }) => {
-      // Read-only folder / network share / disk full must not become an
-      // unhandled rejection in the renderer — report failure instead.
-      try {
-        const dir = join(projectPath, CANVAS_DIR)
-        await fs.mkdir(dir, { recursive: true })
-        await fs.writeFile(join(dir, 'canvas.json'), JSON.stringify(data, null, 2), 'utf8')
-        return true
-      } catch (e) {
-        console.error('[monad] project:save failed:', e)
-        return false
-      }
-    }
-  )
+  // NOTE: there is deliberately no `project:save`. canvas.json is read-only
+  // legacy now — workspaces.json is the single source of truth, and a workspace
+  // with no folder has nowhere to put a per-project file. The old handler had no
+  // callers at all, so canvas.json was being read but never written.
 
   // --- App-data workspace store ---
   // Single source of truth for the whole tab set since workspaces stopped being
@@ -527,25 +524,37 @@ export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
     }
   })
 
+  // Saves are serialized through this chain. The renderer has two independent
+  // writers — the 400ms layout autosave and the un-awaited flush in
+  // closeWorkspaceById — so two saves can genuinely overlap. Write-and-rename is
+  // atomic against a crash, but NOT against a second writer using the same temp
+  // path: B could truncate and rewrite the temp file while A was mid-write, and
+  // A would then rename the spliced result into place, losing the whole tab set.
+  let saveChain: Promise<boolean> = Promise.resolve(true)
+  let saveSeq = 0
+
   ipcMain.handle('workspaces:save', async (_e, data: unknown) => {
-    // Write-and-rename, not write-in-place: this one file holds EVERY workspace,
-    // so a write torn by a crash or power loss would lose the entire tab set
-    // rather than a single project's layout.
-    const target = workspacesFile()
-    const tmp = target + '.tmp'
-    try {
-      await fs.writeFile(tmp, JSON.stringify(data, null, 2), 'utf8')
-      await fs.rename(tmp, target)
-      return true
-    } catch (e) {
-      console.error('[monad] workspaces:save failed:', e)
+    const run = async (): Promise<boolean> => {
+      const target = workspacesFile()
+      // Unique per write, so even a stray concurrent writer can't collide.
+      const tmp = `${target}.${process.pid}.${++saveSeq}.tmp`
       try {
-        await fs.unlink(tmp)
-      } catch {
-        /* the temp file may not exist — nothing to clean up */
+        await fs.writeFile(tmp, JSON.stringify(data, null, 2), 'utf8')
+        await fs.rename(tmp, target)
+        return true
+      } catch (e) {
+        console.error('[monad] workspaces:save failed:', e)
+        try {
+          await fs.unlink(tmp)
+        } catch {
+          /* the temp file may not exist — nothing to clean up */
+        }
+        return false
       }
-      return false
     }
+    // Never let one failed save break the chain for every later one.
+    saveChain = saveChain.then(run, run)
+    return saveChain
   })
 
   // --- Git / per-agent worktree isolation ---

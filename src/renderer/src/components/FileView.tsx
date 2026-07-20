@@ -270,9 +270,16 @@ export default function FileView({
     if (!loadedRel) return null
     setSaving(true)
     setSaveError(null)
-    const r = await window.api.file.save(loadedRoot, loadedRel, local, expectedMtime)
-    setSaving(false)
-    return r
+    try {
+      return await window.api.file.save(loadedRoot, loadedRel, local, expectedMtime)
+    } catch (e) {
+      // A rejected invoke used to skip setSaving(false) entirely, leaving the
+      // button stuck on "Saving…" with the editor unsavable until remount.
+      setSaveError(e instanceof Error ? e.message : 'Save failed')
+      return null
+    } finally {
+      setSaving(false)
+    }
   }
 
   /** @returns true when the save fully succeeded (no conflict/error left to show). */

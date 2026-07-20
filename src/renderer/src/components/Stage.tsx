@@ -32,11 +32,17 @@ export default function Stage({ workspaceId }: { workspaceId: string }): JSX.Ele
   // overlay (palette / settings / diff) covers the stage.
   const overlayOpen = useStore((s) => s.settingsOpen || s.paletteOpen || !!activeWs(s)?.diffAgentId)
 
-  const stageRef = useRef<HTMLDivElement>(null)
+  // Mutable (not RefObject) because the callback ref below assigns it directly.
+  const stageRef = useRef<HTMLDivElement | null>(null)
   const moveableRef = useRef<Moveable>(null)
   const selectoRef = useRef<Selecto>(null)
   const draggingRef = useRef(false)
   const [targets, setTargets] = useState<HTMLElement[]>([])
+  // Moveable/Selecto need the stage ELEMENT, but `stageRef.current` is null on
+  // the first render and assigning a ref doesn't re-render — so both libraries
+  // were permanently handed `undefined` and fell back to the document. Mirroring
+  // the node into state gives them the real container on the second render.
+  const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null)
 
   // Re-tile only when the pane set changes (add/remove) or the selection
   // changes — not on every status/ptyId tick that mutates `agents`.
@@ -54,7 +60,9 @@ export default function Stage({ workspaceId }: { workspaceId: string }): JSX.Ele
     const all = Array.from(vp.querySelectorAll<HTMLElement>('.vec-pane'))
     const sel = new Set(selectedIds)
     setTargets(all.filter((c) => sel.has(c.dataset.id ?? '')))
-  }, [selectedIds, agentCount])
+    // layoutSig too: a drag-reorder keeps agentCount and selectedIds identical,
+    // so without it the queried element list stayed stale after the re-tile.
+  }, [selectedIds, agentCount, layoutSig])
 
   useEffect(() => {
     // Don't poke Moveable mid-drag — the live reorder re-tiles every cross and
@@ -100,7 +108,13 @@ export default function Stage({ workspaceId }: { workspaceId: string }): JSX.Ele
   const dragAgent = draggingId ? agents.find((a) => a.id === draggingId) : undefined
 
   return (
-    <div className="stage" ref={stageRef}>
+    <div
+      className="stage"
+      ref={(el) => {
+        stageRef.current = el
+        setStageEl((prev) => (prev === el ? prev : el))
+      }}
+    >
       <div
         className="stage__panes"
         style={{ transform: `translate(${panX}px, ${panY}px) scale(${zoom})` }}
@@ -124,7 +138,7 @@ export default function Stage({ workspaceId }: { workspaceId: string }): JSX.Ele
         ref={moveableRef}
         target={targets}
         dragTarget={dragTarget}
-        rootContainer={stageRef.current ?? undefined}
+        rootContainer={stageEl ?? undefined}
         zoom={zoom}
         draggable
         resizable={false}
@@ -180,7 +194,7 @@ export default function Stage({ workspaceId }: { workspaceId: string }): JSX.Ele
 
       <Selecto
         ref={selectoRef}
-        dragContainer={stageRef.current ?? undefined}
+        dragContainer={stageEl ?? undefined}
         selectableTargets={['.vec-pane']}
         hitRate={0}
         selectByClick

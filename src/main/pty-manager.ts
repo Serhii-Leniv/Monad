@@ -1,6 +1,7 @@
 import * as pty from '@homebridge/node-pty-prebuilt-multiarch'
 import os from 'os'
 import { randomUUID } from 'crypto'
+import { execFile } from 'child_process'
 
 export interface SpawnOptions {
   /** Executable to launch (defaults to the platform shell). */
@@ -82,22 +83,51 @@ export class PtyManager {
   }
 
   kill(id: string): void {
-    try {
-      this.sessions.get(id)?.kill()
-    } catch {
-      /* killing an already-dead pty throws on Windows conpty; ignore */
-    }
+    const proc = this.sessions.get(id)
+    if (proc) killTree(proc)
     this.sessions.delete(id)
   }
 
   killAll(): void {
-    for (const proc of this.sessions.values()) {
-      try {
-        proc.kill()
-      } catch {
-        /* ignore */
-      }
-    }
+    for (const proc of this.sessions.values()) killTree(proc)
     this.sessions.clear()
+  }
+}
+
+/**
+ * Kill a pty AND everything it spawned.
+ *
+ * `IPty.kill()` alone only takes down the shell that node-pty launched. The
+ * agent CLI the user actually cares about (`claude`, `aider`, …) is a grandchild,
+ * and on Windows ConPTY it is not reliably reaped when its host dies — so closing
+ * an agent, recovering from a renderer crash, or quitting the app leaked live
+ * `node`/`python` processes that kept holding worktree files open.
+ *
+ * Windows: taskkill walks the tree by pid. POSIX: node-pty puts the child in its
+ * own process group (pid == pgid), so negating the pid signals the whole group.
+ */
+function killTree(proc: pty.IPty): void {
+  const pid = proc.pid
+  if (process.platform === 'win32') {
+    if (!pid) return
+    // taskkill /T covers the ConPTY host AND its descendants, so this fully
+    // replaces IPty.kill() — do NOT also call it. Killing the host out from
+    // under node-pty and then calling kill() on the now-invalid native handle
+    // segfaults the process on teardown. node-pty notices the exit on its own
+    // and fires onExit, which is what clears the session map.
+    // Non-zero exit just means the tree was already gone; ignore it.
+    execFile('taskkill', ['/PID', String(pid), '/T', '/F'], { windowsHide: true }, () => {})
+    return
+  }
+  try {
+    process.kill(-pid, 'SIGKILL')
+  } catch {
+    // No such group (already exited) or not permitted — fall back to the pty's
+    // own kill, which at least takes the direct child down.
+    try {
+      proc.kill()
+    } catch {
+      /* already dead */
+    }
   }
 }

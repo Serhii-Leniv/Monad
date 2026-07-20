@@ -1,0 +1,71 @@
+import { describe, it, expect, beforeAll } from 'vitest'
+import { quotePaths, shellFamily } from './terminalRegistry'
+
+// shellFamily consults window.api.platform for the "unknown shell" fallback.
+beforeAll(() => {
+  ;(window as unknown as { api: unknown }).api = { platform: 'win32' }
+})
+
+// Dropped/pasted file paths land directly on an agent's command line. The old
+// implementation DETECTED $, backtick and quotes but wrapped them in DOUBLE
+// quotes — exactly where they still expand — so a file named `id`.txt executed.
+describe('quotePaths', () => {
+  const NASTY = '/tmp/$(whoami)-`id`-"x".txt'
+
+  it('neutralises command substitution for posix shells', () => {
+    const out = quotePaths([NASTY], 'bash')
+    expect(out.startsWith("'")).toBe(true)
+    expect(out.endsWith("'")).toBe(true)
+    // Inside single quotes nothing expands, so these survive as literal text.
+    expect(out).toContain('$(whoami)')
+    expect(out).toContain('`id`')
+  })
+
+  it("escapes an embedded single quote posix-style (close, escape, reopen)", () => {
+    // There is no escape INSIDE posix single quotes, so the only correct form is
+    // to end the quote, emit an escaped quote, and start a new one.
+    expect(quotePaths(["/tmp/it's.txt"], 'zsh')).toBe(`'/tmp/it'\\''s.txt'`)
+  })
+
+  it('escapes an embedded single quote PowerShell-style (doubled)', () => {
+    expect(quotePaths(["C:\\it's.txt"], 'pwsh')).toBe("'C:\\it''s.txt'")
+  })
+
+  it('single-quotes for PowerShell so $ and backtick stay inert', () => {
+    const out = quotePaths([NASTY], 'powershell')
+    expect(out.startsWith("'")).toBe(true)
+    expect(out).toContain('$(whoami)')
+  })
+
+  it('double-quotes for cmd and drops embedded quotes it cannot escape', () => {
+    // cmd.exe has no escape mechanism; leaving the quote in would let the
+    // argument break out of its own quoting.
+    const out = quotePaths(['C:\\a "b".txt'], 'cmd')
+    expect(out).toBe('"C:\\a b.txt"')
+  })
+
+  it('joins multiple paths with a space, each quoted independently', () => {
+    expect(quotePaths(['/a.txt', '/b c.txt'], 'bash')).toBe(`'/a.txt' '/b c.txt'`)
+  })
+
+  it('quotes even a boring path, so the caller never has to reason about it', () => {
+    expect(quotePaths(['/plain.txt'], 'bash')).toBe(`'/plain.txt'`)
+  })
+})
+
+describe('shellFamily', () => {
+  it('maps the known shell ids', () => {
+    expect(shellFamily('powershell')).toBe('powershell')
+    expect(shellFamily('pwsh')).toBe('powershell')
+    expect(shellFamily('cmd')).toBe('cmd')
+    expect(shellFamily('gitbash')).toBe('posix')
+    expect(shellFamily('wsl')).toBe('posix')
+    expect(shellFamily('zsh')).toBe('posix')
+  })
+
+  it('falls back to the platform default for an unknown id', () => {
+    // window.api.platform is stubbed to win32 above.
+    expect(shellFamily(undefined)).toBe('powershell')
+    expect(shellFamily('default')).toBe('powershell')
+  })
+})

@@ -1,7 +1,8 @@
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useStore, activeWs, useActiveAgents, useActiveProjectPath, MAX_AGENTS } from '../store'
 import { openProjectInteractive, openProjectByPath, closeCurrentProject } from '../openProject'
 import { modLabel } from '../shortcuts'
+import Modal from './Modal'
 
 interface Cmd {
   id: string
@@ -133,57 +134,63 @@ export default function CommandPalette(): JSX.Element {
 
   const active = Math.min(idx, Math.max(0, items.length - 1))
 
+  // Arrow keys move `idx`, but the list is a fixed-height scroller — past ~8
+  // results the highlight walked off the bottom and kept going invisibly, so
+  // Enter fired a command the user couldn't see. 'nearest' scrolls only when the
+  // row is actually out of view, leaving mouse-driven browsing unjolted.
+  const listRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    listRef.current?.querySelector('.palette__item.is-active')?.scrollIntoView({ block: 'nearest' })
+  }, [active, items])
+
   return (
-    <div className="modal" onPointerDown={close}>
-      <div className="palette" onPointerDown={(e) => e.stopPropagation()}>
-        <input
-          className="palette__input"
-          autoFocus
-          placeholder="Run a command, or jump to a terminal…"
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value)
-            setIdx(0)
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'ArrowDown') {
-              e.preventDefault()
-              setIdx((i) => Math.min(items.length - 1, i + 1))
-            } else if (e.key === 'ArrowUp') {
-              e.preventDefault()
-              setIdx((i) => Math.max(0, i - 1))
-            } else if (e.key === 'Enter') {
-              e.preventDefault()
-              const c = items[active]
-              if (c) run(c.run)
-            } else if (e.key === 'Escape') {
-              e.preventDefault()
-              e.stopPropagation()
-              close()
-            }
-          }}
-        />
-        <div className="palette__list">
-          {items.map((c, i) => (
-            <Fragment key={c.id}>
-              {/* Section headers only while browsing — search results are a
-                 single ranked list where headers would just break the flow. */}
-              {!q && c.group && items[i - 1]?.group !== c.group && (
-                <div className="palette__head">{c.group}</div>
-              )}
-              <button
-                className={'palette__item' + (i === active ? ' is-active' : '')}
-                onMouseEnter={() => setIdx(i)}
-                onClick={() => run(c.run)}
-              >
-                <span className="palette__item-title">{c.title}</span>
-                {c.hint && <span className="palette__item-hint">{c.hint}</span>}
-              </button>
-            </Fragment>
-          ))}
-          {items.length === 0 && <div className="palette__empty">No matching commands</div>}
-        </div>
+    <Modal className="palette" label="Command palette" onClose={close} initialFocus=".palette__input">
+      <input
+        className="palette__input"
+        placeholder="Run a command, or jump to a terminal…"
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value)
+          setIdx(0)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            setIdx((i) => Math.min(items.length - 1, i + 1))
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            setIdx((i) => Math.max(0, i - 1))
+          } else if (e.key === 'Enter') {
+            e.preventDefault()
+            const c = items[active]
+            if (c) run(c.run)
+          } else if (e.key === 'Escape') {
+            e.preventDefault()
+            e.stopPropagation()
+            close()
+          }
+        }}
+      />
+      <div className="palette__list" ref={listRef}>
+        {items.map((c, i) => (
+          <Fragment key={c.id}>
+            {/* Section headers only while browsing — search results are a
+               single ranked list where headers would just break the flow. */}
+            {!q && c.group && items[i - 1]?.group !== c.group && (
+              <div className="palette__head">{c.group}</div>
+            )}
+            <button
+              className={'palette__item' + (i === active ? ' is-active' : '')}
+              onMouseEnter={() => setIdx(i)}
+              onClick={() => run(c.run)}
+            >
+              <span className="palette__item-title">{c.title}</span>
+              {c.hint && <span className="palette__item-hint">{c.hint}</span>}
+            </button>
+          </Fragment>
+        ))}
+        {items.length === 0 && <div className="palette__empty">No matching commands</div>}
       </div>
-    </div>
+    </Modal>
   )
 }

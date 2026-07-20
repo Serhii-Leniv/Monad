@@ -1541,9 +1541,17 @@ body.has-wallpaper .aurora {
   right: var(--filepanel-w, 0);
 }
 
-/* One Stage per live workspace; only the active one is visible. Hidden layers
-   stay laid out (visibility, NOT display) so xterm can measure them and their
-   PTYs keep streaming — switching tabs is instant with no relayout/respawn. */
+/* One Stage per live workspace; only the active one is on screen. The DOM (and
+   with it every PTY stream, which lives in JS) stays alive so switching tabs
+   never relayouts or respawns anything.
+
+   Background layers get `content-visibility: hidden`, not just `visibility`:
+   a merely-invisible subtree is still laid out and composited every frame, so
+   background xterm instances kept re-rendering behind a dozen backdrop-filtered
+   glass surfaces — with 3 workspaces × 3 agents that's a constant GPU draw for
+   panes nobody can see. Skipping the subtree entirely costs one refit on
+   activation instead (App runs it on the second rAF, once layout is restored;
+   TerminalPane's doFit no-ops while the pane has no box). */
 .workspace-layer {
   position: absolute;
   inset: 0;
@@ -1551,6 +1559,7 @@ body.has-wallpaper .aurora {
 .workspace-layer:not(.is-active) {
   visibility: hidden;
   pointer-events: none;
+  content-visibility: hidden;
 }
 
 .canvas-wrap {
@@ -2933,6 +2942,34 @@ body.has-wallpaper .vec-pane__term {
   background: rgba(4, 8, 14, 0.5);
   backdrop-filter: blur(5px);
   -webkit-backdrop-filter: blur(5px);
+}
+
+/* Shown only while a lazy overlay chunk is still loading. No blur here: the
+   real overlay lands within a frame or two and re-blurring the same backdrop
+   twice in a row reads as a flicker. */
+.modal--loading {
+  cursor: progress;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.modal__spinner {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--line-2);
+  border-top-color: var(--accent);
+  animation: modal-spin 700ms linear infinite;
+}
+@keyframes modal-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Pulse instead of spin — still reads as "working", without the rotation. */
+  .modal__spinner {
+    animation: overlay-in 900ms ease-in-out infinite alternate;
+  }
 }
 
 .settings {

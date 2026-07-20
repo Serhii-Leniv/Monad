@@ -1,5 +1,6 @@
 import { useStore, toPersisted, activeWs, agentPath, uuid, MAX_LIVE_WORKSPACES } from './store'
 import { RECENT_KEY, getRecent, removeRecent, type RecentProject } from './recent'
+import { samePath } from './pathUtil'
 
 export type { RecentProject }
 
@@ -17,15 +18,7 @@ function basename(p: string): string {
  *  longer "the workspace using this folder" — agents can point anywhere, and
  *  several workspaces can share a default. Use agentsUsing() for ownership. */
 function wsByPath(path: string): ReturnType<typeof activeWs> {
-  return useStore.getState().liveWorkspaces.find((w) => w.defaultPath === path)
-}
-
-/** Compare two folder paths as the OS would: separator- and (on Windows)
- *  case-insensitive, since these come from both a dialog and saved JSON. */
-function samePath(a: string | null, b: string | null): boolean {
-  if (!a || !b) return false
-  const norm = (p: string): string => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
-  return norm(a) === norm(b)
+  return useStore.getState().liveWorkspaces.find((w) => samePath(w.defaultPath, path))
 }
 
 /**
@@ -90,13 +83,19 @@ function snapshot(): PersistedWorkspaces {
   return {
     version: 1,
     activeId: s.activeWorkspaceId,
-    workspaces: s.liveWorkspaces.map((w) => ({
-      id: w.id,
-      name: w.name,
-      defaultPath: w.defaultPath,
-      layoutMode: w.layoutMode,
-      agents: toPersisted(w.agents)
-    }))
+    workspaces: [
+      ...s.liveWorkspaces.map((w) => ({
+        id: w.id,
+        name: w.name,
+        defaultPath: w.defaultPath,
+        layoutMode: w.layoutMode,
+        agents: toPersisted(w.agents)
+      })),
+      // Anything the restore parked past MAX_LIVE_WORKSPACES rides along
+      // unchanged. Without this the first autosave after a restore would write
+      // the truncated set and permanently delete those tabs.
+      ...s.parkedWorkspaces
+    ]
   }
 }
 
@@ -115,6 +114,16 @@ export async function saveWorkspaces(): Promise<void> {
   } else if (!saveFailedNotified) {
     saveFailedNotified = true
     useStore.getState().pushToast('Couldn’t save your workspaces.', 'error')
+  }
+}
+
+// Diagnostics hook, alongside window.__agentStore. Smoke tests simulate a fresh
+// install by deleting workspaces.json out from under a running renderer, then
+// reloading — but the flush-on-unload would faithfully rewrite it and undo the
+// setup. This lets a harness stop persistence first. Never called by the app.
+if (typeof window !== 'undefined') {
+  ;(window as unknown as Record<string, unknown>).__monadDisablePersist = (): void => {
+    persistEnabled = false
   }
 }
 
@@ -274,7 +283,9 @@ let opening = false
 export async function openProjectByPath(ref: RecentProject): Promise<void> {
   const store = useStore.getState()
   // Already live → focus its tab (never a second copy, never respawn its agents).
-  const already = store.liveWorkspaces.find((w) => w.defaultPath === ref.path)
+  // samePath, not ===: D:\repo and D:/repo must not open as two tabs racing over
+  // the same worktree container.
+  const already = store.liveWorkspaces.find((w) => samePath(w.defaultPath, ref.path))
   if (already) {
     store.setActiveWorkspace(already.id)
     return
@@ -300,13 +311,14 @@ export async function openProjectByPath(ref: RecentProject): Promise<void> {
       )
       return
     }
-    const [saved, git] = await Promise.all([
-      window.api.project.load(ref.path),
-      window.api.git.info(ref.path)
-    ])
+    // Opening a folder always starts a fresh workspace. canvas.json is no longer
+    // consulted here: it hasn't been written since workspaces became folder-less,
+    // so reading it would restore a layout from some much older build. It's still
+    // read once by migrateLegacyWorkspaces for users upgrading.
+    const git = await window.api.git.info(ref.path)
     void window.api.git.prune(ref.path)
     pushRecent(ref)
-    useStore.getState().openWorkspace(ref, saved, git)
+    useStore.getState().openWorkspace(ref, null, git)
     // A non-git folder silently loses the headline feature (per-agent worktree
     // isolation) — say so instead of quietly downgrading to a shared dir, and
     // offer the fix in place. Deliberately transient (7s): the amber
@@ -411,8 +423,12 @@ export async function restoreWorkspaces(): Promise<void> {
   useStore.getState().hydrateWorkspaces(alive, saved?.activeId ?? null)
 
   for (const r of alive) {
-    if (!r.path) continue
-    const path = r.path
+    // `defaultPath` is what snapshot() writes; `path` is the pre-per-agent-folders
+    // field kept only for reading older saves. Guarding on `path` alone silently
+    // skipped EVERY workspace written by the current version — no git info meant
+    // isolation quietly downgraded to 'shared' on every restart.
+    const path = r.defaultPath ?? r.path
+    if (!path) continue
     try {
       const git = await window.api.git.info(path)
       useStore.getState().setWorkspaceGit(r.id, git)

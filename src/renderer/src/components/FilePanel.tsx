@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useStore, activeWs, agentPath, FILE_PANEL_MIN, FILE_PANEL_MAX } from '../store'
 import { IconClose } from './Icons'
 import FileTree from './FileTree'
+import Modal from './Modal'
 
 /** Last segment of a folder path — labels the panel with the folder on screen. */
 function baseName(p: string): string {
@@ -16,9 +17,12 @@ const FileView = lazy(() => import('./FileView'))
 
 /**
  * Right-docked file explorer / editor panel: a lazy directory tree on top, a
- * CodeMirror view/edit pane filling the rest. Phase 4 drives it purely via the
- * store's openFilePanel/openFile/setFilePanelScope actions (per-card Files
- * button, terminal links, live-refresh) — none of that is wired here.
+ * CodeMirror view/edit pane filling the rest. Every entry point drives it
+ * through the store rather than through props — the rail's Explorer toggle and
+ * a pane's Files button call openFilePanel, terminal path links call openFile —
+ * so this component owns no opening logic and stays a pure view of
+ * `activeWs(s).filePanel`. It also owns the single main-process watcher's
+ * lifecycle (see below), which is why it's mounted only while the panel is open.
  */
 export default function FilePanel(): JSX.Element {
   const filePanelWidth = useStore((s) => s.filePanelWidth)
@@ -93,12 +97,12 @@ export default function FilePanel(): JSX.Element {
   const dragging = useRef(false)
   const onResizeDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      e.preventDefault()
-      dragging.current = true
-      e.currentTarget.setPointerCapture(e.pointerId)
-    },
-    []
-  )
+    e.preventDefault()
+    dragging.current = true
+    e.currentTarget.setPointerCapture(e.pointerId)
+  },
+  []
+)
   const onResizeMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!dragging.current) return
@@ -156,29 +160,32 @@ export default function FilePanel(): JSX.Element {
       </div>
 
       {confirmClose && (
-        <div className="modal" onPointerDown={() => setConfirmClose(false)}>
-          <div className="confirm" onPointerDown={(e) => e.stopPropagation()}>
-            <div className="confirm__title">Discard unsaved changes?</div>
-            <div className="confirm__body">
-              {openPath ? `“${openPath}” has unsaved edits. ` : 'This file has unsaved edits. '}
-              Closing the panel will lose them.
-            </div>
-            <div className="confirm__actions">
-              <button className="confirm__btn" onClick={() => setConfirmClose(false)}>
-                Cancel
-              </button>
-              <button
-                className="confirm__btn confirm__btn--danger"
-                onClick={() => {
-                  setConfirmClose(false)
-                  closeFilePanel()
-                }}
-              >
-                Discard
-              </button>
-            </div>
+        <Modal
+          className="confirm"
+          labelledBy="filepanel-discard-title"
+          onClose={() => setConfirmClose(false)}
+          onEscape={() => setConfirmClose(false)}
+        >
+          <div className="confirm__title" id="filepanel-discard-title">Discard unsaved changes?</div>
+          <div className="confirm__body">
+            {openPath ? `“${openPath}” has unsaved edits. ` : 'This file has unsaved edits. '}
+            Closing the panel will lose them.
           </div>
-        </div>
+          <div className="confirm__actions">
+            <button className="confirm__btn" onClick={() => setConfirmClose(false)}>
+              Cancel
+            </button>
+            <button
+              className="confirm__btn confirm__btn--danger"
+              onClick={() => {
+                setConfirmClose(false)
+                closeFilePanel()
+              }}
+            >
+              Discard
+            </button>
+          </div>
+        </Modal>
       )}
     </aside>
   )

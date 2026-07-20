@@ -249,8 +249,8 @@ interface Window {
     project: {
       pick: () => Promise<ProjectRef | null>
       exists: (projectPath: string) => Promise<boolean>
+      /** Legacy read-only: the one-time canvas.json migration. Never written. */
       load: (projectPath: string) => Promise<PersistedCanvas | null>
-      save: (projectPath: string, data: PersistedCanvas) => Promise<boolean>
     }
     workspaces: {
       load: () => Promise<PersistedWorkspaces | null>

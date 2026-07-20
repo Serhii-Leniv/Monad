@@ -33,6 +33,12 @@ function ToastItem({
   return (
     <div
       className={`toast toast--${kind}${sticky ? ' toast--sticky' : ''}`}
+      // Per-toast politeness, because the container's is fixed for its lifetime:
+      // an error ("worktree is dirty — merge refused") is a consequence the user
+      // has to hear now, while a routine "Merged into main" interrupting whatever
+      // the screen reader is mid-sentence on would be pure noise. The live region
+      // that wins is the innermost one, so this overrides the container below.
+      aria-live={kind === 'error' ? 'assertive' : 'polite'}
       // A toast with an action (e.g. "Download") must NOT dismiss on a stray body
       // click — that silently throws away the only in-app path to the action. It
       // closes via its button or the explicit ✕. Plain toasts still click-to-close.
@@ -85,11 +91,16 @@ function ToastItem({
 }
 
 /** Transient feedback (merged, discarded, errors). Auto-dismiss, click to close. */
-export default function Toasts(): JSX.Element | null {
+export default function Toasts(): JSX.Element {
   const toasts = useStore((s) => s.toasts)
-  if (!toasts.length) return null
   return (
-    <div className="toasts">
+    // Live region on the container, and the container is now rendered even when
+    // empty (it used to return null): assistive tech only announces changes to a
+    // region it was already observing, so a wrapper that appears in the same
+    // commit as its first toast reads as nothing at all. Rendering it empty is
+    // free — .toasts is pointer-events:none with no box of its own.
+    // role="status" supplies the polite default; ToastItem overrides per kind.
+    <div className="toasts" role="status" aria-live="polite">
       {toasts.map((t) => (
         <ToastItem key={t.id} {...t} />
       ))}

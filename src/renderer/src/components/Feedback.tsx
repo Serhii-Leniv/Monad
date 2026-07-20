@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../store'
 import { IconClose, IconSend } from './Icons'
+import Modal from './Modal'
 
 type Category = 'bug' | 'idea' | 'other'
 
@@ -79,69 +80,66 @@ export default function Feedback(): JSX.Element {
   }
 
   return (
-    <div className="modal" onPointerDown={close}>
-      <div className="feedback" onPointerDown={(e) => e.stopPropagation()}>
-        <div className="settings__head">
-          <span className="settings__title">Send feedback</span>
-          <button className="settings__close" onClick={close} aria-label="Close">
-            <IconClose size={16} />
-          </button>
-        </div>
-
-        <div className="feedback__body">
-          <p className="feedback__intro">
-            Found a bug, have an idea, or just want to say something? It goes straight to the maker.
-          </p>
-
-          <div className="settings__seg feedback__seg">
-            {CATEGORIES.map((c) => (
-              <button
-                key={c.id}
-                className={'settings__seg-btn' + (category === c.id ? ' is-active' : '')}
-                onClick={() => setCategory(c.id)}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
-
-          <textarea
-            className="feedback__text"
-            autoFocus
-            rows={6}
-            placeholder={PLACEHOLDER[category]}
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={(e) => {
-              // ⌘/Ctrl+Enter sends without reaching for the mouse.
-              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-                e.preventDefault()
-                void send()
-              }
-            }}
-          />
-
-          <input
-            className="feedback__email"
-            type="email"
-            placeholder="Your email (optional — so I can reply)"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </div>
-
-        <div className="feedback__foot">
-          <span className="feedback__meta">{version ? `Monad v${version}` : ''}</span>
-          <button
-            className="feedback__send"
-            disabled={!message.trim() || sending}
-            onClick={() => void send()}
-          >
-            <IconSend size={14} />
-            {sending ? 'Sending…' : 'Send'}
-          </button>
-        </div>
+    <Modal className="feedback" label="Send feedback" onClose={close} initialFocus=".feedback__text">
+      <div className="settings__head">
+        <span className="settings__title">Send feedback</span>
+        <button className="settings__close" onClick={close} aria-label="Close">
+          <IconClose size={16} />
+        </button>
       </div>
-    </div>
+
+      <div className="feedback__body">
+        <p className="feedback__intro">
+          Found a bug, have an idea, or just want to say something? It goes straight to the maker.
+        </p>
+
+        <div className="settings__seg feedback__seg">
+          {CATEGORIES.map((c) => (
+            <button
+              key={c.id}
+              className={'settings__seg-btn' + (category === c.id ? ' is-active' : '')}
+              onClick={() => setCategory(c.id)}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+
+        <textarea
+          className="feedback__text"
+          rows={6}
+          placeholder={PLACEHOLDER[category]}
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          onKeyDown={(e) => {
+            // ⌘/Ctrl+Enter sends without reaching for the mouse.
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+              e.preventDefault()
+              void send()
+            }
+          }}
+        />
+
+        <input
+          className="feedback__email"
+          type="email"
+          placeholder="Your email (optional — so I can reply)"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+      </div>
+
+      <div className="feedback__foot">
+        <span className="feedback__meta">{version ? `Monad v${version}` : ''}</span>
+        <button
+          className="feedback__send"
+          disabled={!message.trim() || sending}
+          onClick={() => void send()}
+        >
+          <IconSend size={14} />
+          {sending ? 'Sending…' : 'Send'}
+        </button>
+      </div>
+    </Modal>
   )
 }

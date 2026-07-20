@@ -1,15 +1,18 @@
 name: CI
 
-# Validation on every push/PR: typecheck + the Electron integration smoke tests.
-# (build.yml only packages installers on tags — it runs no checks at all.)
+# Validation on every push/PR: typecheck + unit tests + the Electron integration
+# smoke tests. build.yml calls this workflow before packaging, so a tag can no
+# longer ship code that never passed here.
 on:
   push:
     branches: ['**']
   pull_request:
+  # Lets build.yml gate packaging on this same job.
+  workflow_call:
 
 jobs:
   validate:
-    name: Typecheck + smoke tests
+    name: Typecheck + tests + smoke tests
     # windows-latest: a platform we actually ship, real Electron windows work
     # without xvfb, and the smoke scripts' win32 paths (powershell.exe) match.
     runs-on: windows-latest
@@ -28,9 +31,23 @@ jobs:
       # node-pty binary is fetched for this runner's OS/arch.
       - run: npm ci
       - run: npm run typecheck
+      # Fails on errors only — the config's warn-level rules (exhaustive-deps)
+      # flag intentional omissions that each need a human decision, not a gate.
+      - run: npm run lint
+      # Fast pure-logic tests (tiling math, path/shell quoting, git path decoding,
+      # version compare). Run before the build so a logic break fails in seconds.
+      - run: npm run test
       # The phase smokes drive the REAL built bundles (out/) + IPC.
       - run: npm run build
       - run: npm run smoke:pty
       - run: npm run smoke:p1
       - run: npm run smoke:p2
       - run: npm run smoke:p3
+      # These four existed but were never wired in — which is exactly why a
+      # regression that disabled worktree isolation on every restart shipped
+      # unnoticed. wspersist covers that path directly.
+      - run: npm run smoke:file
+      - run: npm run smoke:ws
+      - run: npm run smoke:tabs
+      - run: npm run smoke:wspersist
+      - run: npm run smoke:agentfolder

@@ -223,9 +223,9 @@ const api = {
     pick: (): Promise<ProjectRef | null> => ipcRenderer.invoke('project:pick'),
     exists: (projectPath: string): Promise<boolean> =>
       ipcRenderer.invoke('project:exists', projectPath),
-    load: (projectPath: string): Promise<unknown> => ipcRenderer.invoke('project:load', projectPath),
-    save: (projectPath: string, data: unknown): Promise<boolean> =>
-      ipcRenderer.invoke('project:save', { projectPath, data })
+    // load() is legacy-read-only (one-time canvas.json migration). There is no
+    // save() — workspaces.json holds the whole tab set now.
+    load: (projectPath: string): Promise<unknown> => ipcRenderer.invoke('project:load', projectPath)
   },
   // The whole tab set, in app data — workspaces outlived being folders.
   workspaces: {

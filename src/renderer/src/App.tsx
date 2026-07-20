@@ -6,9 +6,11 @@ import Toasts from './components/Toasts'
 import Home from './components/Home'
 import ProjectBar from './components/ProjectBar'
 import UpdateBanner from './components/UpdateBanner'
+import Modal from './components/Modal'
 
 // On-demand overlays — split out of the initial chunk. They're never the first
-// view, and fallback={null} means no visible loading state.
+// view, so keeping them out of it buys real startup time; the cost is a possible
+// chunk fetch on first open, which OverlayLoading below covers.
 const Settings = lazy(() => import('./components/Settings'))
 const CommandPalette = lazy(() => import('./components/CommandPalette'))
 const DiffPanel = lazy(() => import('./components/DiffPanel'))
@@ -16,6 +18,23 @@ const Feedback = lazy(() => import('./components/Feedback'))
 // Docked (not an overlay), but still lazy — the file panel's body pulls in the
 // editor/tree chunk (Phase 3), which the first canvas view never needs.
 const FilePanel = lazy(() => import('./components/FilePanel'))
+
+/**
+ * Suspense fallback for the overlay chunks. It used to be `null`: on a cold
+ * chunk (first ⌘K of the session, a slow disk, an app that was just updated)
+ * clicking Settings or Diff painted absolutely nothing for a beat, which reads
+ * as a dead button — so people click again, and again. A backdrop + spinner
+ * makes the wait legible and swallows those repeat clicks. Deliberately NOT a
+ * dialog: there is nothing to label or focus yet, and announcing an empty
+ * dialog only to replace it milliseconds later is worse than staying quiet.
+ */
+function OverlayLoading(): JSX.Element {
+  return (
+    <div className="modal modal--loading">
+      <div className="modal__spinner" role="status" aria-label="Loading" />
+    </div>
+  )
+}
 import { useStore, toPersisted, activeWs, useActiveAgents, NEEDS_ATTENTION } from './store'
 import { restoreWorkspaces, saveWorkspaces, closeWorkspaceById } from './openProject'
 import { installPowerIdle } from './powerIdle'
@@ -68,9 +87,12 @@ export default function App(): JSX.Element {
   const canvasRef = useRef<HTMLDivElement>(null)
 
   // Detect the shells + agent CLIs installed on this machine, once on launch.
+  // Panes hold their spawn until shells resolve, so a REJECTED detection must
+  // still settle the flag (with an empty list) or every terminal would wait
+  // forever. An empty list just means "use the platform default".
   useEffect(() => {
-    void window.api.shells.list().then(setShells)
-    void window.api.agents.list().then(setAgentClis)
+    void window.api.shells.list().catch(() => []).then(setShells)
+    void window.api.agents.list().catch(() => []).then(setAgentClis)
   }, [setShells, setAgentClis])
 
   // Tag the platform so CSS can adapt mac chrome (traffic lights, notch safe-area).
@@ -106,22 +128,33 @@ export default function App(): JSX.Element {
     }
   }, [setCanvasSize])
 
-  // Bringing a workspace to the foreground: refit its terminals (they were laid
-  // out while hidden) and hand keyboard focus to its active pane, so switching
-  // tabs lands you typing immediately. rAF lets the visibility flip paint first.
+  // Bringing a workspace to the foreground: refit its terminals (they were not
+  // laid out at all while hidden) and hand keyboard focus to its active pane, so
+  // switching tabs lands you typing immediately.
+  //
+  // TWO rAFs, not one: the layer is content-visibility:hidden while backgrounded,
+  // so removing that only restores the subtree's layout on the NEXT frame. A
+  // single rAF measured a pane that still had no box, the fit was skipped, and
+  // the terminal kept a stale size if the window had been resized meanwhile.
   useEffect(() => {
     if (!activeWorkspaceId) return
+    let inner = 0
     const raf = requestAnimationFrame(() => {
-      const ws = useStore.getState().liveWorkspaces.find((w) => w.id === activeWorkspaceId)
-      if (!ws) return
-      const ids = ws.agents.map((a) => a.id)
-      // Background panes buffer their PTY writes (TerminalPane) — replay them
-      // before refit/focus so the workspace surfaces fully up to date.
-      flushAgents(ids)
-      refitAgents(ids)
-      focusActiveTerminal()
+      inner = requestAnimationFrame(() => {
+        const ws = useStore.getState().liveWorkspaces.find((w) => w.id === activeWorkspaceId)
+        if (!ws) return
+        const ids = ws.agents.map((a) => a.id)
+        // Background panes buffer their PTY writes (TerminalPane) — replay them
+        // before refit/focus so the workspace surfaces fully up to date.
+        flushAgents(ids)
+        refitAgents(ids)
+        focusActiveTerminal()
+      })
     })
-    return () => cancelAnimationFrame(raf)
+    return () => {
+      cancelAnimationFrame(raf)
+      cancelAnimationFrame(inner)
+    }
   }, [activeWorkspaceId])
 
   // Persistent update reminder. The main process reads the app repo's release
@@ -208,7 +241,9 @@ export default function App(): JSX.Element {
       if (!term) return
       e.preventDefault()
       term.focus()
-      void pasteIntoTerminal(term)
+      // Pass the target pane's shell so copied file paths are quoted with the
+      // right escaping rules (see terminalRegistry.quotePaths).
+      void pasteIntoTerminal(term, ws?.agents.find((a) => a.id === id)?.shellId)
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
@@ -513,34 +548,6 @@ export default function App(): JSX.Element {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // Escape dismisses the bulk-close confirm. Capture + stopImmediatePropagation
-  // so the window keydown handler above doesn't ALSO act on the same Esc —
-  // mirrors the per-pane close confirm in TerminalPane.
-  useEffect(() => {
-    if (!bulkCloseIds) return
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key !== 'Escape') return
-      e.preventDefault()
-      e.stopImmediatePropagation()
-      clearBulkClose()
-    }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [bulkCloseIds, clearBulkClose])
-
-  // Same capture-phase Escape treatment for the workspace-close confirm.
-  useEffect(() => {
-    if (!confirmWorkspaceCloseId) return
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key !== 'Escape') return
-      e.preventDefault()
-      e.stopImmediatePropagation()
-      clearWorkspaceClose()
-    }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [confirmWorkspaceCloseId, clearWorkspaceClose])
-
   // Autosave every live workspace's canvas, debounced. Only the persisted fields
   // gate it (a flat join per workspace — no JSON pass on every status flip), so
   // runtime churn (status/pty id) doesn't trigger disk writes. Background
@@ -577,7 +584,11 @@ export default function App(): JSX.Element {
             w.persisted
               .map(
                 (p) =>
-                  `${p.id}:${p.x},${p.y},${p.w},${p.h}:${p.isolation}:${p.shellId ?? ''}:${p.label}:${p.startupCommand ?? ''}:${p.agentId ?? ''}:${p.agentLabel ?? ''}:${p.wide ? 1 : 0}`
+                  // Must cover EVERY field toPersisted writes, or that field only
+                  // reaches disk when some other change happens to bump the key.
+                  // termTheme (pane context menu) and projectPath (per-agent
+                  // folder) were both missing and so silently didn't persist.
+                  `${p.id}:${p.x},${p.y},${p.w},${p.h}:${p.isolation}:${p.shellId ?? ''}:${p.label}:${p.startupCommand ?? ''}:${p.agentId ?? ''}:${p.agentLabel ?? ''}:${p.wide ? 1 : 0}:${p.termTheme ?? ''}:${p.projectPath ?? ''}`
               )
               .join('|')
         )
@@ -592,6 +603,23 @@ export default function App(): JSX.Element {
     return () => window.clearTimeout(saveTimer.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [persistedKey])
+
+  // The debounce above was the ONLY path to disk, so quitting (or reloading)
+  // within 400ms of a change silently threw it away — move a pane, hit ⌘Q, lose
+  // the move. Flush the pending write on teardown. Writes are serialized in the
+  // main process, so this can't race the debounced save it pre-empts.
+  useEffect(() => {
+    const flush = (): void => {
+      window.clearTimeout(saveTimer.current)
+      void saveWorkspaces()
+    }
+    window.addEventListener('beforeunload', flush)
+    window.addEventListener('pagehide', flush)
+    return () => {
+      window.removeEventListener('beforeunload', flush)
+      window.removeEventListener('pagehide', flush)
+    }
+  }, [])
 
   return (
     <div className="app">
@@ -639,7 +667,7 @@ export default function App(): JSX.Element {
           </Suspense>
         )}
       </div>
-      <Suspense fallback={null}>
+      <Suspense fallback={<OverlayLoading />}>
         {/* Stacking order mirrors the Escape handler's close order (diff →
            palette → settings), bottom to top: ⌘K over Settings must paint the
            palette ON TOP, not open it hidden underneath with focus stolen. */}
@@ -649,33 +677,36 @@ export default function App(): JSX.Element {
         {diffAgentId && <DiffPanel />}
       </Suspense>
       {bulkCloseIds && (
-        <div className="modal" onPointerDown={clearBulkClose}>
-          <div className="confirm" onPointerDown={(e) => e.stopPropagation()}>
-            <div className="confirm__title">Close {bulkCloseIds.length} terminals?</div>
-            <div className="confirm__body">
-              This ends their processes. Isolated terminals keep their branches and worktrees on
-              disk — no work is lost, and you can merge or clean them up later.
-            </div>
-            <div className="confirm__actions">
-              <button className="confirm__btn" onClick={clearBulkClose}>
-                Cancel
-              </button>
-              <button
-                className="confirm__btn confirm__btn--danger"
-                onClick={() => {
-                  // keepWorktree for every card: a batch close must never cascade
-                  // into silent worktree deletion (a no-op for shared panes, and
-                  // for any pane closed individually in the meantime).
-                  const { removeAgent } = useStore.getState()
-                  for (const id of bulkCloseIds) removeAgent(id, { keepWorktree: true })
-                  clearBulkClose()
-                }}
-              >
-                Close all
-              </button>
-            </div>
+        <Modal
+          className="confirm"
+          labelledBy="bulk-close-title"
+          onClose={clearBulkClose}
+          onEscape={clearBulkClose}
+        >
+          <div className="confirm__title" id="bulk-close-title">Close {bulkCloseIds.length} terminals?</div>
+          <div className="confirm__body">
+            This ends their processes. Isolated terminals keep their branches and worktrees on
+            disk — no work is lost, and you can merge or clean them up later.
           </div>
-        </div>
+          <div className="confirm__actions">
+            <button className="confirm__btn" onClick={clearBulkClose}>
+              Cancel
+            </button>
+            <button
+              className="confirm__btn confirm__btn--danger"
+              onClick={() => {
+                // keepWorktree for every card: a batch close must never cascade
+                // into silent worktree deletion (a no-op for shared panes, and
+                // for any pane closed individually in the meantime).
+                const { removeAgent } = useStore.getState()
+                for (const id of bulkCloseIds) removeAgent(id, { keepWorktree: true })
+                clearBulkClose()
+              }}
+            >
+              Close all
+            </button>
+          </div>
+        </Modal>
       )}
       {closingWs &&
         (() => {
@@ -683,32 +714,35 @@ export default function App(): JSX.Element {
             (a) => a.status === 'working' || NEEDS_ATTENTION.includes(a.status ?? 'starting')
           ).length
           return (
-            <div className="modal" onPointerDown={clearWorkspaceClose}>
-              <div className="confirm" onPointerDown={(e) => e.stopPropagation()}>
-                <div className="confirm__title">Close “{closingWs.name}”?</div>
-                <div className="confirm__body">
-                  {busy > 0
-                    ? `${busy === 1 ? 'An agent is' : `${busy} agents are`} still busy in this workspace — closing the tab stops ${busy === 1 ? 'it' : 'them'}. `
-                    : 'This ends the workspace’s terminals. '}
-                  Worktrees and branches stay on disk, and the canvas is saved — reopen the
-                  project to pick up where you left off.
-                </div>
-                <div className="confirm__actions">
-                  <button className="confirm__btn" onClick={clearWorkspaceClose}>
-                    Cancel
-                  </button>
-                  <button
-                    className="confirm__btn confirm__btn--danger"
-                    onClick={() => {
-                      closeWorkspaceById(closingWs.id)
-                      clearWorkspaceClose()
-                    }}
-                  >
-                    Close workspace
-                  </button>
-                </div>
+            <Modal
+              className="confirm"
+              labelledBy="ws-close-title"
+              onClose={clearWorkspaceClose}
+              onEscape={clearWorkspaceClose}
+            >
+              <div className="confirm__title" id="ws-close-title">Close “{closingWs.name}”?</div>
+              <div className="confirm__body">
+                {busy > 0
+                  ? `${busy === 1 ? 'An agent is' : `${busy} agents are`} still busy in this workspace — closing the tab stops ${busy === 1 ? 'it' : 'them'}. `
+                  : 'This ends the workspace’s terminals. '}
+                Worktrees and branches stay on disk, and the canvas is saved — reopen the
+                project to pick up where you left off.
               </div>
-            </div>
+              <div className="confirm__actions">
+                <button className="confirm__btn" onClick={clearWorkspaceClose}>
+                  Cancel
+                </button>
+                <button
+                  className="confirm__btn confirm__btn--danger"
+                  onClick={() => {
+                    closeWorkspaceById(closingWs.id)
+                    clearWorkspaceClose()
+                  }}
+                >
+                  Close workspace
+                </button>
+              </div>
+            </Modal>
           )
         })()}
       <Toasts />

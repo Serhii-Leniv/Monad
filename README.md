@@ -16,6 +16,8 @@
 <p align="center">
   <a href="https://serhii-leniv.github.io/Monad/"><img alt="Download Monad" src="https://img.shields.io/badge/Download-Monad-ff453a?style=flat-square"></a>
   <a href="https://github.com/Serhii-Leniv/Monad/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Serhii-Leniv/Monad?style=flat-square&label=latest&color=ff453a"></a>
+  <a href="https://github.com/Serhii-Leniv/Monad/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/Serhii-Leniv/Monad/ci.yml?branch=main&style=flat-square&label=CI"></a>
+  <a href="https://github.com/Serhii-Leniv/Monad/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/Serhii-Leniv/Monad?style=flat-square&color=f0b429"></a>
   <img alt="macOS and Windows" src="https://img.shields.io/badge/macOS%20%C2%B7%20Windows-1f2430?style=flat-square">
   <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-30d158?style=flat-square">
 </p>
@@ -27,6 +29,11 @@
   <br>
   <sub><a href="https://github.com/Serhii-Leniv/Monad/blob/main/assets/demo.mp4">▶ Watch the 45-second demo</a></sub>
 </p>
+
+---
+
+**[Download](#download)** · **[Quick start](#quick-start)** · **[How it compares](#how-it-compares)** ·
+**[FAQ](#faq)** · **[Build from source](#build-from-source)** · **[Contributing](#contributing)**
 
 ---
 
@@ -55,6 +62,19 @@ already installed.
 Monad runs entirely on your machine, against your repo. Your code never leaves your computer,
 agents use your own credentials, and there's no telemetry and no background service — just the
 app and the tools you choose to run.
+
+## How it compares
+
+If you're already running agents in parallel, you're probably doing one of these:
+
+| Instead of… | Monad gives you |
+| --- | --- |
+| **Tiled terminal panes** (tmux, Windows Terminal) | The same tiling, plus per-agent worktrees, status, and diff/merge — no scripting |
+| **Manual `git worktree` juggling** | Worktree create/teardown per agent, handled automatically |
+| **One agent at a time in your IDE** | Five agents on the same task, then merge the one that got it right |
+| **A cloud agent platform** | Local execution, your own CLIs and keys, no inference bill, no code leaving your machine |
+
+Monad isn't another agent — it's the surface you run the agents you already pay for on.
 
 ## Download
 
@@ -107,24 +127,87 @@ src/
 
 - **Terminals** — xterm.js ↔ `node-pty` (prebuilt) over IPC.
 - **Isolation** — `git worktree add` per agent (branch `canvas/<id>`), kept in a sibling `.monad-worktrees/` folder; agents are cwd-pinned after spawn so a shell profile can't move them out of their worktree.
-- **Persistence** — one canvas per project in `<project>/.monad/canvas.json`.
+- **Persistence** — the whole tab set lives in `workspaces.json` in the app's user-data folder, written atomically. (Older builds kept one canvas per project in `<project>/.monad/canvas.json`; that file is still read once to migrate you, then ignored.)
 - **Updates** — on launch the app checks the [release feed](https://github.com/Serhii-Leniv/Monad/releases) and shows an in-app notice when a newer version is out.
 
 <details>
 <summary>Tests</summary>
 
-Integration smoke tests drive the real built bundles + IPC under Electron (run in CI on every
-push — see `.github/workflows/ci.yml`):
+Two layers, both run in CI on every push (see `.github/workflows/ci.yml`), and packaging
+is gated on them:
 
 ```bash
 npm run typecheck
-npm run smoke:pty   # PTY loads under Electron ABI + shell echo
-npm run smoke:p1    # preload bridge, project save/load, renderer PTY
-npm run smoke:p2    # git detect, worktree isolation, pty fan-out, teardown
-npm run smoke:p3    # diff sees changes, merge lands work on base branch
+npm run lint        # bug-focused rules (react-hooks + a small correctness set)
+npm run test        # fast unit tests: tiling math, shell quoting, git path decoding
+```
+
+Integration smoke tests drive the real built bundles + IPC under a headless Electron:
+
+```bash
+npm run smoke:pty          # PTY loads under Electron ABI + shell echo
+npm run smoke:p1           # preload bridge, legacy canvas load, renderer PTY
+npm run smoke:p2           # git detect, worktree isolation, pty fan-out, teardown
+npm run smoke:p3           # diff sees changes, merge lands work on base branch
+npm run smoke:file         # file tree/read/save + path-traversal guard
+npm run smoke:ws           # workspace store
+npm run smoke:tabs         # tab behaviour
+npm run smoke:wspersist    # workspace persistence + legacy migration
+npm run smoke:agentfolder  # per-agent folders
 ```
 
 </details>
+
+## FAQ
+
+<details>
+<summary><b>Does Monad cost anything to run?</b></summary>
+
+No. Monad is MIT-licensed and free, and it has no inference cost of its own — it drives the agent
+CLIs already installed on your machine, using your existing credentials and plans.
+</details>
+
+<details>
+<summary><b>Do I need a git repository?</b></summary>
+
+No, but it's recommended. Monad opens any folder; a git repo is what unlocks per-agent worktree
+isolation, diff, and merge. Without git you still get the parallel terminal canvas.
+</details>
+
+<details>
+<summary><b>macOS says the app is "damaged and can't be opened."</b></summary>
+
+Builds aren't yet signed with a paid Apple Developer certificate, so Gatekeeper quarantines them.
+Remove the quarantine flag once after installing:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Monad.app
+```
+
+Windows shows a comparable one-time SmartScreen prompt (**More info → Run anyway**). Proper signing
+and notarization are on the roadmap.
+</details>
+
+<details>
+<summary><b>How many agents can run at once?</b></summary>
+
+Up to nine tile automatically on the canvas. Each is a real PTY, so the practical limit is your
+machine's CPU and memory.
+</details>
+
+<details>
+<summary><b>Where does Monad store my data?</b></summary>
+
+Workspace and layout state lives in `workspaces.json` in the app's user-data folder. Agent branches
+live in a sibling `.monad-worktrees/` directory next to your repo. Nothing is sent anywhere — there's
+no account, no telemetry, and no background service.
+</details>
+
+## Contributing
+
+Issues and pull requests are welcome. A good first step is running the app from source (see
+[Build from source](#build-from-source)) and checking that `npm run typecheck` plus the smoke tests
+pass before opening a PR. For larger changes, open an issue first so we can agree on the approach.
 
 ## Feedback
 
