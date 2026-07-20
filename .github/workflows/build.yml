@@ -104,6 +104,25 @@ jobs:
       # from the SAME runner that built them, so it never depends on artifact
       # storage. Both jobs target the same release; action-gh-release create-or-
       # updates, and the concurrency group above keeps them from racing.
+      # Manual runs only. Tagged releases keep using Release assets (see the note
+      # at the top of this file — artifact storage is a metered quota that, once
+      # full, blocks uploads for hours and has broken releases before). A 1-day
+      # retention on dispatch-only runs keeps nothing accumulating, and makes it
+      # possible to test a build on real hardware without cutting a release.
+      - name: Upload installer for manual test runs
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          # Must be unique per matrix job: upload-artifact@v4 fails when two jobs
+          # write the same artifact name.
+          name: monad-${{ runner.os }}-test
+          path: |
+            dist/*.dmg
+            dist/*.exe
+          # The mac glob finds nothing on the Windows runner and vice versa.
+          if-no-files-found: ignore
+          retention-days: 1
+
       - name: Attach installers to this repo's Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
