@@ -162,7 +162,7 @@ describe('caps', () => {
     st().addAgent()
     expect(ws().agents).toHaveLength(MAX_AGENTS)
     // A silent refusal here reads as a broken button.
-    expect(st().toasts.at(-1)?.text).toBe(`Maximum ${MAX_AGENTS} terminals on one canvas`)
+    expect(st().toasts.at(-1)?.text).toBe(`Maximum ${MAX_AGENTS} terminals on one stage`)
   })
 
   it('refuses to create a seventh live workspace', () => {
@@ -320,7 +320,7 @@ describe('addAgent', () => {
 
 describe('focusTerminal vs revealAgent', () => {
   // Distinct concepts with distinct state: focus maximizes, reveal only brings
-  // forward. Collapsing them makes every notification click zoom the canvas.
+  // forward. Collapsing them makes every notification click zoom the stage.
   let a1: string
   let a2: string
 
@@ -374,7 +374,7 @@ describe('setSelected', () => {
     const id = agentIds()[0]
 
     st().setSelected([])
-    // No selection means no keyboard target — the canvas goes inert.
+    // No selection means no keyboard target — the stage goes inert.
     expect(ws().selectedIds).toEqual([id])
   })
 
@@ -608,7 +608,7 @@ describe('removeAgent', () => {
     st().focusTerminal(a1)
     st().removeAgent(a1)
     vi.advanceTimersByTime(200)
-    // A stale focusedId leaves the canvas zoomed on nothing.
+    // A stale focusedId leaves the stage zoomed on nothing.
     expect(ws().focusedId).toBeNull()
   })
 })
@@ -746,14 +746,14 @@ describe('setUpdate', () => {
   })
 })
 
-describe('setCanvasSize', () => {
+describe('setStageSize', () => {
   it('applies the first measurement even when it matches the default', () => {
-    // canvasReady starts false, so the guard must not swallow the first call —
+    // stageReady starts false, so the guard must not swallow the first call —
     // panes wait on it before spawning.
-    const { canvasW, canvasH } = st()
-    expect(st().canvasReady).toBe(false)
-    st().setCanvasSize(canvasW, canvasH)
-    expect(st().canvasReady).toBe(true)
+    const { stageW, stageH } = st()
+    expect(st().stageReady).toBe(false)
+    st().setStageSize(stageW, stageH)
+    expect(st().stageReady).toBe(true)
   })
 
   it('re-tiles every live workspace, not just the active one', () => {
@@ -763,7 +763,7 @@ describe('setCanvasSize', () => {
     st().createWorkspace('B')
     st().addAgent()
 
-    st().setCanvasSize(1600, 1000)
+    st().setStageSize(1600, 1000)
     const background = wsById(st(), a)
     expect(background).toBeDefined()
     // A background tab left at the old size renders wrong the moment it shows.

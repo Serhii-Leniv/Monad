@@ -864,7 +864,7 @@ app.whenReady().then(async () => {
   }
 
   // ================= TIMELINE (~55s) =================
-  // A hero · B six agents · C broadcast · D branches · E appearance
+  // A hero · B six agents · D branches · E appearance
   // F project switching · G file panel · H diff+merge · I outro
   const T = Date.now()
   const beat = (n) => log(`beat ${n} @ ${((Date.now() - T) / 1000).toFixed(1)}s`)
@@ -896,47 +896,6 @@ app.whenReady().then(async () => {
   }
   await sleep(3600)
   await shot('b-six-agents')
-
-  beat('C broadcast to all six')
-  await js(`(() => { window.__demo.S().setSelected(window.__demo.ids()); return true })()`)
-  await sleep(1100)
-  // The field is a <textarea>; using HTMLInputElement's setter throws "Illegal
-  // invocation". React needs the native setter + a bubbling input event to pick
-  // up a programmatic value change.
-  const typed = await js(`(() => {
-    const el = document.querySelector('.broadcast__input');
-    if (!el) return 'no-input';
-    const proto = el.tagName === 'TEXTAREA'
-      ? window.HTMLTextAreaElement.prototype
-      : window.HTMLInputElement.prototype;
-    const set = Object.getOwnPropertyDescriptor(proto, 'value').set;
-    set.call(el, 'run the test suite and fix any failures');
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    return el.value
-  })()`)
-  log('broadcast input: ' + typed)
-  await sleep(2000)
-  // The bar only renders while 2+ cards are selected, and terminal activity can
-  // steal the selection between typing and sending -- re-assert it first.
-  const sent = await js(`(() => {
-    window.__demo.S().setSelected(window.__demo.ids());
-    const el = document.querySelector('.broadcast__input');
-    if (!el) return 'no-input';
-    if (!el.value) {
-      const proto = el.tagName === 'TEXTAREA'
-        ? window.HTMLTextAreaElement.prototype
-        : window.HTMLInputElement.prototype;
-      Object.getOwnPropertyDescriptor(proto, 'value').set
-        .call(el, 'run the test suite and fix any failures');
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-    el.focus();
-    el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-    return 'sent'
-  })()`)
-  log('broadcast send: ' + sent)
-  await shot('c-broadcast')
-  await sleep(2200)
 
   beat('D worktree branches')
   // Deliberately NOT focusTerminal(). Maximising remounts the pane, which restarts

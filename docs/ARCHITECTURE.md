@@ -99,7 +99,7 @@ so run `npm run build` first. They live in `scripts/smoke/`:
 ```bash
 npm run smoke:pty          # PTY loads under Electron ABI + shell echo
 npm run smoke:p1           # preload bridge, legacy canvas load, renderer PTY
-npm run smoke:p2           # git detect, worktree isolation, pty fan-out, teardown
+npm run smoke:p2           # git detect, worktree isolation, agent cwd pinning, teardown
 npm run smoke:p3           # diff sees changes, merge lands work on base branch
 npm run smoke:file         # file tree/read/save + path-traversal guard
 npm run smoke:ws           # workspace store
@@ -109,7 +109,7 @@ npm run smoke:agentfolder  # per-agent folders
 ```
 
 `scripts/diag/` holds manual diagnostic harnesses — they open a real window for eyeballing terminal
-or canvas behaviour and are not part of CI.
+or stage behaviour and are not part of CI.
 
 Smoke scripts resolve the built bundles relative to their own location
 (`join(__dirname, '..', '..', 'out', ...)`). If you move one, that depth has to move with it.

@@ -88,7 +88,7 @@ function buildMarkerCmd(sid: string | undefined, win: boolean, mark: string): st
   return `printf %s '${a}''${b}'`
 }
 
-/** Floor for the maximized pane before the canvas has reported its size. */
+/** Floor for the maximized pane before the stage has reported its size. */
 const MIN_FOCUS_SIZE = 200
 
 // Path-looking tokens in terminal output ("src/foo.ts:42", "..\lib\a.py") —
@@ -214,7 +214,7 @@ const resolvedTermTheme = (
  * One terminal window. The SAME instance is reused across every layout mode, so
  * switching Grid/Columns/Free never kills the PTY. In free mode it's absolutely
  * positioned (driven by Moveable). Status is detected from PTY output so the
- * canvas can show, at a glance, which agent is working / idle / waiting on you.
+ * stage can show, at a glance, which agent is working / idle / waiting on you.
  */
 function TerminalPane({
   agent,
@@ -240,7 +240,7 @@ function TerminalPane({
     })
   )
   // Whether this pane's workspace is the one on screen — gates DOM-focus grabs so
-  // a hidden background pane never steals keyboard focus from the active canvas.
+  // a hidden background pane never steals keyboard focus from the active stage.
   const isActive = useStore((s) => s.activeWorkspaceId === workspaceId)
   // Spawning is held until shell detection resolves — see the guard in the mount
   // effect below.
@@ -260,8 +260,8 @@ function TerminalPane({
   const focusTerminal = useStore((s) => s.focusTerminal)
   const clearFocus = useStore((s) => s.clearFocus)
   const focused = useStore((s) => wsById(s, workspaceId)?.focusedId === id)
-  const canvasW = useStore((s) => s.canvasW)
-  const canvasH = useStore((s) => s.canvasH)
+  const stageW = useStore((s) => s.stageW)
+  const stageH = useStore((s) => s.stageH)
   const setDiffAgentId = useStore((s) => s.setDiffAgentId)
   const pendingClose = useStore((s) => wsById(s, workspaceId)?.pendingCloseId === id)
   const clearPendingClose = useStore((s) => s.clearPendingClose)
@@ -620,7 +620,7 @@ function TerminalPane({
       const hz = a.h * st.zoom
       const sx = st.panX + a.x * st.zoom
       const sy = st.panY + a.y * st.zoom
-      const offscreen = sx + wz < 0 || sx > st.canvasW || sy + hz < 0 || sy > st.canvasH
+      const offscreen = sx + wz < 0 || sx > st.stageW || sy + hz < 0 || sy > st.stageH
       const appUnfocused = typeof document !== 'undefined' && !document.hasFocus()
       if (!offscreen && !appUnfocused) return
       const now = Date.now()
@@ -1081,7 +1081,7 @@ function TerminalPane({
   // The single selected terminal always owns keyboard focus, so you can type the
   // instant it becomes active — clicking its header, cycling to it, spawning it,
   // or having selection fall back to it when a neighbour closes. (Clicking empty
-  // canvas keeps the current selection; Stage re-focuses it there.)
+  // stage keeps the current selection; Stage re-focuses it there.)
   const soleSelected = useStore((s) => {
     const w = wsById(s, workspaceId)
     return !!w && w.selectedIds.length === 1 && w.selectedIds[0] === id
@@ -1211,8 +1211,8 @@ function TerminalPane({
         top: 0,
         left: 0,
         transform: `translate(${RAIL_INSET}px, ${PAD}px)`,
-        width: Math.max(MIN_FOCUS_SIZE, canvasW - RAIL_INSET - PAD),
-        height: Math.max(MIN_FOCUS_SIZE, canvasH - PAD * 2)
+        width: Math.max(MIN_FOCUS_SIZE, stageW - RAIL_INSET - PAD),
+        height: Math.max(MIN_FOCUS_SIZE, stageH - PAD * 2)
       }
     : {
         position: 'absolute' as const,
@@ -1538,7 +1538,7 @@ function TerminalPane({
       )}
     </div>
 
-    {/* Rendered via a portal: a position:fixed modal inside the canvas transform
+    {/* Rendered via a portal: a position:fixed modal inside the stage transform
         would be positioned relative to the pane, not the screen. */}
     {closePrompt &&
       createPortal(

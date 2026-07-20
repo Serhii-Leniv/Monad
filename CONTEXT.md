@@ -138,7 +138,7 @@ spread them into new code either.**
 
 | Term | Where it survives | Why |
 |---|---|---|
-| **canvas** | `canvasW`/`canvasH`, `setCanvasSize`, `PersistedCanvas`, `CANVAS_DIR = '.monad'`, `.app__canvas` CSS, package.json description | The old name for the Stage/workspace surface. ~113 occurrences across renderer files. |
+| **canvas** | `PersistedCanvas`, `CANVAS_DIR = '.monad'` | The old name for the Stage/workspace surface. Renderer state, CSS, and user-visible copy were renamed to **stage** (`stageW`/`stageH`, `setStageSize`, `.app__stage`); what survives is tied to the on-disk `canvas.json` format and must not be renamed. |
 | **`canvas/` branch prefix** | Every worktree branch: `canvas/<short12>` | User-visible in git. The renderer strips it via `displayBranch()`. Worktree removal is *gated* on this prefix — changing it would strand existing branches. |
 | **`vectro.`** | Every localStorage key | Frozen for data continuity across the Monad rename. Changing a key orphans that user's data (recents, settings, panel width). |
 | **`vec-`** | CSS class prefix, ~100 occurrences | Cosmetic, but a bulk rename is churn with no user benefit. |
@@ -175,7 +175,7 @@ New channels should follow the regular convention.
 | `<project>/.monad/canvas.json` | `PersistedCanvas` — one canvas per project | Legacy, read-only. Migrated once, then ignored; files are deliberately left on disk as a fallback. |
 | `<parent>/.monad-worktrees/` | Worktree container | Current |
 | `userData/.migrated-from-vectro` | Migration marker | Current |
-| localStorage `vectro.*` | `settings`, `filePanelWidth`, `recent`, `openWorkspaces` (legacy), `broadcastHistory`, `update.firstSeen.<version>` | Current data, frozen key names |
+| localStorage `vectro.*` | `settings`, `filePanelWidth`, `recent`, `openWorkspaces` (legacy), `update.firstSeen.<version>` | Current data, frozen key names |
 
 Note `PersistedWorkspace.path` is the pre-per-agent-folders name for `defaultPath`, kept read-only
 for compatibility — hydration reads `defaultPath ?? path ?? null`.

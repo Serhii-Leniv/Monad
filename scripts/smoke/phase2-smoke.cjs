@@ -2,8 +2,7 @@
 //   1. git:info detects the repo + base branch
 //   2. worktree:create makes an isolated worktree+branch; an agent PTY runs IN it
 //   3. `git worktree list` reflects the new worktree
-//   4. broadcasting one command reaches multiple agent PTYs
-//   5. worktree:remove tears the worktree+branch back down
+//   4. worktree:remove tears the worktree+branch back down
 const { app, BrowserWindow } = require('electron')
 const { join } = require('path')
 const os = require('os')
@@ -55,17 +54,6 @@ app.whenReady().then(async () => {
   await win.loadFile(join(__dirname, '..', '..', 'out', 'renderer', 'index.html'))
 
   const createScript = `(async () => {
-    const runIn = (cwd, cmd, marker, t=8000) => new Promise((resolve) => {
-      let buf = ''
-      window.api.pty.spawn({ cwd, cols: 80, rows: 24 }).then((pid) => {
-        const off = window.api.pty.onData(pid, (d) => {
-          buf += d
-          if (buf.includes(marker)) { off(); window.api.pty.kill(pid); resolve({ seen: true, buf }) }
-        })
-        setTimeout(() => { off(); window.api.pty.kill(pid); resolve({ seen: buf.includes(marker), buf }) }, t)
-        window.api.pty.write(pid, cmd + '\\r')
-      })
-    })
     // Non-interactive spawn => no PSReadLine echo/ANSI; clean cwd proof.
     const runArgs = (cwd, psCommand, marker, t=15000) => new Promise((resolve) => {
       let buf = ''
@@ -91,11 +79,8 @@ app.whenReady().then(async () => {
     })
     const cdCmd = "Set-Location -LiteralPath '" + wt.cwd.replace(/'/g, "''") + "'"
     await fireAndWait(wt.cwd, cdCmd + '; New-Item -ItemType File marker2.txt -Force > $null')
-    const b1 = runIn(${JSON.stringify(REPO)}, 'echo BCAST_OK', 'BCAST_OK')
-    const b2 = runIn(${JSON.stringify(REPO)}, 'echo BCAST_OK', 'BCAST_OK')
-    const bcast = (await Promise.all([b1, b2])).every((x) => x.seen)
     const cwdLine = (wtRun.buf.match(/CWD=([^\\r\\n]+)/) || [])[1] || ''
-    return { info, wt, ranInWorktree: wtRun.seen, reportedCwd: cwdLine.trim(), bcast }
+    return { info, wt, ranInWorktree: wtRun.seen, reportedCwd: cwdLine.trim() }
   })()`
 
   let r
@@ -128,7 +113,6 @@ app.whenReady().then(async () => {
   console.log('[p2] marker file in worktree: ' + markerExists)
   console.log('[p2] interactive+cd lands  : ' + marker2Exists)
   console.log('[p2] worktree list = 2    : ' + (wtCountAfterCreate === 2) + ' (' + wtCountAfterCreate + ')')
-  console.log('[p2] broadcast -> 2 ptys  : ' + r.bcast)
   console.log('[p2] worktree removed     : ' + (wtCountAfterRemove === 1) + ' (' + wtCountAfterRemove + ')')
   console.log('[p2] branch deleted       : ' + branchGone)
   console.log('[p2] console errors       : ' + (errors.length ? errors.join(' | ') : 'none'))
@@ -141,7 +125,6 @@ app.whenReady().then(async () => {
     markerExists &&
     marker2Exists &&
     wtCountAfterCreate === 2 &&
-    r.bcast &&
     wtCountAfterRemove === 1 &&
     branchGone &&
     errors.length === 0

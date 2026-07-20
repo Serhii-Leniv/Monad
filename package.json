@@ -1,7 +1,7 @@
 {
   "name": "monad",
   "version": "0.1.27",
-  "description": "Monad — a cross-platform canvas for running terminals and AI agents in parallel",
+  "description": "Monad — a cross-platform stage for running terminals and AI agents in parallel",
   "main": "./out/main/index.js",
   "author": "Serhii Leniv",
   "license": "MIT",

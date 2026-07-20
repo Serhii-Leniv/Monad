@@ -31,7 +31,7 @@ export default class ErrorBoundary extends Component<Props, State> {
           <h1 className="crash__title">Something went wrong</h1>
           <p className="crash__msg">
             Monad hit an unexpected error. Your open terminals were interrupted, but your
-            saved canvas is safe — reloading usually fixes it.
+            saved workspace is safe — reloading usually fixes it.
           </p>
           <pre className="crash__detail">{this.state.error.message}</pre>
           <button className="crash__btn" onClick={() => window.location.reload()}>

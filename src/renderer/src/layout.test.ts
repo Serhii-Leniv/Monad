@@ -26,7 +26,7 @@ const tile = (n: number, mode: LayoutMode = 'grid', wide: number[] = []): AgentI
   laidOut(makeAgents(n, wide), mode, W, H)
 
 describe('laidOut', () => {
-  it('returns the input untouched for an empty canvas', () => {
+  it('returns the input untouched for an empty stage', () => {
     const empty = makeAgents(0)
     expect(laidOut(empty, 'grid', W, H)).toBe(empty)
   })
@@ -135,7 +135,7 @@ describe('laidOut', () => {
   })
 
   it('survives a degenerate viewport without producing negative geometry', () => {
-    // The canvas is measured async; a pane can be tiled before the first real
+    // The stage is measured async; a pane can be tiled before the first real
     // measurement lands.
     for (const a of laidOut(makeAgents(4), 'grid', 0, 0)) {
       expect(a.w).toBeGreaterThan(0)
