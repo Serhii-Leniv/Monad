@@ -1,4 +1,4 @@
-// Diagnostic for the Moveable/Selecto canvas: render cards, select one (so
+// Diagnostic for the Moveable/Selecto stage: render cards, select one (so
 // Moveable shows handles), screenshot, and report DOM state + console errors.
 const { app, BrowserWindow } = require('electron')
 const { join } = require('path')

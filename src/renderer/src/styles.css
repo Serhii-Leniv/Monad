@@ -118,7 +118,7 @@
   --shadow-menu: var(--shadow-menu);
   --shadow-float: 0 10px 26px rgba(0, 0, 0, 0.5);
 
-  /* Card surface inside the canvas transform (solid-translucent, not blurred). */
+  /* Card surface inside the stage transform (solid-translucent, not blurred). */
   --card-bg: rgba(22, 25, 32, 0.72);
   --card-bg-strong: rgba(30, 34, 44, 0.76);
   --term-bg: #0a0c10;
@@ -634,35 +634,6 @@ body.has-wallpaper .aurora {
   }
 }
 
-/* Broadcast landed — one quick accent ring pulse on every targeted pane, so a
-   multi-send visibly reaches all of them. Lighter and faster than done-flash:
-   it's an input acknowledgment, not a completion. */
-.vec-pane.is-broadcast-pulse {
-  animation: broadcast-pulse 500ms var(--ease-out);
-}
-@keyframes broadcast-pulse {
-  /* Base card shadow restated in every frame (like done-flash) so the pulse
-     only ADDS the accent layers instead of dropping the resting depth. */
-  0%,
-  100% {
-    box-shadow:
-      var(--shadow-card),
-      inset 0 1px 0 var(--glass-highlight);
-  }
-  30% {
-    box-shadow:
-      0 0 0 1px rgba(var(--accent-rgb), 0.6),
-      0 0 22px rgba(var(--accent-rgb), 0.35),
-      var(--shadow-card),
-      inset 0 1px 0 var(--glass-highlight);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .vec-pane.is-broadcast-pulse {
-    animation: none;
-  }
-}
-
 /* Tactile press feedback — buttons "give" a touch when clicked. */
 .rail-btn:active:not(:disabled),
 .rail__seg-btn:active,
@@ -673,8 +644,6 @@ body.has-wallpaper .aurora {
 .settings__close:active,
 .vec-pane__close:active,
 .vec-pane__wide:active,
-.broadcast__send:active,
-.broadcast__dismiss:active,
 .vec-pane__relaunch:active,
 .vec-pane__retry:active {
   transform: scale(0.92);
@@ -806,7 +775,7 @@ body.has-wallpaper .aurora {
 /* An inset floating glass strip in the column flow under the 40px titlebar —
    the top margin clears the floating tab bar (absolute, top:6px, ~40px tall)
    and its shadow, so the two never overlap. Same glass family as the tab bar /
-   rail. Still in-flow: it pushes the canvas down and can't be missed. Tone
+   rail. Still in-flow: it pushes the stage down and can't be missed. Tone
    escalates with how long the release has gone un-installed (see updateReminder). */
 .updbar {
   position: relative;
@@ -1043,7 +1012,7 @@ body.has-wallpaper .aurora {
 /* Full-width flex strip centres the pill via the layout engine (pixel-snapped),
    instead of translateX(-50%) which lands on half-pixels on Windows and blurs the
    text + 1px border. pointer-events:none lets the empty sides fall through to the
-   titlebar drag region / canvas; the pill itself re-enables them. */
+   titlebar drag region / stage; the pill itself re-enables them. */
 .projbar {
   position: absolute;
   /* max() keeps the pill clear of the MacBook notch in fullscreen (safe-area
@@ -1530,13 +1499,13 @@ body.has-wallpaper .aurora {
   min-height: 0;
 }
 
-.app__canvas {
+.app__stage {
   position: absolute;
   top: 0;
   bottom: 0;
   left: 0;
   /* Shrink from the right by the docked file panel's width (0 when closed).
-     Because the canvas is absolutely positioned, changing `right` changes its
+     Because the stage is absolutely positioned, changing `right` changes its
      clientWidth, so the ResizeObserver in App re-tiles every card automatically. */
   right: var(--filepanel-w, 0);
 }
@@ -1562,14 +1531,14 @@ body.has-wallpaper .aurora {
   content-visibility: hidden;
 }
 
-.canvas-wrap {
+.stage-wrap {
   width: 100%;
   height: 100%;
 }
 
 /* ---------- Right-docked file explorer / editor panel ---------- */
-/* Sibling of .app__canvas inside .app__main: anchored to the right edge, filling
-   the --filepanel-w gutter the canvas leaves free. Frosted-glass chrome matching
+/* Sibling of .app__stage inside .app__main: anchored to the right edge, filling
+   the --filepanel-w gutter the stage leaves free. Frosted-glass chrome matching
    the review panel; its width is set inline from the persisted filePanelWidth. */
 .filepanel {
   position: absolute;
@@ -1904,7 +1873,7 @@ body.has-wallpaper .aurora {
   background-clip: padding-box;
 }
 
-/* ---------- Stage (free canvas) ---------- */
+/* ---------- Stage (free-positioned pane surface) ---------- */
 .stage {
   position: absolute;
   inset: 0;
@@ -2006,7 +1975,7 @@ body.has-wallpaper .aurora {
   color: #fff;
 }
 
-/* Focus (maximized) mode: the pane expands over the canvas; siblings recede.
+/* Focus (maximized) mode: the pane expands over the stage; siblings recede.
    Dimmed panes keep rendering (live output stays visible through the glass)
    but ignore the pointer so a stray click can't type into a hidden terminal. */
 .vec-pane.is-focused {
@@ -2192,7 +2161,7 @@ body.has-wallpaper .aurora {
 }
 
 /* Frosted glass only matters over a wallpaper — keep it off otherwise so the
-   canvas stays buttery-smooth when dragging/reflowing. */
+   stage stays buttery-smooth when dragging/reflowing. */
 body.has-wallpaper .vec-pane__header {
   backdrop-filter: var(--blur-sm);
   -webkit-backdrop-filter: var(--blur-sm);
@@ -2504,7 +2473,7 @@ body.has-wallpaper .vec-pane__term {
 /* Full-height flex column vertically centres the dock through the layout engine
    (pixel-snapped) rather than translateY(-50%), which lands on half-pixels on
    Windows and softens the dock's border + icons. pointer-events fall through the
-   empty top/bottom to the canvas; the dock re-enables them. */
+   empty top/bottom to the stage; the dock re-enables them. */
 .rail-dock {
   position: absolute;
   left: max(14px, env(safe-area-inset-left, 0px));
@@ -2528,7 +2497,7 @@ body.has-wallpaper .vec-pane__term {
   gap: calc(var(--dock) * 0.16);
   padding: calc(var(--dock) * 0.28) 11px;
   /* A defined dark-glass body (not just translucent white) so the dock reads
-     crisp over the now-transparent canvas instead of a blurry smudge. */
+     crisp over the now-transparent stage instead of a blurry smudge. */
   background:
     linear-gradient(150deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02) 55%),
     rgba(13, 16, 23, 0.82);
@@ -4770,97 +4739,6 @@ body.has-wallpaper .vec-pane__term {
   filter: brightness(1.07);
 }
 
-/* ---------- Broadcast bar (send to every selected terminal) ---------- */
-.broadcast {
-  position: absolute;
-  left: 50%;
-  bottom: 26px; /* floats just above the tiles' bottom inset */
-  transform: translateX(-50%);
-  z-index: 40; /* over the cards (panes top out at 6), under modals (100) */
-  display: flex;
-  align-items: flex-end;
-  gap: 4px;
-  width: min(560px, calc(100% - 220px));
-  padding: 5px 5px 5px 14px;
-  border-radius: 21px;
-  background:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03) 50%),
-    rgba(15, 21, 32, 0.72);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--line-2);
-  box-shadow:
-    var(--glass-specular),
-    var(--shadow-menu);
-  animation: pop-in 240ms var(--ease-decelerate);
-  transition:
-    border-color var(--dur-select) var(--ease-out),
-    box-shadow var(--dur-select) var(--ease-out);
-}
-
-.broadcast:focus-within {
-  border-color: rgba(var(--accent-rgb), 0.55);
-  box-shadow:
-    var(--glass-specular),
-    0 0 0 1px rgba(var(--accent-rgb), 0.12),
-    0 0 22px rgba(var(--accent-rgb), 0.22),
-    var(--shadow-menu);
-}
-
-/* Styled as a single-line pill; BroadcastBar's autosize effect grows it with
-   content up to ~4 lines (max-height mirrors its MAX_INPUT_PX), then it scrolls. */
-.broadcast__input {
-  flex: 1;
-  min-width: 0;
-  max-height: 84px;
-  margin: 5px 0;
-  padding: 0;
-  font-family: var(--font-ui);
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--text);
-  background: transparent;
-  border: none;
-  outline: none;
-  resize: none;
-}
-
-.broadcast__input::placeholder {
-  color: var(--muted);
-}
-
-.broadcast__send,
-.broadcast__dismiss {
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-.broadcast__send {
-  color: #fff;
-  background: linear-gradient(180deg, var(--accent-2), var(--accent));
-  box-shadow: 0 0 14px rgba(var(--accent-rgb), 0.35);
-}
-
-.broadcast__send:hover {
-  filter: brightness(1.07);
-}
-
-.broadcast__dismiss {
-  color: var(--muted);
-  background: transparent;
-}
-
-.broadcast__dismiss:hover {
-  color: var(--text);
-  background: var(--hover-bg);
-}
-
 /* ----------------------------------------------------------------------------
    Light theme — component overrides. Everything the token flip above can't
    reach: hardcoded dark surfaces, white-highlight gradients, and status tints
@@ -4988,7 +4866,7 @@ body.has-wallpaper .vec-pane__term {
 }
 /* Light terminals: a translucent WHITE veil (black text above it, via the
    light xterm palette). The full opacity-slider range works again — a white
-   veil blending toward the light canvas stays readable at any alpha, unlike
+   veil blending toward the light stage stays readable at any alpha, unlike
    the old dark veil that had to be clamped near-opaque. */
 :root[data-theme='light'] .vec-pane__term {
   background: rgba(255, 255, 255, var(--term-alpha, 0.8));
@@ -5243,13 +5121,6 @@ body.has-wallpaper .vec-pane__term {
   box-shadow:
     var(--glass-specular),
     0 30px 80px rgba(31, 38, 54, 0.24);
-}
-
-/* ---- Broadcast bar ---- */
-:root[data-theme='light'] .broadcast {
-  background:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.55) 50%),
-    rgba(250, 250, 252, 0.8);
 }
 
 /* ---- Crash screen ---- */

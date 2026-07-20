@@ -38,7 +38,7 @@ interface ModalProps {
  * and restored on close.
  *
  * Before this, overlays were bare `<div className="modal">` wrappers. Tab walked
- * straight out of them into the canvas behind the backdrop — landing on controls
+ * straight out of them into the stage behind the backdrop — landing on controls
  * the user can't see and can't reach back from — and with no role/aria-modal a
  * screen reader never announced that a dialog had opened at all, so the whole
  * surface was invisible to it.

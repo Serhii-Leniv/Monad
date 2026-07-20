@@ -12,7 +12,7 @@ If you're already running agents in parallel, you're probably doing one of these
 | --- | --- |
 | **Tiled terminal panes** (tmux, Windows Terminal) | The same tiling, plus per-agent worktrees, status, and diff/merge — no scripting |
 | **Manual `git worktree` juggling** | Worktree create/teardown per agent, handled automatically |
-| **One agent at a time in your IDE** | Five agents on the same task, then merge the one that got it right |
+| **One agent at a time in your IDE** | Several agents at once, each isolated in its own worktree, reviewed and merged one by one |
 | **A cloud agent platform** | Local execution, your own CLIs and keys, no inference bill, no code leaving your machine |
 
 Monad isn't another agent — it's the surface you run the agents you already pay for on.
@@ -25,7 +25,7 @@ agent CLIs already installed on your machine, using your existing credentials an
 ## Do I need a git repository?
 
 No, but it's recommended. Monad opens any folder; a git repo is what unlocks per-agent worktree
-isolation, diff, and merge. Without git you still get the parallel terminal canvas.
+isolation, diff, and merge. Without git you still get the parallel terminal stage.
 
 ## macOS says the app is "damaged and can't be opened."
 

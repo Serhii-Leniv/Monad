@@ -22,7 +22,7 @@ function baseName(p: string): string {
 }
 
 /** Minimal floating dock — icons only, refined liquid glass. Workspace switching
- *  lives in the top bar; the rail is just identity + the active canvas's tools. */
+ *  lives in the top bar; the rail is just identity + the active stage's tools. */
 export default function Rail(): JSX.Element {
   const projectPath = useActiveProjectPath()
   const agents = useActiveAgents()

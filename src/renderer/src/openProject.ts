@@ -273,12 +273,12 @@ async function checkOrphanWorktrees(path: string): Promise<void> {
   }
 }
 
-// Set while an open is in flight. Opening is async (canvas load + git info) and
+// Set while an open is in flight. Opening is async (stage load + git info) and
 // the Home card/button stay clickable meanwhile, so a second click (or a stray
-// double-click) would spawn a duplicate canvas + a second set of shells.
+// double-click) would spawn a duplicate stage + a second set of shells.
 let opening = false
 
-/** Load a folder's saved canvas + git info, prune stale worktrees, and open it
+/** Load a folder's saved stage + git info, prune stale worktrees, and open it
  *  as a live workspace tab. If it's already open, just bring its tab forward. */
 export async function openProjectByPath(ref: RecentProject): Promise<void> {
   const store = useStore.getState()
@@ -294,7 +294,7 @@ export async function openProjectByPath(ref: RecentProject): Promise<void> {
   opening = true
   try {
     // A recent card may point at a folder that's since been moved or deleted.
-    // Opening it would spawn a canvas full of dead terminals — refuse and prune.
+    // Opening it would spawn a stage full of dead terminals — refuse and prune.
     const exists = await window.api.project.exists(ref.path)
     if (!exists) {
       store.setWorkspaces(removeRecent(ref.path))
@@ -336,9 +336,9 @@ export async function openProjectByPath(ref: RecentProject): Promise<void> {
         })
     }
     // Always land on at least one terminal so a freshly-opened workspace isn't a
-    // bare canvas. openWorkspace made it active, so addAgent targets it.
+    // bare stage. openWorkspace made it active, so addAgent targets it.
     if ((wsByPath(ref.path)?.agents.length ?? 0) === 0) useStore.getState().addAgent()
-    // After the canvas (and its default agent) exists, look for worktrees left
+    // After the stage (and its default agent) exists, look for worktrees left
     // by crashed sessions — must run after addAgent so the fresh agent's ids
     // are in the owned set.
     if (git.isGit) void checkOrphanWorktrees(ref.path)
@@ -402,7 +402,7 @@ export async function restoreWorkspaces(): Promise<void> {
       : await migrateLegacyWorkspaces()
 
   // Drop folders that have since been moved or deleted — restoring one would
-  // spawn a canvas full of dead terminals. Folder-less workspaces always survive.
+  // spawn a stage full of dead terminals. Folder-less workspaces always survive.
   const alive: PersistedWorkspace[] = []
   for (const r of records) {
     try {
@@ -439,7 +439,7 @@ export async function restoreWorkspaces(): Promise<void> {
     }
   }
 
-  // Never restore a workspace to a bare canvas — but only for folder-bound ones.
+  // Never restore a workspace to a bare stage — but only for folder-bound ones.
   // An empty folder-less workspace is a deliberate state (you just made it).
   for (const r of alive) {
     const ws = useStore.getState().liveWorkspaces.find((w) => w.id === r.id)

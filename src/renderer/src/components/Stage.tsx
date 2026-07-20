@@ -2,8 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Moveable from 'react-moveable'
 import Selecto from 'react-selecto'
 import TerminalPane from './TerminalPane'
-import BroadcastBar from './BroadcastBar'
-import { useStore, wsById, activeWs, type AgentInstance } from '../store'
+import { useStore, wsById, type AgentInstance } from '../store'
 import { terminals } from '../terminalRegistry'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -11,7 +10,7 @@ import { terminals } from '../terminalRegistry'
 const EMPTY_AGENTS: AgentInstance[] = []
 const EMPTY_IDS: string[] = []
 
-/** One workspace's canvas. App mounts one per live workspace (keyed by id) and
+/** One workspace's stage. App mounts one per live workspace (keyed by id) and
  *  only the active one is visible; the rest stay mounted (visibility-hidden) so
  *  their PTYs keep streaming. All scoped reads are for THIS workspace. */
 export default function Stage({ workspaceId }: { workspaceId: string }): JSX.Element {
@@ -26,11 +25,6 @@ export default function Stage({ workspaceId }: { workspaceId: string }): JSX.Ele
   const panY = useStore((s) => s.panY)
   const zoom = useStore((s) => s.zoom)
   const focusedId = useStore((s) => wsById(s, workspaceId)?.focusedId ?? null)
-  // Only the foreground workspace shows interactive chrome (the broadcast bar).
-  const isActive = useStore((s) => s.activeWorkspaceId === workspaceId)
-  // The broadcast bar only makes sense over a visible canvas — hide it while an
-  // overlay (palette / settings / diff) covers the stage.
-  const overlayOpen = useStore((s) => s.settingsOpen || s.paletteOpen || !!activeWs(s)?.diffAgentId)
 
   // Mutable (not RefObject) because the callback ref below assigns it directly.
   const stageRef = useRef<HTMLDivElement | null>(null)
@@ -70,7 +64,7 @@ export default function Stage({ workspaceId }: { workspaceId: string }): JSX.Ele
     if (!draggingRef.current) moveableRef.current?.updateRect()
   }, [panX, panY, zoom, layoutSig])
 
-  // (Canvas measurement lives in App now — it observes the shared canvas box and
+  // (Stage measurement lives in App now — it observes the shared stage box and
   // re-tiles every workspace, so a hidden Stage never reports a 0×0 size.)
 
   const idOf = (el: HTMLElement | null): string | undefined =>
@@ -209,9 +203,6 @@ export default function Stage({ workspaceId }: { workspaceId: string }): JSX.Ele
         dragCondition={(e: any) => {
           const t = e.inputEvent?.target as HTMLElement | undefined
           if (t?.closest?.('.vec-pane__term') || t?.closest?.('.vec-pane__close')) return false
-          // The broadcast bar floats over the stage — a press there is typing /
-          // a button click, never the start of a marquee.
-          if (t?.closest?.('.broadcast')) return false
           return true
         }}
         onDragStart={(e: any) => {
@@ -219,7 +210,6 @@ export default function Stage({ workspaceId }: { workspaceId: string }): JSX.Ele
           const mv = moveableRef.current
           if (mv?.isMoveableElement(t)) return e.stop()
           if (t.closest?.('.vec-pane__term') || t.closest?.('.vec-pane__close')) return e.stop()
-          if (t.closest?.('.broadcast')) return e.stop()
           if (targets.some((el) => el === t || el.contains(t))) e.stop()
         }}
         onSelect={(e: any) =>
@@ -231,12 +221,12 @@ export default function Stage({ workspaceId }: { workspaceId: string }): JSX.Ele
           // Hand keyboard focus to the active terminal so typing never dead-ends —
           // whether the click hit a pane (including RE-clicking the already-selected
           // one, which is a no-op selection change so the pane's own focus effect
-          // won't re-fire) or landed on empty canvas (selection preserved by the
+          // won't re-fire) or landed on empty stage (selection preserved by the
           // store). Skip when this gesture is starting a drag-to-move — and when it
           // marquee-selected 2+ panes: the marquee's mousedown blurred the terminal,
           // so re-focusing here would fire the pane's onFocus, which collapses the
-          // selection to that pane and kills the broadcast bar the instant it opens
-          // (BroadcastBar deliberately never takes focus on appearance).
+          // multi-selection back to that single pane — undoing the marquee the user
+          // just drew and making a group drag impossible.
           if (!e.isDragStart && ids.length <= 1) {
             const cur = ids[0] ?? wsById(useStore.getState(), workspaceId)?.selectedIds[0]
             if (cur) terminals.get(cur)?.focus()
@@ -249,8 +239,6 @@ export default function Stage({ workspaceId }: { workspaceId: string }): JSX.Ele
           }
         }}
       />
-
-      {isActive && selectedIds.length > 1 && !overlayOpen && <BroadcastBar />}
     </div>
   )
 }

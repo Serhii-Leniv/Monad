@@ -42,7 +42,7 @@ bundles** over IPC under a headless Electron, so run `npm run build` first:
 ```bash
 npm run build
 npm run smoke:pty          # PTY loads under Electron ABI + shell echo
-npm run smoke:p2           # git detect, worktree isolation, pty fan-out, teardown
+npm run smoke:p2           # git detect, worktree isolation, agent cwd pinning, teardown
 npm run smoke:p3           # diff sees changes, merge lands work on base branch
 ```
 

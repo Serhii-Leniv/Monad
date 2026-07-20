@@ -16,7 +16,7 @@ const CommandPalette = lazy(() => import('./components/CommandPalette'))
 const DiffPanel = lazy(() => import('./components/DiffPanel'))
 const Feedback = lazy(() => import('./components/Feedback'))
 // Docked (not an overlay), but still lazy — the file panel's body pulls in the
-// editor/tree chunk (Phase 3), which the first canvas view never needs.
+// editor/tree chunk (Phase 3), which the first stage view never needs.
 const FilePanel = lazy(() => import('./components/FilePanel'))
 
 /**
@@ -55,13 +55,13 @@ export default function App(): JSX.Element {
   const activeAgents = useActiveAgents()
   const setShells = useStore((s) => s.setShells)
   const setAgentClis = useStore((s) => s.setAgentClis)
-  const setCanvasSize = useStore((s) => s.setCanvasSize)
+  const setStageSize = useStore((s) => s.setStageSize)
   const settingsOpen = useStore((s) => s.settingsOpen)
   const paletteOpen = useStore((s) => s.paletteOpen)
   const feedbackOpen = useStore((s) => s.feedbackOpen)
   const diffAgentId = useStore((s) => activeWs(s)?.diffAgentId ?? null)
   // The right-docked file panel is part of the layout (not an overlay): when
-  // open it shrinks the canvas from the right, and the canvas's ResizeObserver
+  // open it shrinks the stage from the right, and the stage's ResizeObserver
   // re-tiles every card. Both flags come from the active workspace / global width.
   const filePanelOpen = useStore((s) => activeWs(s)?.filePanel.open ?? false)
   const filePanelWidth = useStore((s) => s.filePanelWidth)
@@ -84,7 +84,7 @@ export default function App(): JSX.Element {
     ? liveWorkspaces.find((w) => w.id === confirmWorkspaceCloseId)
     : undefined
   const saveTimer = useRef<number>()
-  const canvasRef = useRef<HTMLDivElement>(null)
+  const stageBoxRef = useRef<HTMLDivElement>(null)
 
   // Detect the shells + agent CLIs installed on this machine, once on launch.
   // Panes hold their spawn until shells resolve, so a REJECTED detection must
@@ -110,23 +110,23 @@ export default function App(): JSX.Element {
     void restoreWorkspaces()
   }, [])
 
-  // Measure the shared canvas box (one per window) and feed it to the store,
+  // Measure the shared stage box (one per window) and feed it to the store,
   // which re-tiles EVERY live workspace. Deliberately here, not per-Stage: a
   // background workspace's Stage is visibility-hidden and must never report 0.
   useEffect(() => {
-    const el = canvasRef.current
+    const el = stageBoxRef.current
     if (!el) return
     let raf = 0
     const ro = new ResizeObserver(() => {
       cancelAnimationFrame(raf)
-      raf = requestAnimationFrame(() => setCanvasSize(el.clientWidth, el.clientHeight))
+      raf = requestAnimationFrame(() => setStageSize(el.clientWidth, el.clientHeight))
     })
     ro.observe(el)
     return () => {
       cancelAnimationFrame(raf)
       ro.disconnect()
     }
-  }, [setCanvasSize])
+  }, [setStageSize])
 
   // Bringing a workspace to the foreground: refit its terminals (they were not
   // laid out at all while hidden) and hand keyboard focus to its active pane, so
@@ -218,7 +218,7 @@ export default function App(): JSX.Element {
   }, [])
 
   // Windows/Linux paste fallback. xterm only handles Ctrl+V while its textarea is
-  // the focused element; if focus has drifted onto a pane header / the canvas /
+  // the focused element; if focus has drifted onto a pane header / the stage /
   // nothing, Ctrl+V would dead-end (and paste tools like Wispr Flow warn "click a
   // text box first"). Route it to the active terminal instead. macOS is already
   // covered by the Edit-menu path above (handleMenuEdit), so skip it there to
@@ -382,10 +382,6 @@ export default function App(): JSX.Element {
         }
         return
       }
-      // While the broadcast bar's input is focused, every keystroke is text for
-      // the bar (it handles Enter/Escape itself) — never an app chord. Only the
-      // Escape handling above may act; ⌘W/⌘T/arrows must not fire from typing.
-      if ((document.activeElement as HTMLElement | null)?.closest?.('.broadcast')) return
       // Switch workspace — ⌘⌥1…9 (Ctrl+Alt on Win/Linux). Brings that live tab to
       // the foreground; no-op if that slot is empty. Exclude AltGr (which reports
       // as Ctrl+Alt): on EU layouts it types digits/brackets, and swallowing those
@@ -444,7 +440,7 @@ export default function App(): JSX.Element {
         }
         return
       }
-      // With an overlay up, the canvas is hidden — don't let ⌘T/⌘1/⌘2/⌘W/cycle
+      // With an overlay up, the stage is hidden — don't let ⌘T/⌘1/⌘2/⌘W/cycle
       // fire actions the user can't see (spawning panes behind Settings, silently
       // swapping layout, stealing selection). Only Escape / ⌘K / ⌘/ operate above.
       if (st.settingsOpen || st.paletteOpen || st.feedbackOpen || ws?.diffAgentId) return
@@ -548,7 +544,7 @@ export default function App(): JSX.Element {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // Autosave every live workspace's canvas, debounced. Only the persisted fields
+  // Autosave every live workspace's stage, debounced. Only the persisted fields
   // gate it (a flat join per workspace — no JSON pass on every status flip), so
   // runtime churn (status/pty id) doesn't trigger disk writes. Background
   // workspaces autosave too, so their edits survive a close/restart.
@@ -640,7 +636,7 @@ export default function App(): JSX.Element {
         style={{ ['--filepanel-w' as any]: filePanelOpen ? filePanelWidth + 'px' : '0px' }}
       >
         <Rail />
-        <div className="app__canvas" ref={canvasRef}>
+        <div className="app__stage" ref={stageBoxRef}>
           {/* One persistently-mounted Stage per live workspace — only the active
              one is visible (the rest are visibility-hidden but laid out, so their
              PTYs keep streaming and show crisp on switch). Home when none open. */}
@@ -658,8 +654,8 @@ export default function App(): JSX.Element {
             ))
           )}
         </div>
-        {/* Docked file panel — sibling of the canvas so it occupies the reserved
-           --filepanel-w gutter (see .app__canvas right). Lazy, so its own
+        {/* Docked file panel — sibling of the stage so it occupies the reserved
+           --filepanel-w gutter (see .app__stage right). Lazy, so its own
            Suspense boundary keeps the docked layout independent of the overlays. */}
         {filePanelOpen && (
           <Suspense fallback={null}>
@@ -725,7 +721,7 @@ export default function App(): JSX.Element {
                 {busy > 0
                   ? `${busy === 1 ? 'An agent is' : `${busy} agents are`} still busy in this workspace — closing the tab stops ${busy === 1 ? 'it' : 'them'}. `
                   : 'This ends the workspace’s terminals. '}
-                Worktrees and branches stay on disk, and the canvas is saved — reopen the
+                Worktrees and branches stay on disk, and the stage is saved — reopen the
                 project to pick up where you left off.
               </div>
               <div className="confirm__actions">

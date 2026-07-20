@@ -49,7 +49,7 @@ export function toastIsSticky(
   return !!t.actionLabel || !!t.secondaryLabel || t.kind === 'error'
 }
 
-/** Hard cap — more than this on one canvas is unreadable. */
+/** Hard cap — more than this on one stage is unreadable. */
 export const MAX_AGENTS = 9
 
 /** Hard cap on simultaneously-live workspaces — kept low so the top-bar tabs
@@ -58,7 +58,7 @@ export const MAX_AGENTS = 9
 export const MAX_LIVE_WORKSPACES = 6
 
 /**
- * Lifecycle of a terminal's agent, surfaced at a glance across the canvas:
+ * Lifecycle of a terminal's agent, surfaced at a glance across the stage:
  *  - starting   spawning the shell / creating the worktree
  *  - working    producing output right now
  *  - idle       alive, quiet, ready
@@ -158,7 +158,7 @@ const DEFAULT_FILE_PANEL: FilePanelState = {
 }
 
 /**
- * A live workspace — one open project folder with its own canvas of agents,
+ * A live workspace — one open project folder with its own stage of agents,
  * kept running in the background even when another workspace is on screen. This
  * is what the top-bar tabs switch between. Everything that used to be a single
  * global "the open project" now lives per-session here; exactly one session is
@@ -227,10 +227,10 @@ interface AppState {
   parkedWorkspaces: PersistedWorkspace[]
   /** Recently-opened folders, newest first — the +/dropdown's recents list. */
   workspaces: Workspace[]
-  canvasW: number
-  canvasH: number
+  stageW: number
+  stageH: number
   /** True once the stage has been measured at least once (real viewport size). */
-  canvasReady: boolean
+  stageReady: boolean
   shells: ShellInfo[]
   /** True once shells:list has resolved (even to an empty list). Panes wait for
    *  this before spawning: detection is async, but restored panes mount as soon
@@ -293,7 +293,7 @@ interface AppState {
    *  without re-opening — keeps the shared-mode chip and isolation default live. */
   setGitInfo: (git: GitInfo) => void
   setWorkspaces: (workspaces: Workspace[]) => void
-  setCanvasSize: (w: number, h: number) => void
+  setStageSize: (w: number, h: number) => void
   setShells: (shells: ShellInfo[]) => void
   setAgentClis: (agentClis: AgentCli[]) => void
   setSelected: (ids: string[]) => void
@@ -469,7 +469,7 @@ function saveSettings(s: AppSettings): void {
 }
 
 // --- file-panel width (global, persisted across restart) -------------------
-// A single width shared by every workspace's panel — not a per-canvas concern,
+// A single width shared by every workspace's panel — not a per-stage concern,
 // so it lives at the top level with its own key rather than in a WorkspaceSession
 // or the user-facing settings blob. Legacy 'vectro.' prefix like the other keys.
 export const FILE_PANEL_MIN = 260
@@ -538,7 +538,7 @@ export function laidOut(
 
   // Integer pixel geometry: fractional tile coords put the terminal between
   // device pixels and the compositor resamples it — text and borders go soft.
-  // Clamped: with a viewport smaller than the insets + gaps (a canvas tiled
+  // Clamped: with a viewport smaller than the insets + gaps (a stage tiled
   // before its first real measurement lands), the gap subtraction went negative
   // and panes got negative width/height, which CSS renders as a collapsed card.
   const ch = Math.max(1, Math.round((availH - GAP * (rows - 1)) / rows))
@@ -565,7 +565,7 @@ export function laidOut(
       // The dragged card keeps its position constant so React never fights
       // Moveable for its transform — it follows the cursor; its slot stays an
       // empty gap that the other cards reflow around. We stash that slot in
-      // drop* so the canvas can draw a placeholder there.
+      // drop* so the stage can draw a placeholder there.
       if (skipId && a.id === skipId) {
         out.push({ ...a, dropX: x, dropY: y, dropW: cw, dropH: ch })
       } else {
@@ -758,9 +758,9 @@ export const useStore = create<AppState>((set, get) => ({
   activeWorkspaceId: null,
   parkedWorkspaces: [],
   workspaces: getRecent(),
-  canvasW: 1200,
-  canvasH: 800,
-  canvasReady: false,
+  stageW: 1200,
+  stageH: 800,
+  stageReady: false,
   shells: [],
   shellsLoaded: false,
   agentClis: [],
@@ -797,7 +797,7 @@ export const useStore = create<AppState>((set, get) => ({
         isGit: git.isGit,
         baseBranch: git.branch,
         // Start with the first terminal active so you can type immediately.
-        agents: laidOut(loaded, mode, s.canvasW, s.canvasH),
+        agents: laidOut(loaded, mode, s.stageW, s.stageH),
         layoutMode: mode,
         selectedIds: loaded[0] ? [loaded[0].id] : []
       })
@@ -826,7 +826,7 @@ export const useStore = create<AppState>((set, get) => ({
           id: r.id,
           name: r.name,
           defaultPath: r.defaultPath ?? r.path ?? null,
-          agents: laidOut(loaded, mode, s.canvasW, s.canvasH),
+          agents: laidOut(loaded, mode, s.stageW, s.stageH),
           layoutMode: mode,
           selectedIds: loaded[0] ? [loaded[0].id] : []
         })
@@ -911,7 +911,7 @@ export const useStore = create<AppState>((set, get) => ({
       // have resized while it was hidden) and make sure it has a live selection
       // so keyboard input lands the instant it shows.
       const liveWorkspaces = mapWs(s.liveWorkspaces, id, (w) => {
-        const agents = laidOut(w.agents, w.layoutMode, s.canvasW, s.canvasH)
+        const agents = laidOut(w.agents, w.layoutMode, s.stageW, s.stageH)
         const selectedIds =
           w.selectedIds.length > 0 ? w.selectedIds : agents[0] ? [agents[0].id] : []
         return agents === w.agents && selectedIds === w.selectedIds
@@ -931,15 +931,15 @@ export const useStore = create<AppState>((set, get) => ({
   setWorkspaces: (workspaces) => set({ workspaces }),
 
   // Re-tile EVERY live workspace to the new viewport — they all share this one
-  // window's canvas box, so a resize must reflow the hidden ones too (their panes
+  // window's stage box, so a resize must reflow the hidden ones too (their panes
   // are laid out even while hidden, ready to show crisp on switch).
-  setCanvasSize: (w, h) =>
+  setStageSize: (w, h) =>
     set((s) => {
-      if (s.canvasReady && w === s.canvasW && h === s.canvasH) return {}
+      if (s.stageReady && w === s.stageW && h === s.stageH) return {}
       return {
-        canvasW: w,
-        canvasH: h,
-        canvasReady: true,
+        stageW: w,
+        stageH: h,
+        stageReady: true,
         liveWorkspaces: s.liveWorkspaces.map((ws) => ({
           ...ws,
           agents: laidOut(ws.agents, ws.layoutMode, w, h)
@@ -964,8 +964,8 @@ export const useStore = create<AppState>((set, get) => ({
       const ws = activeWs(s)
       if (!ws) return {}
       // Invariant: while any terminal exists, one is always selected (and so
-      // keyboard-focused). Clicking empty canvas / rubber-banding nothing must
-      // never leave the canvas with no active terminal to type into — keep the
+      // keyboard-focused). Clicking empty stage / rubber-banding nothing must
+      // never leave the stage with no active terminal to type into — keep the
       // current selection, or fall back to the first terminal.
       let selectedIds = ids
       if (ids.length === 0 && ws.agents.length > 0) {
@@ -1167,7 +1167,7 @@ export const useStore = create<AppState>((set, get) => ({
     // paths otherwise no-op silently (the Rail button + palette already hide/disable
     // themselves, but a keystroke gave no feedback and read as a broken shortcut).
     if (ws.agents.length >= MAX_AGENTS) {
-      get().pushToast(`Maximum ${MAX_AGENTS} terminals on one canvas`, 'info')
+      get().pushToast(`Maximum ${MAX_AGENTS} terminals on one stage`, 'info')
       return
     }
     set((s) => {
@@ -1200,7 +1200,7 @@ export const useStore = create<AppState>((set, get) => ({
       return {
         liveWorkspaces: mapWs(s.liveWorkspaces, cur.id, (w) => ({
           ...w,
-          agents: laidOut([...w.agents, agent], w.layoutMode, s.canvasW, s.canvasH),
+          agents: laidOut([...w.agents, agent], w.layoutMode, s.stageW, s.stageH),
           selectedIds: [agent.id],
           focusedId: null
         }))
@@ -1248,7 +1248,7 @@ export const useStore = create<AppState>((set, get) => ({
         cleanupWorktree()
         const rest = w.agents.filter((a) => a.id !== id)
         let selectedIds = w.selectedIds.filter((sid) => sid !== id)
-        // Closing the active terminal shouldn't leave the canvas inert — hand
+        // Closing the active terminal shouldn't leave the stage inert — hand
         // selection (and thus keyboard focus) to the nearest surviving neighbour.
         if (selectedIds.length === 0 && rest.length > 0) {
           const idx = w.agents.findIndex((a) => a.id === id)
@@ -1257,7 +1257,7 @@ export const useStore = create<AppState>((set, get) => ({
         return {
           liveWorkspaces: mapWs(s.liveWorkspaces, w.id, (x) => ({
             ...x,
-            agents: laidOut(rest, x.layoutMode, s.canvasW, s.canvasH),
+            agents: laidOut(rest, x.layoutMode, s.stageW, s.stageH),
             selectedIds,
             closingIds,
             focusedId: x.focusedId === id ? null : x.focusedId,
@@ -1284,7 +1284,7 @@ export const useStore = create<AppState>((set, get) => ({
     const ws = activeWs(get())
     if (!ws) return
     if (ws.agents.length >= MAX_AGENTS) {
-      get().pushToast(`Maximum ${MAX_AGENTS} terminals on one canvas`, 'info')
+      get().pushToast(`Maximum ${MAX_AGENTS} terminals on one stage`, 'info')
       return
     }
     set((s) => {
@@ -1309,7 +1309,7 @@ export const useStore = create<AppState>((set, get) => ({
       return {
         liveWorkspaces: mapWs(s.liveWorkspaces, w.id, (x) => ({
           ...x,
-          agents: laidOut([...x.agents, agent], x.layoutMode, s.canvasW, s.canvasH),
+          agents: laidOut([...x.agents, agent], x.layoutMode, s.stageW, s.stageH),
           selectedIds: [agent.id],
           focusedId: null,
           lastClosed: null
@@ -1341,8 +1341,8 @@ export const useStore = create<AppState>((set, get) => ({
           agents: laidOut(
             w.agents.map((a) => (a.id === id ? { ...a, wide: !a.wide } : a)),
             w.layoutMode,
-            s.canvasW,
-            s.canvasH
+            s.stageW,
+            s.stageH
           )
         }))
       }
@@ -1358,7 +1358,7 @@ export const useStore = create<AppState>((set, get) => ({
           ...w,
           layoutMode: mode,
           focusedId: null,
-          agents: laidOut(w.agents, mode, s.canvasW, s.canvasH)
+          agents: laidOut(w.agents, mode, s.stageW, s.stageH)
         }))
       }
     }),
@@ -1383,7 +1383,7 @@ export const useStore = create<AppState>((set, get) => ({
           const arr = [...w.agents]
           const [moved] = arr.splice(from, 1)
           arr.splice(Math.max(0, Math.min(arr.length, toIndex)), 0, moved)
-          return { ...w, agents: laidOut(arr, w.layoutMode, s.canvasW, s.canvasH, w.draggingId) }
+          return { ...w, agents: laidOut(arr, w.layoutMode, s.stageW, s.stageH, w.draggingId) }
         })
       }
     }),
@@ -1396,7 +1396,7 @@ export const useStore = create<AppState>((set, get) => ({
       return {
         liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({
           ...w,
-          agents: laidOut(w.agents, w.layoutMode, s.canvasW, s.canvasH, w.draggingId)
+          agents: laidOut(w.agents, w.layoutMode, s.stageW, s.stageH, w.draggingId)
         }))
       }
     }),

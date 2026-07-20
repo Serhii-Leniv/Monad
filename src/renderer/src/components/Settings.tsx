@@ -48,12 +48,11 @@ const SHORTCUT_SECTIONS: { title: string; rows: { label: string; keys?: string; 
     ]
   },
   {
-    title: 'Canvas',
+    title: 'Stage',
     rows: [
       { label: 'Layout: Grid', keys: modLabel('1') },
       { label: 'Layout: Columns', keys: modLabel('2') },
-      { label: 'Wide card on / off', note: 'card header button' },
-      { label: 'Broadcast to terminals', note: 'select 2+ cards' }
+      { label: 'Wide card on / off', note: 'card header button' }
     ]
   },
   {

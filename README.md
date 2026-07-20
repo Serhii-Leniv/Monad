@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <img alt="Six AI coding agents running in parallel on the Monad canvas, each in its own git worktree" src="assets/demo.gif" width="880">
+  <img alt="Six AI coding agents running in parallel on the Monad stage, each in its own git worktree" src="assets/demo.gif" width="880">
   <br>
   <sub><a href="https://github.com/Serhii-Leniv/Monad/blob/main/assets/demo.mp4">▶ Watch the full demo</a></sub>
 </p>
@@ -37,8 +37,10 @@
 
 ## Why Monad
 
-You already know the move: throw the same task at three agents, take the best answer. What
-you don't have is a place to *do* it. Monad is that place.
+Running several coding agents at once means several terminals, several checkouts, and a
+running tally in your head of which agent touched what. Monad is the place to do it properly:
+every agent gets its own pane and its own git worktree, so they never step on each other's
+work — or on yours.
 
 ## Bring your own agents
 
