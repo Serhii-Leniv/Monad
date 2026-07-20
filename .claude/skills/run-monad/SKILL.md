@@ -5,13 +5,18 @@ description: Build, run, and start the Monad (agent-canvas) Electron desktop app
 
 # Run Monad (agent-canvas)
 
-Monad is an **Electron desktop app** (electron-vite + React renderer). This
-project runs on **Windows with a real display** — there is no headless/xvfb
-setup and none is needed. To review a change, launch the real window with
-`npm run dev` and look at it.
+Monad is an **Electron desktop app** (electron-vite + React renderer). To review
+a change, launch the real window with `npm run dev` and look at it.
 
-All paths are relative to the repo root (`D:\IT\Projects\agent-canvas`).
-Shell examples use the Bash tool (Git Bash); `npm` also works from PowerShell.
+**All paths below are relative to the repo root**, and commands assume that is
+the working directory. Shell examples use the Bash tool (Git Bash); `npm` also
+works from PowerShell.
+
+This skill is written for the primary development setup: **Windows with a real
+display**, where there is no headless/xvfb layer and none is needed. The
+`npm run dev` and `npm run build` paths are cross-platform; the single-instance
+and detached-launch sections below are Windows-specific and are called out as
+such.
 
 ## Prerequisites
 
@@ -78,9 +83,9 @@ needs to render a specific state without clicking through the UI:
 - `webContents.capturePage()` gives a PNG; the window must be shown
   (`show: true`) for it to actually paint.
 
-## Launching a second instance alongside the installed app (agent path that works)
+## Launching a second instance alongside the installed app (Windows)
 
-The installed build (`D:\Soft\Monad\Monad.exe`) runs as **`Monad.exe`** (not
+If the packaged app is installed and open, it runs as **`Monad.exe`** (not
 `electron.exe`) and holds a **single-instance lock keyed to the `monad`
 userData dir** (`index.ts` `requestSingleInstanceLock`). So a plain
 `npm run dev` / `npx electron .` launched while it's open acquires no lock and
@@ -94,17 +99,25 @@ WMI** (`Win32_Process.Create` escapes the Claude tool session's job object, so
 it survives the tool call; a Bash-background or `Start-Process` launch is
 reaped). This is what actually produced a visible, persistent window:
 
+Run from the repo root — `$repo` is resolved from the working directory, so
+there is nothing machine-specific to edit:
+
 ```powershell
 npm run build   # first — dev runs leave out/main pointing at the dev server
+$repo = (Get-Location).Path
 $ud = Join-Path $env:TEMP 'monad-dev-userdata'
 New-Item -ItemType Directory -Force -Path $ud | Out-Null
-$exe = 'D:\IT\Projects\agent-canvas\node_modules\electron\dist\electron.exe'
+$exe = Join-Path $repo 'node_modules\electron\dist\electron.exe'
 Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
   CommandLine = '"' + $exe + '" . --user-data-dir="' + $ud + '"'
-  CurrentDirectory = 'D:\IT\Projects\agent-canvas'
+  CurrentDirectory = $repo
 }
 # verify: Get-CimInstance Win32_Process -Filter "Name='electron.exe'"
 ```
+
+`Win32_Process.Create` needs **absolute** paths for both `$exe` and
+`CurrentDirectory` — that is why `$repo` is resolved rather than using a
+relative path.
 
 It runs as `electron.exe` (dev), starts on a blank throwaway userData, and does
 not hot-reload — rebuild + relaunch after further changes. Kill it by PID when
