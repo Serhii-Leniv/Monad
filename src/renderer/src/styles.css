@@ -114,8 +114,8 @@
   --shadow-card-heavy: 0 14px 40px rgba(0, 0, 0, 0.45);
   --shadow-card-hover: 0 20px 52px rgba(0, 0, 0, 0.52), 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-card-drag: 0 36px 70px rgba(0, 0, 0, 0.68);
-  --shadow-pop: var(--shadow-pop);
-  --shadow-menu: var(--shadow-menu);
+  --shadow-pop: 0 30px 80px rgba(0, 0, 0, 0.6);
+  --shadow-menu: 0 18px 50px rgba(0, 0, 0, 0.55);
   --shadow-float: 0 10px 26px rgba(0, 0, 0, 0.5);
 
   /* Card surface inside the stage transform (solid-translucent, not blurred). */
