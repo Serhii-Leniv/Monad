@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="build/logo-mark-white.png">
-    <img alt="Monad" src="build/logo-mark-black.png" width="132">
+    <source media="(prefers-color-scheme: dark)" srcset="build/mark-knockout-light-1024.png">
+    <img alt="Monad" src="build/mark-knockout-dark-1024.png" width="132">
   </picture>
 </p>
 
