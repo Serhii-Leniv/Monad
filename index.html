@@ -740,7 +740,11 @@
           </a>
         </div>
         <div class="ver">
-          <span id="ver-text">Latest release · <b>v0.1.23</b></span>
+          <!-- Fallback only — the script below overwrites this from the Releases
+               API. It's what visitors see when that fetch fails, most often the
+               unauthenticated GitHub API's 60 req/hr per-IP limit, so bump it at
+               release time instead of letting it drift versions behind. -->
+          <span id="ver-text">Latest release · <b>v0.1.26</b></span>
           · <a href="https://github.com/Serhii-Leniv/Monad/releases" target="_blank" rel="noopener">changelog</a>
         </div>
       </section>
