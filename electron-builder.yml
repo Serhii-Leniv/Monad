@@ -39,16 +39,36 @@ publish:
 # "damaged". Runs after packing, before the dmg is built.
 afterPack: scripts/afterPack.cjs
 
+# macOS signing has two modes, chosen by whether signing credentials are present
+# in the environment — nothing here needs editing to switch between them.
+#
+#   Credentials absent (local builds, forks, and CI until the secrets exist):
+#     CSC_IDENTITY_AUTO_DISCOVERY=false makes electron-builder skip signing, and
+#     it then skips notarization too ("app is not signed"). scripts/afterPack.cjs
+#     ad-hoc signs so the app at least launches on Apple Silicon. Downloads stay
+#     quarantined → macOS reports "damaged" → users run `xattr -dr
+#     com.apple.quarantine`, as the README and download page explain.
+#
+#   Credentials present (CSC_LINK + CSC_KEY_PASSWORD, and APPLE_ID +
+#     APPLE_APP_SPECIFIC_PASSWORD + APPLE_TEAM_ID):
+#     electron-builder signs with the Developer ID cert under Hardened Runtime,
+#     then notarizes and staples. Gatekeeper accepts it with no terminal step.
+#
+# See docs/RELEASING.md for how to produce those secrets.
 mac:
   target:
     - dmg
   category: public.app-category.developer-tools
   icon: build/icon.png
-  # No paid Apple Developer cert, so electron-builder skips real signing and the
-  # afterPack hook ad-hoc signs instead. Downloaded builds are still quarantined
-  # and unnotarized → macOS says "damaged"; users clear it with `xattr -dr
-  # com.apple.quarantine`. See scripts/afterPack.cjs. Notarization later.
-  identity: null
+  # Required for notarization; harmless when signing is skipped.
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.inherit.plist
+  # `spctl --assess` fails for an unsigned/ad-hoc app and would abort the build in
+  # the unsigned mode above. Notarization is the real gate, so don't also assess.
+  gatekeeperAssess: false
+  # Auto-skipped when the app wasn't signed; credentials come from the env.
+  notarize: true
 
 # Fixed (version-less) names so the site can link to a stable
 # releases/latest/download/<name> URL that never goes stale.

@@ -55,7 +55,35 @@ jobs:
       # .npmrc pins runtime=electron target=29.4.6 so the right prebuilt
       # node-pty binary is fetched for this runner's OS/arch.
       - run: npm ci
-      - run: npm run ${{ matrix.script }}
+
+      # macOS and Windows build in separate steps so the Apple signing secrets are
+      # never present on the Windows runner — electron-builder reads CSC_LINK on
+      # every platform and would try to sign the NSIS installer with the mac cert.
+      #
+      # Signing degrades gracefully: with no MAC_CERT_P12 secret,
+      # CSC_IDENTITY_AUTO_DISCOVERY is "false", electron-builder skips signing, and
+      # (because the app is unsigned) skips notarization too. The build still
+      # produces a working ad-hoc-signed .dmg that needs the xattr step on install.
+      # Add the five secrets below and the same tag produces a notarized build with
+      # no workflow change. See docs/RELEASING.md.
+      - name: Build installer (macOS)
+        if: runner.os == 'macOS'
+        run: npm run ${{ matrix.script }}
+        env:
+          # Developer ID Application cert (.p12) as base64, plus its export password.
+          CSC_LINK: ${{ secrets.MAC_CERT_P12 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          # notarytool credentials.
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # "true" only when a cert secret actually exists; otherwise force the
+          # unsigned path rather than letting the runner keychain be searched.
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.MAC_CERT_P12 != '' }}
+
+      - name: Build installer (Windows)
+        if: runner.os == 'Windows'
+        run: npm run ${{ matrix.script }}
       # Attach the freshly built installer(s) to this repo's Release for the tag —
       # from the SAME runner that built them, so it never depends on artifact
       # storage. Both jobs target the same release; action-gh-release create-or-
