@@ -5,8 +5,13 @@ dist/
 *.log
 *.tsbuildinfo
 
-# Local Claude Code tooling config (permissions, local settings)
-.claude/
+# Claude Code tooling. The shared workflow — slash commands and skills — is
+# version-controlled so it survives a fresh clone and has history. Local
+# machine-specific config (permissions, settings) stays out.
+.claude/*
+!.claude/commands/
+!.claude/skills/
+.claude/settings.local.json
 
 # Debug shell-redirect leftovers (e.g. cmd 1>b.out 2>b.err)
 *.err
