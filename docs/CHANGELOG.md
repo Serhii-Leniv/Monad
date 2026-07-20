@@ -6,6 +6,30 @@ Notable changes per release. Installers for every version are on the
 This file was reconstructed from git history at v0.1.25; entries before then are summarised rather
 than exhaustive.
 
+## v0.1.26
+
+- **Fixed: agents silently lost worktree isolation after every restart.** Restoring a session read
+  the wrong field, so real git repos came back marked as non-git and new agents fell back to sharing
+  the project folder — editing your actual working tree instead of an isolated worktree. Present
+  since v0.1.25.
+- **Fixed: closing a tab while the canvas was saving could lose the whole tab set.** Two writers
+  shared one temp file, so overlapping saves could interleave and leave `workspaces.json` spliced.
+- **Fixed: agents starting at the same time could race for a worktree.** The loser quietly ran in
+  the shared project folder while the UI still showed it as isolated.
+- **Fixed: closing an agent left its CLI running.** Killing a terminal now reaps the whole process
+  tree instead of just the shell, so nothing keeps holding worktree files open.
+- **Fixed: a dropped file whose name contained shell metacharacters could execute.** Paths are now
+  escaped for the target shell rather than merely quoted.
+- Fixed: pane theme and per-agent folder changes not persisting on their own; layout changes lost
+  when quitting within 400ms; the review panel latching on "Merging…" after a failure; the terminal
+  falling back to the wrong shell on restore; workspaces past the tab cap being permanently deleted.
+- Background workspaces stop rendering entirely instead of merely being invisible, which should cut
+  idle GPU load with several workspaces open.
+- Overlays are now proper dialogs — focus is trapped and restored, Escape closes, and toasts are
+  announced to screen readers.
+- Added unit tests and linting, and wired the five existing integration tests that were never
+  running in CI; packaging is now blocked unless all of them pass.
+
 ## v0.1.25
 
 - Top-bar tabs became real **workspaces** — renameable, no longer tied to a folder, with an agent
