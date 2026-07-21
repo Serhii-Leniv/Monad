@@ -168,16 +168,24 @@ app.whenReady().then(async () => {
   console.log('[af] RESULT: ' + (pass ? 'PASS' : 'FAIL'))
   cleanup()
   clearTimeout(timer)
-  win.destroy()
-  process.exit(pass ? 0 : 2)
+  // Exit via app.exit, and give teardown a beat first.
+  //
+  // process.exit raced Electron's own shutdown: on a loaded runner (two CI jobs
+  // on one box) the process could die with code 1 BEFORE the requested code
+  // landed, reporting a passing smoke as a CI failure.
+  //
+  // The delay matters where a PTY is live — exiting straight into node-pty's
+  // native teardown segfaults (139) or hangs. 250ms lets it settle. app.exit
+  // also closes every window, so the old win.destroy() beforehand isn't needed.
+  setTimeout(() => app.exit(pass ? 0 : 2), 250)
 }).catch((e) => {
   console.log('[af] EXCEPTION: ' + (e && e.stack ? e.stack : e))
   cleanup()
-  process.exit(4)
+  app.exit(4)
 })
 
 const timer = setTimeout(() => {
   console.log('[af] TIMEOUT')
   cleanup()
-  process.exit(3)
+  app.exit(3)
 }, 90000)
