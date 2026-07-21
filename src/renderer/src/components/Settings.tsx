@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useStore, FONT_FAMILIES, type SettingsTab } from '../store'
 import { ACCENT_PRESETS } from '../accent'
-import { THEME_OPTIONS } from '../theme'
 import { IconClose, IconTerminal, IconFolder, IconBell } from './Icons'
 import { modLabel, altModLabel, plainModLabel, shiftModLabel } from '../shortcuts'
 import { previewCue } from '../sound'
@@ -205,26 +204,6 @@ export default function Settings(): JSX.Element {
           {tab === 'appearance' && (
             <>
               <div className="settings__row">
-                <span className="settings__label">
-                  Theme
-                  <span className="settings__hint">also sets the default terminal palette — override it per pane</span>
-                </span>
-                <div className="settings__seg">
-                  {THEME_OPTIONS.map((t) => (
-                    <button
-                      key={t.id}
-                      className={
-                        'settings__seg-btn' + (settings.theme === t.id ? ' is-active' : '')
-                      }
-                      onClick={() => setSetting('theme', t.id)}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="settings__row">
                 <span className="settings__label">Accent</span>
                 <div className="settings__swatches">
                   {ACCENT_PRESETS.map((a) => (
@@ -288,7 +267,7 @@ export default function Settings(): JSX.Element {
                 <span className="settings__label">
                   Translucent window
                   <span className="settings__hint">
-                    frosted desktop behind the app — costs noticeably more power, especially on
+                    frosted desktop behind the app. Costs noticeably more power, especially on
                     a laptop
                   </span>
                 </span>
@@ -369,7 +348,7 @@ export default function Settings(): JSX.Element {
                 <span className="settings__label">
                   Alert when an agent finishes
                   <span className="settings__hint">
-                    when a long task settles back to idle — popup and/or chime per the toggles here
+                    when a long task settles back to idle: popup and/or chime per the toggles here
                   </span>
                 </span>
                 <input

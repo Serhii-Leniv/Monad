@@ -34,32 +34,115 @@
      app's TRANSLUCENT --surface-input lets the UA's white base leak through, so
      the feedback/settings inputs look white inside the dark UI. */
   color-scheme: dark;
-  /* Professional dark palette (Apple dark-mode + dev tools) */
-  /* Off-white with the palette's cool cast — softer on the eyes than pure
-     white on dark glass, while staying comfortably above AA contrast. */
-  --text: rgba(237, 241, 248, 0.92);
-  --text-2: rgba(235, 235, 245, 0.66);
-  --muted: rgba(235, 235, 245, 0.52);
-  /* Brand red accent. One RGB triple drives every translucent tint so the
-     whole UI stays in the same family. */
-  --accent-rgb: 255, 69, 58;
-  --accent: rgb(var(--accent-rgb)); /* #ff453a */
-  --accent-2: #ff7269; /* lighter top for gradients */
-  --accent-active: #b8322a; /* pressed / deeper red */
+
+  /* --- Substrate: one warm material at four depths ------------------------
+     Oxblood ink, not blue-charcoal. The brand red lives IN the base rather
+     than being splashed on top of it, so the palette is near-monochrome and
+     coheres by construction — and the old red-on-navy fringing (long and
+     short wavelengths focusing at different depths in the eye) is gone
+     because there is no longer a cool counter-tone to fringe against.
+     Nearer the viewer = lighter. This ramp IS the elevation model; depth
+     never comes from a shadow. */
+  --sub-1: #14100f; /* canvas — the stage */
+  --sub-2: #1a1514; /* chrome — titlebar, dock, bars */
+  --sub-3: #221b19; /* raised — panes, cards */
+  --sub-4: #2b2321; /* overlay — menus, modals, palette */
+
+  /* --- The seam ------------------------------------------------------------
+     The app's one invented geometry: a doubled hairline with a hair of bare
+     substrate between the rules, so an edge reads as SEALED rather than
+     drawn. Every contained surface carries it; nothing uses a plain border.
+     Applied as stacked box-shadows so it costs no layout space and follows
+     the radius. */
+  --seam-inner: rgba(255, 240, 235, 0.06);
+  --seam-outer: rgba(0, 0, 0, 0.5);
+  --seam: inset 0 0 0 1px var(--seam-inner), 0 0 0 1px var(--seam-outer);
+
+  /* --- The strong seam ------------------------------------------------------
+     The doubled edge with a real gap of bare substrate between the rules: a lit
+     inner lip, a hair of canvas, then the outer groove. This is the geometry
+     --seam was meant to have; at 1px per rule with no gap it collapsed into a
+     single line and was not perceptible at all — verified at 8x magnification.
+
+     Deliberately NOT on panes. Up to nine tile at once, and doubling every edge
+     would put six rules in each 12px gutter, which reads as noise rather than
+     craft. It goes on surfaces that are single objects with space around them,
+     where an edge reads as an object's rim: the dock, palette, menus, modals.
+     The plate has a defined rim; the cells cut into it are cut simply. */
+  --seam-strong:
+    inset 0 0 0 1px rgba(255, 240, 235, 0.09),
+    0 0 0 1px var(--sub-1),
+    0 0 0 1px rgba(0, 0, 0, 0.38);
+
+  /* Warm ink ramp — same hue family as the substrate, three steps.
+
+     The two lower steps were measured against every surface with APCA and both
+     failed: --text-2 landed at Lc 54-56 (under the 60 a secondary label needs)
+     and --muted at Lc 31-33, below even the 45 floor for large text and icons,
+     with its WCAG ratio dropping to 3.79 on the overlay surface — under the
+     4.5:1 that 12-13px text requires. They were de-emphasised past the point of
+     being readable.
+
+     Raised to clear Lc 75 and Lc 60 against the LIGHTEST surface (--sub-4, the
+     hardest case), so they hold on all four. Both keep the substrate's hue, so
+     they still recede the way a hue-matched ink does rather than sitting on the
+     page as flat grey — which is what lets them read as quiet at a contrast
+     ratio this high. */
+  --text: #f2ece9;
+  --text-2: #d6cfcc;
+  --muted: #bdb5b2;
+
+  /* Accent: a LIGHTNESS step inside the substrate's own family, never a
+     saturated fill. This is why it cannot float or fringe the way #ff453a
+     did — it is the same material, lit. */
+  --accent-rgb: 217, 122, 104;
+  --accent: rgb(var(--accent-rgb)); /* #d97a68 */
+  --accent-2: #e3907f; /* lifted */
+  --accent-active: #b35f4f; /* pressed */
   --accent-muted: rgba(var(--accent-rgb), 0.16);
-  /* Secondary brand: navy blue. Lives in the ambient background so the red
-     accent always has a cool counter-tone to read against. */
-  --brand-rgb: 59, 91, 217;
-  --brand: rgb(var(--brand-rgb)); /* #3b5bd9 */
+  /* The accent as INK. A colour tuned to work as a fill is not contrast-safe as
+     text: --accent measures Lc 42-44 against the substrate, under the 45 floor
+     for even large text and icons, and it is used as the colour of active tab
+     labels and dock glyphs. This is the same split Radix draws between its
+     solid step and its text step — one hue, two jobs, two values. Lc 60+ on
+     every surface. */
+  --accent-ink: #e6a79b;
+  /* Kept as an alias so nothing referencing --brand breaks; the navy ambient
+     it used to drive is gone. Points at the substrate now, not a second hue. */
+  --brand-rgb: 217, 122, 104;
+  --brand: rgb(var(--brand-rgb));
 
   /* --- Type system (see @font-face above). System faces are the fallback so
      the UI still renders cleanly before the woff2 swaps in. --- */
-  /* Serif everywhere: Lora is the whole UI voice (terminals/code stay mono).
-     'Monad Sans' (Inter) remains bundled as the glyph-coverage fallback. */
-  --font-serif: 'Monad Serif', 'Monad Sans', Georgia, 'Times New Roman', serif;
-  --font-ui: var(--font-serif);
-  --font-display: var(--font-serif);
-  --font-mono: 'Cascadia Code', 'JetBrains Mono', Consolas, ui-monospace, monospace;
+  /* Two voices, and they do different jobs.
+
+     Chrome is set in the OPERATING SYSTEM's own interface font — Segoe UI
+     Variable on Windows, SF Pro on macOS. It was Lora, a reading serif, down to
+     8.5px labels, where its thin strokes simply stop rendering. system-ui is
+     the one genuinely neutral choice, and it is also what stops an Electron app
+     reading as a web page in a window: the chrome matches every native app
+     beside it.
+
+     The display face carries identity and is used ONLY on brand surfaces.
+     Lora is a placeholder here and must be replaced — it is off the Google
+     shelf, which cannot carry an identity. See the spec's open question.
+
+     Mono is for content that is genuinely DATA: terminal output, paths,
+     branches, hashes. Never for labels, buttons or captions. */
+  --font-ui: system-ui, -apple-system, 'Segoe UI Variable Text', 'Segoe UI', sans-serif;
+  --font-display: 'Monad Serif', Georgia, serif;
+  --font-serif: var(--font-display);
+  --font-mono: 'Cascadia Mono', 'Cascadia Code', Consolas, ui-monospace, monospace;
+
+  /* --- Type scale. Was fourteen sizes including 8.5, 10.5, 11.5, 12.5 and
+     13.5px — steps within 4% of each other, which nobody can perceive as
+     hierarchy. Five, and nothing below 11px. --- */
+  --fs-1: 11px; /* peripheral badges */
+  --fs-2: 12px; /* metadata */
+  --fs-3: 13px; /* chrome default */
+  --fs-4: 14px; /* content */
+  --fs-5: 16px; /* headings */
+  --fs-6: 22px; /* display */
 
   /* --- One coherent radius scale --- */
   --r-xs: 8px; /* inputs, step buttons */
@@ -79,22 +162,27 @@
   --blur-md: blur(16px) saturate(180%); /* dock, menus, modals, palette */
   --blur-lg: blur(26px) saturate(185%); /* hero overlays */
 
-  /* --- One coherent hairline/border opacity scale --- */
-  --line-1: rgba(255, 255, 255, 0.08);
-  --line-2: rgba(255, 255, 255, 0.14);
-  --line-3: rgba(255, 255, 255, 0.2);
+  /* --- Hairlines — warm-tinted, so an edge never reads as a cool line laid
+     over a warm surface. --- */
+  --line-1: rgba(255, 240, 235, 0.06);
+  --line-2: rgba(255, 240, 235, 0.1);
+  --line-3: rgba(255, 240, 235, 0.16);
 
-  /* Frosted glass for chrome (real backdrop blur) */
+  /* Glass survives ONLY on transient surfaces (palette, menus, modals) —
+     things that appear on demand and dismiss on click-away, sitting over
+     live terminal output that is genuinely worth refracting. Persistent
+     chrome is solid substrate. The specular was 42% white, which read as an
+     inner glow rather than a lit lip; 6% is a light source, not a bloom. */
   --hairline: var(--line-1);
-  --glass-bg: rgba(255, 255, 255, 0.05);
-  --glass-bg-strong: rgba(255, 255, 255, 0.08);
+  --glass-bg: rgba(255, 240, 235, 0.04);
+  --glass-bg-strong: rgba(255, 240, 235, 0.07);
   --glass-border: var(--line-2);
-  --glass-highlight: rgba(255, 255, 255, 0.12);
+  --glass-highlight: rgba(255, 240, 235, 0.1);
   --glass-blur: var(--blur-md);
-  --glass-sheen: linear-gradient(150deg, rgba(255, 255, 255, 0.1), transparent 44%);
-  --glass-specular: inset 0 1px 0 rgba(255, 255, 255, 0.42);
-  --glass-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
-  --menu-bg: rgba(16, 18, 24, 0.86);
+  --glass-sheen: none;
+  --glass-specular: inset 0 1px 0 rgba(255, 240, 235, 0.06);
+  --glass-shadow: 0 8px 16px -6px rgba(0, 0, 0, 0.28);
+  --menu-bg: rgba(43, 35, 33, 0.88);
 
   /* --- Theme-flippable component tokens (light theme overrides them below).
      Each dark value here is EXACTLY the literal it replaced, so the dark theme
@@ -105,34 +193,39 @@
   --hover-bg: rgba(255, 255, 255, 0.08);
   --hover-bg-strong: rgba(255, 255, 255, 0.12);
   /* Recessed input/select surface (sits INSIDE glass panels). */
-  --surface-input: rgba(10, 16, 26, 0.5);
-  /* Strongest ink — headings/titles; a hair off pure white to cut glare. */
-  --ink-strong: #eef1f7;
-  /* One shadow scale: cards (resting / ringed / hover / dragged) and the
-     floating chrome (modals, menus, small floats). Light softens these. */
-  --shadow-card: 0 14px 40px rgba(0, 0, 0, 0.42), 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-card-heavy: 0 14px 40px rgba(0, 0, 0, 0.45);
-  --shadow-card-hover: 0 20px 52px rgba(0, 0, 0, 0.52), 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-card-drag: 0 36px 70px rgba(0, 0, 0, 0.68);
-  --shadow-pop: 0 30px 80px rgba(0, 0, 0, 0.6);
-  --shadow-menu: 0 18px 50px rgba(0, 0, 0, 0.55);
-  --shadow-float: 0 10px 26px rgba(0, 0, 0, 0.5);
+  --surface-input: rgba(10, 7, 6, 0.4);
+  /* Strongest ink — headings/titles; a hair off white to cut glare. */
+  --ink-strong: #f7f3f1;
+  /* Shadows are near-gone. Depth comes from the substrate ramp and the seam;
+     a shadow does not read on a dark surface, it only adds haze. What is left
+     is tight, low-offset and directional — a cast, never a bloom. Nothing is
+     symmetric, nothing exceeds ~10% alpha, nothing radiates on all sides. */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.24);
+  --shadow-card-heavy: 0 2px 4px -1px rgba(0, 0, 0, 0.28);
+  --shadow-card-hover: 0 2px 6px -2px rgba(0, 0, 0, 0.3);
+  --shadow-card-drag: 0 8px 16px -6px rgba(0, 0, 0, 0.4);
+  --shadow-pop: 0 10px 20px -8px rgba(0, 0, 0, 0.34);
+  --shadow-menu: 0 8px 16px -6px rgba(0, 0, 0, 0.3);
+  --shadow-float: 0 4px 10px -4px rgba(0, 0, 0, 0.28);
 
-  /* Card surface inside the stage transform (solid-translucent, not blurred). */
-  --card-bg: rgba(22, 25, 32, 0.72);
-  --card-bg-strong: rgba(30, 34, 44, 0.76);
-  --term-bg: #0a0c10;
+  /* Card surface inside the stage transform. Sits on the substrate ramp. */
+  --card-bg: var(--sub-3);
+  --card-bg-strong: var(--sub-4);
+  --term-bg: #14100f;
 
-  --success: #30d158;
-  --danger: #ff453a;
+  --success: #7d9b6a;
+  --danger: #c2564a;
 
-  /* --- Agent status palette --- */
-  /* Working is always green, independent of the picked accent colour. */
-  --status-working: #30d158;
-  --status-idle: #3a4a60;
-  --status-attention: #ff9f0a;
-  --status-done: #30d158;
-  --status-error: #ff6b63;
+  /* --- Agent status palette ---
+     The one place genuine hue difference is permitted, because here colour is
+     semantic rather than decorative. Muted into the warm world so they read as
+     stains in the material, not stickers on it. Each is paired with a
+     non-colour cue in the components so hue is never load-bearing alone. */
+  --status-working: #7d9b6a;
+  --status-idle: #5a4d49;
+  --status-attention: #c9924e;
+  --status-done: #7d9b6a;
+  --status-error: #c2564a;
 
   /* Apple-grade motion */
   --ease-out: cubic-bezier(0, 0, 0.58, 1);
@@ -140,72 +233,9 @@
   /* Springy curve with a touch of overshoot — the "settle into place" feel. */
   --ease-spring: cubic-bezier(0.32, 1.28, 0.5, 1);
   --dur-select: 150ms;
-  --dur-snap: 340ms;
-  --dur-spring: 440ms;
+  --dur-snap: 300ms;
+  --dur-spring: 300ms;
   --dur-resize: 220ms;
-}
-
-/* ----------------------------------------------------------------------------
-   Light theme — token overrides. Stamped as data-theme="light" on <html> by
-   theme.ts (Settings → Appearance → Theme; 'system' follows the OS). The dark
-   palette above stays the untouched base, so dark renders pixel-identical.
-   Terminal interiors flip too: white paper with black text (--term-bg, the
-   pane veil, and the xterm ANSI palette in TerminalPane.tsx all follow).
----------------------------------------------------------------------------- */
-:root[data-theme='light'] {
-  color-scheme: light;
-  /* Ink scale on warm paper-white: near-black body text, secondary kept dark
-     enough (~#5a5f6b when blended) to hold ≥4.5:1 on the light surfaces. */
-  --text: rgba(26, 29, 36, 0.95);
-  --text-2: rgba(44, 50, 62, 0.78);
-  --muted: rgba(44, 50, 62, 0.66);
-  --ink-strong: #14171e;
-
-  /* Hairlines flip to translucent dark ink. */
-  --line-1: rgba(16, 20, 30, 0.1);
-  --line-2: rgba(16, 20, 30, 0.16);
-  --line-3: rgba(16, 20, 30, 0.24);
-
-  /* Glass turns to translucent white with dark hairlines; speculars stay white
-     (a brighter top edge still reads as light hitting the surface). */
-  --glass-bg: rgba(255, 255, 255, 0.55);
-  --glass-bg-strong: rgba(255, 255, 255, 0.72);
-  --glass-highlight: rgba(255, 255, 255, 0.7);
-  --glass-sheen: linear-gradient(150deg, rgba(255, 255, 255, 0.7), transparent 44%);
-  --glass-specular: inset 0 1px 0 rgba(255, 255, 255, 0.75);
-  --glass-shadow: 0 20px 50px rgba(31, 38, 54, 0.2);
-  --menu-bg: rgba(249, 249, 251, 0.9);
-
-  --hover-bg-soft: rgba(18, 22, 32, 0.05);
-  --hover-bg: rgba(18, 22, 32, 0.07);
-  --hover-bg-strong: rgba(18, 22, 32, 0.1);
-  --surface-input: rgba(255, 255, 255, 0.72);
-
-  /* Softer, cooler shadows: lower alpha, slightly blue-gray so they don't read
-     as dirt on the paper background. */
-  --shadow-card: 0 14px 40px rgba(31, 38, 54, 0.16), 0 1px 2px rgba(31, 38, 54, 0.1);
-  --shadow-card-heavy: 0 14px 40px rgba(31, 38, 54, 0.18);
-  --shadow-card-hover: 0 20px 52px rgba(31, 38, 54, 0.2), 0 1px 2px rgba(31, 38, 54, 0.1);
-  --shadow-card-drag: 0 36px 70px rgba(31, 38, 54, 0.3);
-  --shadow-pop: 0 30px 80px rgba(31, 38, 54, 0.28);
-  --shadow-menu: 0 18px 50px rgba(31, 38, 54, 0.22);
-  --shadow-float: 0 10px 26px rgba(31, 38, 54, 0.18);
-
-  --card-bg: rgba(255, 255, 255, 0.7);
-  --card-bg-strong: rgba(248, 249, 251, 0.85);
-  /* Terminal interiors follow the theme: white paper with black text (the
-     xterm palette flips in TerminalPane.tsx to match). */
-  --term-bg: #ffffff;
-
-  /* Status colours darkened for contrast as text/rings on light surfaces.
-     (Bright fills that need to stay vivid keep hardcoded values.) */
-  --success: #1f9d45;
-  --danger: #d0453c;
-  --status-working: #1f9d45;
-  --status-idle: #93a0b4;
-  --status-attention: #c77800;
-  --status-done: #1f9d45;
-  --status-error: #d0453c;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -237,17 +267,22 @@ body,
   color: var(--text);
   font-family: var(--font-ui);
   line-height: 1.45;
-  -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
+  /* The cv/ss axes that used to be here were Inter's character variants — dead
+     code since the UI moved to a serif, and equally dead on system-ui. Standard
+     ligatures and contextual alternates are what actually apply.
+
+     `-webkit-font-smoothing: antialiased` is deliberately NOT set globally. It
+     swaps subpixel AA for greyscale and makes every glyph thinner, and stroke
+     thinness is a primary driver of perceived contrast — at 12-13px on a dark
+     ground that is a legibility regression, not a cosmetic preference. */
+  font-feature-settings: 'liga' 1, 'calt' 1;
 }
 
 /* Cold scene over the OS acrylic: a lighter veil so the frosted desktop /
    wallpaper shows through translucent terminals. */
 body {
-  background:
-    radial-gradient(1200px 820px at 18% -6%, rgba(30, 64, 92, 0.14), transparent 55%),
-    linear-gradient(180deg, rgba(10, 12, 16, 0.42), rgba(7, 9, 12, 0.52));
+  background: linear-gradient(180deg, rgba(20, 16, 15, 0.86), rgba(14, 11, 10, 0.94));
 }
 
 /* Opaque window (the default): the veil above is deliberately semi-transparent
@@ -256,9 +291,7 @@ body {
    Same two layers at full strength, so the app looks like itself while the OS
    is spared blurring the desktop behind the window on every frame. */
 body.is-opaque-window {
-  background:
-    radial-gradient(1200px 820px at 18% -6%, rgba(30, 64, 92, 0.14), transparent 55%),
-    linear-gradient(180deg, #0a0c10, #07090c);
+  background: linear-gradient(180deg, var(--sub-1), #0f0c0b);
 }
 
 .app {
@@ -286,12 +319,7 @@ body.is-opaque-window {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(6, 8, 12, 0.28), rgba(6, 8, 12, 0.46));
-}
-/* Light theme frosts the wallpaper toward paper-white instead of darkening it —
-   a dark scrim under light chrome made every card read as a grey smudge. */
-:root[data-theme='light'] .wallpaper::after {
-  background: linear-gradient(180deg, rgba(248, 249, 252, 0.55), rgba(244, 246, 250, 0.68));
+  background: linear-gradient(180deg, rgba(10, 7, 6, 0.28), rgba(10, 7, 6, 0.46));
 }
 
 .titlebar,
@@ -302,60 +330,37 @@ body.is-opaque-window {
 
 /* ---------- Eye candy ---------- */
 
-/* Ambient aurora: slow-drifting cold orbs behind the glass so it has something
-   to refract (dark glass on flat black reads dead). Pure transform animation =
-   GPU-cheap; hidden under a wallpaper; paused while dragging. */
+/* Grain. This element used to host three drifting coloured orbs; they are gone.
+   Blurred radial blobs behind content are the single most recognisable
+   machine-made background there is, and these were paying for it twice — the
+   drift had already been switched off because re-blurring the chrome above them
+   every frame was the app's largest GPU cost.
+
+   What replaces them does the job the orbs were actually there for. The stated
+   reason was "dark glass on flat black reads dead", and that is true: a flat
+   fill has nothing for a gradient to resolve into, so large tonal areas band.
+   Fine grain breaks the banding, gives the substrate a physical, printed
+   quality, and costs one tiled paint that is never dirtied again.
+
+   The turbulence is an inline SVG data URI — self-contained, so nothing here
+   reaches the network and the CSP stays as narrow as it is. */
 .aurora {
   position: absolute;
   inset: 0;
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
+  opacity: 0.4;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  mix-blend-mode: soft-light;
 }
 
-/* Ambient orbs giving the glass real light to refract.
-
-   These deliberately do NOT animate. The drift was the app's single largest GPU
-   cost: the orbs sit under backdrop-filtered chrome, so every frame they moved
-   forced that chrome to re-blur — a full-screen composite at Retina 2x, running
-   forever, regardless of how many agents were open. Held still they are painted
-   once and never dirtied again, which is effectively free, and the colour and
-   depth they give the glass is unchanged.
-
-   No `will-change` either: it exists to hint at *upcoming* animation, and on a
-   static element it just pins a compositor layer (~16MB across the three) for
-   nothing. */
+/* The orbs themselves. Kept as a nulled rule rather than deleted so the
+   renderer can keep emitting the nodes unchanged — and so this stays a
+   tombstone: do not bring these back. */
 .aurora__orb {
-  position: absolute;
-  border-radius: 50%;
-}
-
-.aurora__orb--1 {
-  width: 52vmax;
-  height: 52vmax;
-  left: -10%;
-  top: -20%;
-  /* Secondary-brand navy — stays blue even though the accent is red. */
-  background: radial-gradient(circle, rgba(var(--brand-rgb), 0.34), transparent 62%);
-}
-
-.aurora__orb--2 {
-  width: 44vmax;
-  height: 44vmax;
-  right: -12%;
-  top: 4%;
-  background: radial-gradient(circle, rgba(46, 132, 162, 0.26), transparent 62%);
-  /* Held at the midpoint of the old drift so the composition reads the same. */
-  transform: translate3d(-3%, 3.5%, 0) scale(1);
-}
-
-.aurora__orb--3 {
-  width: 40vmax;
-  height: 40vmax;
-  left: 22%;
-  bottom: -24%;
-  background: radial-gradient(circle, rgba(122, 92, 222, 0.2), transparent 62%);
-  transform: translate3d(2.5%, -3%, 0) scale(1.08);
+  display: none;
 }
 
 /* ---------- Power: pause decoration when nobody is watching ----------
@@ -406,7 +411,7 @@ body.has-wallpaper .aurora {
 /* Spawn: a soft spring pop. Animates the independent `scale` property (NOT
    `transform`, which carries the pane's inline translate position) + opacity. */
 .vec-pane {
-  animation: pane-in 380ms var(--ease-spring);
+  animation: pane-in 300ms var(--ease-spring);
 }
 @keyframes pane-in {
   from {
@@ -457,34 +462,34 @@ body.has-wallpaper .aurora {
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
 
 /* An agent that needs you gently breathes amber. */
 .vec-pane.is-attention:not(.is-selected) {
-  animation: attention-breathe 2.6s ease-in-out infinite;
+  /* Was a 2.6s breathing glow loop. A pane that needs attention says so by
+     holding a distinct seam colour, not by throbbing at the user forever. */
+  box-shadow: inset 0 0 0 1px var(--status-attention), 0 0 0 1px var(--seam-outer),
+    var(--shadow-card);
 }
 @keyframes attention-breathe {
   0%,
   100% {
     box-shadow:
-      0 0 0 1px rgba(255, 159, 10, 0.5),
-      0 0 14px rgba(255, 159, 10, 0.26),
+      0 0 0 1px rgba(201, 146, 78, 0.5),
       var(--shadow-card-heavy),
       inset 0 1px 0 var(--glass-highlight);
   }
   50% {
     box-shadow:
-      0 0 0 1px rgba(255, 159, 10, 0.72),
-      0 0 30px rgba(255, 159, 10, 0.5),
+      0 0 0 1px rgba(201, 146, 78, 0.72),
       var(--shadow-card-heavy),
       inset 0 1px 0 var(--glass-highlight);
   }
 }
 
 .rail-btn__badge {
-  animation: badge-pulse 2.2s ease-in-out infinite;
+  /* Pulse removed — the badge's presence IS the signal. */
 }
 @keyframes badge-pulse {
   0%,
@@ -493,8 +498,7 @@ body.has-wallpaper .aurora {
   }
   50% {
     box-shadow:
-      0 1px 4px rgba(0, 0, 0, 0.5),
-      0 0 12px rgba(255, 159, 10, 0.85);
+      0 1px 4px rgba(0, 0, 0, 0.5);
   }
 }
 
@@ -525,29 +529,30 @@ body.has-wallpaper .aurora {
 .empty__btn:hover::after,
 .home__open:hover::after,
 .review__btn--merge:hover::after {
-  transform: translateX(135%);
 }
 
 /* Merge succeeded → a green flash + the checkmark pops in. */
 .review.is-merged {
-  animation: merge-flash 780ms var(--ease-out);
+  animation: merge-flash 300ms var(--ease-out);
 }
+/* Was a 64px green bloom around the merged panel. The seam brightens instead —
+   the same "this is sealed now" idea as the merge overlay, at panel scale. */
 @keyframes merge-flash {
   0% {
-    box-shadow: var(--glass-specular), var(--shadow-pop), 0 0 0 0 rgba(48, 209, 88, 0);
+    box-shadow: var(--seam), var(--shadow-pop);
   }
   28% {
     box-shadow:
-      var(--glass-specular),
-      var(--shadow-pop),
-      0 0 64px 4px rgba(48, 209, 88, 0.55);
+      inset 0 0 0 1px var(--status-done),
+      0 0 0 1px var(--seam-outer),
+      var(--shadow-pop);
   }
   100% {
-    box-shadow: var(--glass-specular), var(--shadow-pop), 0 0 0 0 rgba(48, 209, 88, 0);
+    box-shadow: var(--seam), var(--shadow-pop);
   }
 }
 .review__empty--ok {
-  animation: pop-check 440ms var(--ease-decelerate);
+  animation: pop-check 300ms var(--ease-decelerate);
 }
 @keyframes pop-check {
   from {
@@ -556,7 +561,6 @@ body.has-wallpaper .aurora {
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
 
@@ -578,10 +582,9 @@ body.has-wallpaper .aurora {
   }
   24% {
     box-shadow:
-      0 0 0 1px rgba(48, 209, 88, 0.55),
-      0 0 24px rgba(48, 209, 88, 0.3),
-      var(--shadow-card),
-      inset 0 1px 0 var(--glass-highlight);
+      inset 0 0 0 1px var(--status-done),
+      0 0 0 1px var(--seam-outer),
+      var(--shadow-card);
   }
 }
 .vec-pane__done-check {
@@ -597,8 +600,8 @@ body.has-wallpaper .aurora {
   place-items: center;
   border-radius: 50%;
   background: var(--success);
-  color: #04180b;
-  font-size: 10px;
+  color: #10200c;
+  font-size: var(--fs-1);
   font-weight: 700;
   line-height: 1;
   pointer-events: none;
@@ -653,7 +656,8 @@ body.has-wallpaper .aurora {
    uses currentColor), so the "working" light stays green whatever the accent is. */
 .vec-pane__dot--working {
   color: var(--status-working);
-  animation: dot-pulse 1.5s ease-in-out infinite;
+  /* Working state reads from colour plus this ring, not a pulse. */
+  box-shadow: 0 0 0 2px rgba(125, 155, 106, 0.28);
 }
 @keyframes dot-pulse {
   0%,
@@ -694,18 +698,20 @@ body.has-wallpaper .aurora {
   pointer-events: auto;
   max-width: 320px;
   padding: 11px 15px;
-  font-size: 13px;
+  font-size: var(--fs-3);
   color: var(--text);
   background: var(--menu-bg);
   backdrop-filter: var(--blur-md);
   -webkit-backdrop-filter: var(--blur-md);
   border: 1px solid var(--line-2);
-  border-left: 3px solid var(--accent);
+  /* No accent bar. A single bright stripe down one edge of a box is decoration
+     standing in for hierarchy — the toast's own text carries its meaning, and
+     its variants differ by ink, not by a stripe. */
   border-radius: var(--r-sm);
   box-shadow:
     var(--glass-specular),
     0 14px 36px rgba(0, 0, 0, 0.5);
-  cursor: pointer;
+  cursor: default;
   animation: toast-in 280ms var(--ease-decelerate);
 }
 /* Sticky toasts render the ✕ in the top-right corner; keep text clear of it. */
@@ -728,13 +734,13 @@ body.has-wallpaper .aurora {
 .toast__action {
   padding: 5px 12px;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-2);
   font-weight: 600;
   color: var(--text);
   background: var(--accent);
   border: none;
   border-radius: var(--r-sm);
-  cursor: pointer;
+  cursor: default;
 }
 .toast__action:hover {
   filter: brightness(1.15);
@@ -759,7 +765,6 @@ body.has-wallpaper .aurora {
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
 
@@ -778,7 +783,7 @@ body.has-wallpaper .aurora {
   gap: 11px;
   margin: 10px 12px 0;
   padding: 8px 12px 8px 17px;
-  font-size: 12.5px;
+  font-size: var(--fs-3);
   line-height: 1.4;
   color: var(--text);
   background:
@@ -791,7 +796,7 @@ body.has-wallpaper .aurora {
   /* The inset accent rail follows the rounded corners (inset shadows clip to
      the border-radius). */
   box-shadow: inset 3px 0 0 var(--accent);
-  animation: updbar-in 320ms var(--ease-decelerate);
+  animation: updbar-in 300ms var(--ease-decelerate);
 }
 
 /* Mid-download the action button becomes a passive progress readout. */
@@ -814,7 +819,7 @@ body.has-wallpaper .aurora {
 }
 .updbar__icon {
   flex: 0 0 auto;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .updbar--urgent .updbar__icon {
   color: var(--danger);
@@ -827,13 +832,13 @@ body.has-wallpaper .aurora {
   flex: 0 0 auto;
   padding: 5px 13px;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-2);
   font-weight: 600;
   color: var(--text);
   background: var(--accent);
   border: none;
   border-radius: var(--r-xs);
-  cursor: pointer;
+  cursor: default;
   transition: filter var(--dur-select) var(--ease-out);
 }
 .updbar__btn:hover {
@@ -852,7 +857,7 @@ body.has-wallpaper .aurora {
   background: transparent;
   border: none;
   border-radius: 6px;
-  cursor: pointer;
+  cursor: default;
 }
 .updbar__dismiss:hover {
   color: var(--text);
@@ -869,7 +874,6 @@ body.has-wallpaper .aurora {
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -917,7 +921,7 @@ body.has-wallpaper .aurora {
   background: transparent;
   border: none;
   border-radius: calc(var(--dock) * 0.22);
-  cursor: pointer;
+  cursor: default;
   transition: color var(--dur-select) var(--ease-out);
 }
 .rail__seg-btn svg {
@@ -1023,13 +1027,10 @@ body.has-wallpaper .aurora {
   max-width: 380px;
   padding: 0 12px 0 7px;
   color: var(--text);
-  background: linear-gradient(150deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02) 58%),
-    rgba(16, 22, 34, 0.84);
-  border: 1px solid var(--line-3);
+  background: var(--sub-2);
+  border: 0;
   border-radius: 999px;
-  cursor: pointer;
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
+  cursor: default;
   box-shadow:
     var(--glass-specular),
     inset 0 0 0 0.5px rgba(255, 255, 255, 0.06),
@@ -1042,15 +1043,14 @@ body.has-wallpaper .aurora {
     transform var(--dur-spring) var(--ease-spring);
 }
 .projbar__btn:hover {
-  transform: translateY(1px);
   border-color: rgba(var(--accent-rgb), 0.55);
   background: linear-gradient(150deg, rgba(255, 255, 255, 0.17), rgba(255, 255, 255, 0.04) 58%),
-    rgba(18, 24, 38, 0.78);
+    rgba(30, 24, 22, 0.78);
   box-shadow:
     var(--glass-specular),
     0 0 0 1px rgba(var(--accent-rgb), 0.12),
     0 0 22px rgba(var(--accent-rgb), 0.22),
-    0 14px 34px rgba(0, 0, 0, 0.52);
+    var(--shadow-float);
 }
 .projbar__btn:active {
   transform: translateY(1px) scale(0.985);
@@ -1061,7 +1061,7 @@ body.has-wallpaper .aurora {
     var(--glass-specular),
     0 0 0 1px rgba(var(--accent-rgb), 0.18),
     0 0 24px rgba(var(--accent-rgb), 0.28),
-    0 14px 34px rgba(0, 0, 0, 0.52);
+    var(--shadow-float);
 }
 .projbar__btn:focus-visible {
   outline: none;
@@ -1079,7 +1079,7 @@ body.has-wallpaper .aurora {
   place-items: center;
   border-radius: 8px;
   font-family: var(--font-display);
-  font-size: 13px;
+  font-size: var(--fs-3);
   font-weight: 600;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.32),
@@ -1097,16 +1097,17 @@ body.has-wallpaper .aurora {
   min-width: 0;
   line-height: 1.05;
 }
+/* Not a section heading, so it does not get the section-heading costume.
+   Tracked-out caps is reserved for one role in this app; when every small
+   string wears it, the interface reads as a template rather than a voice. */
 .projbar__label {
-  font-size: 8.5px;
-  font-weight: 600;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
+  font-size: var(--fs-2);
+  font-weight: 500;
   color: var(--muted);
 }
 .projbar__name {
   font-family: var(--font-display);
-  font-size: 14px;
+  font-size: var(--fs-4);
   font-weight: 600;
   letter-spacing: 0;
   white-space: nowrap;
@@ -1141,18 +1142,16 @@ body.has-wallpaper .aurora {
   align-self: center;
   margin-left: 8px;
   padding: 4px 11px;
-  font-size: 10.5px;
+  font-size: var(--fs-1);
   font-weight: 600;
   letter-spacing: 0.05em;
   white-space: nowrap;
   color: #ffbe66;
   background: linear-gradient(150deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.01) 58%),
-    rgba(255, 159, 10, 0.1);
-  border: 1px solid rgba(255, 159, 10, 0.32);
+    rgba(201, 146, 78, 0.1);
+  border: 1px solid rgba(201, 146, 78, 0.32);
   border-radius: 999px;
-  cursor: pointer;
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
+  cursor: default;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.07),
     0 6px 18px rgba(0, 0, 0, 0.35);
@@ -1162,18 +1161,17 @@ body.has-wallpaper .aurora {
     box-shadow var(--dur-select) var(--ease-out);
 }
 .projbar__chip:hover {
-  border-color: rgba(255, 159, 10, 0.55);
+  border-color: rgba(201, 146, 78, 0.55);
   background: linear-gradient(150deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.02) 58%),
-    rgba(255, 159, 10, 0.16);
+    rgba(201, 146, 78, 0.16);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.09),
-    0 0 16px rgba(255, 159, 10, 0.18),
     0 6px 18px rgba(0, 0, 0, 0.38);
 }
 .projbar__chip:focus-visible {
   outline: none;
-  border-color: rgba(255, 159, 10, 0.7);
-  box-shadow: 0 0 0 2px rgba(255, 159, 10, 0.45);
+  border-color: rgba(201, 146, 78, 0.7);
+  box-shadow: 0 0 0 2px rgba(201, 146, 78, 0.45);
 }
 /* Command-palette launcher chip beside the project pill — neutral glass so it
    reads as a quiet utility, not a status like the amber isolation chip. */
@@ -1186,12 +1184,10 @@ body.has-wallpaper .aurora {
   padding: 5px 9px 5px 8px;
   color: var(--muted);
   background: linear-gradient(150deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.015) 58%),
-    rgba(15, 21, 32, 0.4);
+    rgba(34, 27, 25, 0.4);
   border: 1px solid var(--line-2);
   border-radius: 999px;
-  cursor: pointer;
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
+  cursor: default;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
     0 6px 18px rgba(0, 0, 0, 0.32);
@@ -1204,15 +1200,15 @@ body.has-wallpaper .aurora {
   color: var(--text-2);
   border-color: var(--line-1);
   background: linear-gradient(150deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03) 58%),
-    rgba(15, 21, 32, 0.5);
+    rgba(34, 27, 25, 0.5);
 }
 .projbar__cmdk:focus-visible {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--accent-ink);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 .projbar__cmdk-key {
-  font-size: 10.5px;
+  font-size: var(--fs-1);
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--muted);
@@ -1276,11 +1272,10 @@ body.has-wallpaper .aurora {
   max-width: min(76vw, 860px);
   padding: 4px;
   border-radius: 13px;
-  background: rgba(13, 18, 28, 0.92);
-  border: 1px solid var(--line-3);
+  background: var(--sub-2);
+  border: 0;
   box-shadow:
-    var(--glass-specular),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    var(--seam),
     0 10px 26px rgba(0, 0, 0, 0.46);
   /* Scrolls rather than clips: tabs now carry a name + count and can't be
      assumed to fit. Scrollbar hidden — the strip is short and drag/Alt+N cover it. */
@@ -1302,7 +1297,7 @@ body.has-wallpaper .aurora {
   padding: 0 6px 0 11px;
   border-radius: 9px;
   color: var(--text-2);
-  cursor: pointer;
+  cursor: default;
   user-select: none;
   transition:
     background var(--dur-select) var(--ease-out),
@@ -1322,7 +1317,7 @@ body.has-wallpaper .aurora {
   flex: 1 1 auto;
   min-width: 0;
   font-family: var(--font-display);
-  font-size: 13px;
+  font-size: var(--fs-3);
   font-weight: 600;
   line-height: 1.3;
   white-space: nowrap;
@@ -1341,7 +1336,7 @@ body.has-wallpaper .aurora {
   background: transparent;
   color: var(--text);
   font-family: var(--font-display);
-  font-size: 13px;
+  font-size: var(--fs-3);
   font-weight: 600;
   line-height: 1.3;
   outline: none;
@@ -1360,7 +1355,7 @@ body.has-wallpaper .aurora {
   background: rgba(255, 255, 255, 0.09);
   color: var(--text-2);
   font-family: var(--font-display);
-  font-size: 11px;
+  font-size: var(--fs-1);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 17px;
@@ -1378,15 +1373,15 @@ body.has-wallpaper .aurora {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: rgba(150, 162, 182, 0.7);
+  background: rgba(170, 158, 152, 0.7);
 }
 .tab__dot--working {
   background: var(--status-working);
-  box-shadow: 0 0 6px rgba(48, 209, 88, 0.5);
+  box-shadow: 0 0 6px rgba(125, 155, 106, 0.5);
 }
 .tab__dot--attention {
   background: var(--status-attention);
-  box-shadow: 0 0 6px rgba(255, 159, 10, 0.5);
+  box-shadow: 0 0 6px rgba(201, 146, 78, 0.5);
 }
 /* Close x — a reserved, contained slot (opacity-toggled, never display:none) so
    it can't shift layout or spill outside the tab; text-2 ink keeps the glyph
@@ -1406,7 +1401,7 @@ body.has-wallpaper .aurora {
   background: transparent;
   border-radius: 5px;
   color: var(--text-2);
-  cursor: pointer;
+  cursor: default;
   opacity: 0;
   transition:
     opacity var(--dur-select) var(--ease-out),
@@ -1434,12 +1429,12 @@ body.has-wallpaper .aurora {
   padding: 0;
   border-radius: 11px;
   color: var(--muted);
-  background: rgba(13, 18, 28, 0.92);
+  background: rgba(26, 21, 20, 0.92);
   border: 1px solid var(--line-3);
   box-shadow:
     var(--glass-specular),
     0 8px 20px rgba(0, 0, 0, 0.4);
-  cursor: pointer;
+  cursor: default;
   transition:
     color var(--dur-select) var(--ease-out),
     border-color var(--dur-select) var(--ease-out),
@@ -1459,7 +1454,7 @@ body.has-wallpaper .aurora {
 }
 .tabbar__add-label {
   font-family: var(--font-display);
-  font-size: 13.5px;
+  font-size: var(--fs-4);
   font-weight: 600;
 }
 /* Anchor for the + dropdown. Zero-size influence — it just wraps the button. */
@@ -1512,7 +1507,6 @@ body.has-wallpaper .aurora {
 
    Background layers get `content-visibility: hidden`, not just `visibility`:
    a merely-invisible subtree is still laid out and composited every frame, so
-   background xterm instances kept re-rendering behind a dozen backdrop-filtered
    glass surfaces — with 3 workspaces × 3 agents that's a constant GPU draw for
    panes nobody can see. Skipping the subtree entirely costs one refit on
    activation instead (App runs it on the second rAF, once layout is restored;
@@ -1548,8 +1542,6 @@ body.has-wallpaper .aurora {
   background:
     linear-gradient(160deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015) 50%),
     var(--menu-bg);
-  backdrop-filter: var(--blur-md);
-  -webkit-backdrop-filter: var(--blur-md);
   border-left: 1px solid var(--glass-border);
   box-shadow: -18px 0 46px rgba(0, 0, 0, 0.34);
 }
@@ -1599,7 +1591,7 @@ body.has-wallpaper .aurora {
 
 .filepanel__scope {
   font-family: var(--font-serif);
-  font-size: 15px;
+  font-size: var(--fs-5);
   font-weight: 600;
   color: var(--ink-strong);
   white-space: nowrap;
@@ -1609,7 +1601,7 @@ body.has-wallpaper .aurora {
 
 .filepanel__branch {
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--fs-2);
   color: var(--muted);
   white-space: nowrap;
 }
@@ -1626,14 +1618,14 @@ body.has-wallpaper .aurora {
 
 .filepanel__placeholder {
   padding: 14px 16px;
-  font-size: 13px;
+  font-size: var(--fs-3);
   line-height: 1.6;
   color: var(--text-2);
 }
 
 .filepanel__openpath {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-2);
   color: var(--muted);
 }
 
@@ -1644,7 +1636,7 @@ body.has-wallpaper .aurora {
   overflow: auto;
   padding: 6px 0;
   border-bottom: 1px solid var(--line-1);
-  font-size: 12.5px;
+  font-size: var(--fs-3);
 }
 .filetree__row {
   display: flex;
@@ -1652,7 +1644,7 @@ body.has-wallpaper .aurora {
   gap: 6px;
   padding: 3px 10px 3px 0;
   color: var(--text-2);
-  cursor: pointer;
+  cursor: default;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1680,7 +1672,7 @@ body.has-wallpaper .aurora {
 .filetree__twisty {
   flex: 0 0 auto;
   width: 12px;
-  font-size: 10px;
+  font-size: var(--fs-1);
   color: var(--muted);
   text-align: center;
 }
@@ -1712,7 +1704,7 @@ body.has-wallpaper .aurora {
   flex: 1;
   min-width: 0;
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--fs-2);
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
@@ -1723,7 +1715,7 @@ body.has-wallpaper .aurora {
   margin-right: 8px;
   padding: 2px 7px;
   border-radius: 5px;
-  font-size: 10.5px;
+  font-size: var(--fs-1);
   color: rgba(var(--accent-rgb), 0.95);
   background: rgba(var(--accent-rgb), 0.12);
   white-space: nowrap;
@@ -1731,13 +1723,13 @@ body.has-wallpaper .aurora {
 .fileview__save {
   flex: 0 0 auto;
   padding: 5px 12px;
-  font-size: 12px;
+  font-size: var(--fs-2);
   font-weight: 600;
   color: var(--text);
   background: var(--glass-bg-strong);
   border: 1px solid var(--glass-border);
   border-radius: var(--r-sm);
-  cursor: pointer;
+  cursor: default;
   transition: background var(--dur-select) var(--ease-out);
 }
 .fileview__save:hover:not(:disabled) {
@@ -1753,9 +1745,9 @@ body.has-wallpaper .aurora {
 .fileview__guard,
 .fileview__conflict {
   padding: 10px 12px;
-  font-size: 12px;
-  background: rgba(255, 159, 10, 0.08);
-  border-bottom: 1px solid rgba(255, 159, 10, 0.28);
+  font-size: var(--fs-2);
+  background: rgba(201, 146, 78, 0.08);
+  border-bottom: 1px solid rgba(201, 146, 78, 0.28);
 }
 .fileview__guard-text,
 .fileview__conflict-text {
@@ -1773,12 +1765,12 @@ body.has-wallpaper .aurora {
 .fileview__conflict-actions button {
   padding: 5px 12px;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-2);
   color: var(--text);
   background: var(--glass-bg-strong);
   border: 1px solid var(--glass-border);
   border-radius: var(--r-sm);
-  cursor: pointer;
+  cursor: default;
   transition: background var(--dur-select) var(--ease-out);
 }
 .fileview__guard-actions button:hover:not(:disabled),
@@ -1793,7 +1785,7 @@ body.has-wallpaper .aurora {
 
 .fileview__error {
   padding: 7px 12px;
-  font-size: 12px;
+  font-size: var(--fs-2);
   color: #ff9b94;
   background: rgba(255, 90, 90, 0.1);
   border-bottom: 1px solid var(--line-1);
@@ -1811,7 +1803,7 @@ body.has-wallpaper .aurora {
   max-width: 80%;
   text-align: center;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--fs-3);
   line-height: 1.6;
 }
 .fileview__img {
@@ -1875,7 +1867,7 @@ body.has-wallpaper .aurora {
   inset: 0;
   overflow: hidden;
   background: transparent;
-  --moveable-color: var(--accent);
+  --moveable-color: var(--accent-ink);
 }
 
 .stage__panes {
@@ -1895,10 +1887,12 @@ body.has-wallpaper .aurora {
   /* Transparent body so the terminal can be see-through; the card reads from its
      header, border ring and shadow. */
   background: transparent;
-  border: 1px solid var(--glass-border);
-  box-shadow:
-    var(--shadow-card),
-    inset 0 1px 0 var(--glass-highlight);
+  /* The seam. A doubled hairline with a hair of substrate between the rules, so
+     the edge reads as SEALED rather than drawn — a pane is a closed cell set
+     into the plate, not a card resting on it. Applied as box-shadow so it costs
+     no layout space and follows the radius. */
+  border: 0;
+  box-shadow: var(--seam), var(--shadow-card);
   transition:
     transform var(--dur-spring) var(--ease-spring),
     width var(--dur-resize) var(--ease-out),
@@ -1925,42 +1919,71 @@ body.has-wallpaper .aurora {
 
 /* Elapsed-work timer next to the title while an agent is running. */
 .vec-pane__timer {
-  font-size: 10.5px;
+  font-size: var(--fs-1);
   font-variant-numeric: tabular-nums;
   color: inherit;
   opacity: 0.5;
   flex: 0 0 auto;
 }
 
-/* Merge celebration — a one-second particle burst from screen centre. */
-.confetti {
+/* The merge moment — see celebrate.ts. Two hairlines travel in from opposite
+   edges and meet in the middle: the seam closing. Separate units resolving into
+   one whole, which is what a merge actually is, drawn in the app's own accent
+   rather than in party colours. */
+.merge-seal {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 400;
+  display: flex;
+  align-items: center;
 }
-.confetti i {
+.merge-seal i {
   position: absolute;
-  left: 50%;
-  top: 42%;
-  width: 7px;
-  height: 11px;
-  border-radius: 2px;
-  opacity: 0;
-  animation: confetti-burst 900ms var(--ease-out) forwards;
+  top: 50%;
+  width: 50%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent));
+  animation: merge-seal-in 300ms var(--ease-decelerate) forwards;
 }
-@keyframes confetti-burst {
-  0% {
-    opacity: 1;
-    transform: translate(0, 0) rotate(0);
+/* The right half is the same gradient mirrored, so both lines brighten toward
+   the point where they meet rather than both fading the same direction. */
+.merge-seal i:last-child {
+  right: 0;
+  background: linear-gradient(270deg, transparent, var(--accent));
+  animation-name: merge-seal-in-right;
+}
+.merge-seal i:first-child {
+  left: 0;
+}
+@keyframes merge-seal-in {
+  from {
+    transform: translateX(-100%);
   }
-  100% {
+  60% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(0);
     opacity: 0;
-    transform: translate(var(--dx), calc(var(--dy) + 140px)) rotate(var(--rz));
+  }
+}
+@keyframes merge-seal-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  60% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .confetti {
+  .merge-seal {
     display: none;
   }
 }
@@ -1986,20 +2009,20 @@ body.has-wallpaper .aurora {
 
 /* Apple selection: crisp 1px accent ring, no glow. */
 .vec-pane.is-selected {
-  border-color: var(--accent);
+  border-color: var(--accent-ink);
   box-shadow:
-    0 0 0 1px var(--accent),
+    inset 0 0 0 1px var(--accent),
     0 0 22px rgba(var(--accent-rgb), 0.38),
-    var(--shadow-card-heavy),
-    inset 0 1px 0 var(--glass-highlight);
+    0 0 0 1px var(--seam-outer),
+    var(--shadow-card-heavy);
 }
 
 /* Status rings — quiet, only when the card isn't selected (selection wins).
    Restrained: a 1px tinted ring, no glow, no loop. */
 .vec-pane.is-attention:not(.is-selected) {
-  border-color: rgba(255, 159, 10, 0.55);
+  border-color: rgba(201, 146, 78, 0.55);
   box-shadow:
-    0 0 0 1px rgba(255, 159, 10, 0.5),
+    0 0 0 1px rgba(201, 146, 78, 0.5),
     var(--shadow-card-heavy),
     inset 0 1px 0 var(--glass-highlight);
 }
@@ -2033,7 +2056,7 @@ body.has-wallpaper .aurora {
 }
 
 .vec-pane__dot--done {
-  animation: dot-settle 560ms var(--ease-out);
+  animation: dot-settle 300ms var(--ease-out);
 }
 
 .vec-pane__header {
@@ -2044,9 +2067,9 @@ body.has-wallpaper .aurora {
   padding: 8px 10px;
   /* Slightly opaque frosted strip so the title/status stay readable even when
      the terminal below is see-through. */
-  background: linear-gradient(180deg, rgba(20, 24, 32, 0.62), rgba(16, 20, 27, 0.52));
-  border-bottom: 1px solid var(--line-1);
-  font-size: 12px;
+  background: var(--sub-3);
+  box-shadow: inset 0 -1px 0 var(--seam-outer), inset 0 -2px 0 var(--seam-inner);
+  font-size: var(--fs-2);
   cursor: grab;
 }
 
@@ -2059,7 +2082,6 @@ body.has-wallpaper .aurora {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  box-shadow: 0 0 8px currentColor;
   transition: background var(--dur-select) var(--ease-out);
 }
 
@@ -2072,9 +2094,9 @@ body.has-wallpaper .aurora {
 }
 
 .vec-pane__branch {
-  font-size: 10px;
+  font-size: var(--fs-1);
   color: var(--muted);
-  background: rgba(220, 235, 255, 0.07);
+  background: rgba(242, 236, 233, 0.07);
   border: 1px solid var(--glass-border);
   border-radius: 6px;
   padding: 2px 6px;
@@ -2093,7 +2115,7 @@ body.has-wallpaper .aurora {
   height: 18px;
 }
 .vec-pane__agent-mono {
-  font-size: 12px;
+  font-size: var(--fs-2);
   font-weight: 700;
 }
 
@@ -2110,7 +2132,7 @@ body.has-wallpaper .aurora {
   background: transparent;
   border: none;
   border-radius: 6px;
-  cursor: pointer;
+  cursor: default;
 }
 
 .vec-pane__close:hover {
@@ -2129,7 +2151,7 @@ body.has-wallpaper .aurora {
   background: transparent;
   border: none;
   border-radius: 6px;
-  cursor: pointer;
+  cursor: default;
 }
 
 .vec-pane__wide:hover {
@@ -2153,7 +2175,7 @@ body.has-wallpaper .aurora {
      wallpaper / frosted desktop shows. backdrop-filter is the most expensive
      thing to animate, so it's enabled ONLY when a wallpaper is set (it has no
      visible benefit over the plain dark scene) — see body.has-wallpaper below. */
-  background: rgba(10, 13, 18, var(--term-alpha, 0.8));
+  background: rgba(26, 21, 20, var(--term-alpha, 0.8));
 }
 
 /* Frosted glass only matters over a wallpaper — keep it off otherwise so the
@@ -2233,28 +2255,31 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .vec-pane__error-title {
-  font-size: 13px;
+  font-size: var(--fs-3);
   font-weight: 600;
   color: var(--status-error);
 }
 
 .vec-pane__error-msg {
-  font-size: 11.5px;
+  font-size: var(--fs-2);
   line-height: 1.5;
   color: var(--muted);
   word-break: break-word;
-  font-family: var(--font-mono);
+  /* Was mono. An error message is prose the user has to read under stress, not
+     data — mono here was costume, and it made the one moment that most needs to
+     be legible the least legible. Paths and branch names inside it keep mono
+     through their own selectors. */
 }
 
 .vec-pane__retry {
   margin-top: 4px;
   padding: 6px 16px;
-  font-size: 12px;
+  font-size: var(--fs-2);
   color: var(--text);
   background: var(--glass-bg-strong);
   border: 1px solid var(--glass-border);
   border-radius: var(--r-xs);
-  cursor: pointer;
+  cursor: default;
   transition: background var(--dur-select) var(--ease-out),
     border-color var(--dur-select) var(--ease-out);
 }
@@ -2285,7 +2310,7 @@ body.has-wallpaper .vec-pane__term {
 .vec-pane__search-input {
   width: 150px;
   padding: 5px 8px;
-  font-size: 12px;
+  font-size: var(--fs-2);
   color: var(--text);
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid var(--line-2);
@@ -2302,12 +2327,12 @@ body.has-wallpaper .vec-pane__term {
   height: 24px;
   display: grid;
   place-items: center;
-  font-size: 13px;
+  font-size: var(--fs-3);
   color: var(--muted);
   background: transparent;
   border: none;
   border-radius: var(--r-xs);
-  cursor: pointer;
+  cursor: default;
   transition: background var(--dur-select) var(--ease-out), color var(--dur-select) var(--ease-out);
 }
 
@@ -2328,9 +2353,9 @@ body.has-wallpaper .vec-pane__term {
   justify-content: space-between;
   gap: 10px;
   padding: 7px 10px 7px 12px;
-  font-size: 12px;
+  font-size: var(--fs-2);
   color: var(--text-2);
-  background: rgba(16, 18, 24, 0.86);
+  background: rgba(34, 27, 25, 0.86);
   backdrop-filter: var(--blur-sm);
   -webkit-backdrop-filter: var(--blur-sm);
   border: 1px solid var(--line-2);
@@ -2340,13 +2365,13 @@ body.has-wallpaper .vec-pane__term {
 
 .vec-pane__relaunch {
   padding: 5px 14px;
-  font-size: 12px;
+  font-size: var(--fs-2);
   font-weight: 600;
   color: #fff;
   background: linear-gradient(180deg, var(--accent-2), var(--accent));
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: var(--r-xs);
-  cursor: pointer;
+  cursor: default;
   transition: filter var(--dur-select) var(--ease-out);
 }
 
@@ -2380,12 +2405,12 @@ body.has-wallpaper .vec-pane__term {
 .vec-pane__menu-item {
   text-align: left;
   padding: 7px 10px;
-  font-size: 12.5px;
+  font-size: var(--fs-3);
   color: var(--text);
   background: transparent;
   border: none;
   border-radius: var(--r-xs);
-  cursor: pointer;
+  cursor: default;
   transition: background var(--dur-select) var(--ease-out);
 }
 
@@ -2396,7 +2421,7 @@ body.has-wallpaper .vec-pane__term {
 }
 .vec-pane__menu-head {
   padding: 4px 10px 2px;
-  font-size: 10.5px;
+  font-size: var(--fs-1);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2404,7 +2429,7 @@ body.has-wallpaper .vec-pane__term {
 }
 /* Radio-style checkmark for the theme picker. */
 .vec-pane__menu-item.is-checked {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .vec-pane__menu-item.is-checked::after {
   content: ' ✓';
@@ -2429,13 +2454,13 @@ body.has-wallpaper .vec-pane__term {
   gap: 6px;
   max-width: 160px;
   padding: 5px 10px;
-  font-size: 11px;
+  font-size: var(--fs-1);
   color: #1a1205;
   font-weight: 600;
   background: var(--status-attention);
   border-radius: 999px;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
-  cursor: pointer;
+  cursor: default;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2492,29 +2517,21 @@ body.has-wallpaper .vec-pane__term {
   align-items: center;
   gap: calc(var(--dock) * 0.16);
   padding: calc(var(--dock) * 0.28) 11px;
-  /* A defined dark-glass body (not just translucent white) so the dock reads
-     crisp over the now-transparent stage instead of a blurry smudge. */
-  background:
-    linear-gradient(150deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02) 55%),
-    rgba(13, 16, 23, 0.82);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--line-3);
+  /* Solid chrome substrate. This was frosted glass with a white sheen gradient
+     and a 40%-white inner highlight; persistent chrome does not get glass —
+     it is on screen permanently, so it pays the blur cost on every frame and
+     earns none of the light-dismiss quality glass is actually for. The seam
+     defines the edge instead. */
+  background: var(--sub-2);
+  border: 0;
   border-radius: var(--r-xl);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.4),
-    inset 0 0 0 0.5px rgba(255, 255, 255, 0.06),
-    var(--glass-shadow);
+  box-shadow: var(--seam-strong), var(--shadow-float);
 }
 
-/* specular sheen */
+/* Sheen layer retired — --glass-sheen is `none` now. Kept as a nulled rule so
+   the renderer keeps emitting the node and this stays a tombstone. */
 .rail::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: var(--glass-sheen);
-  pointer-events: none;
+  content: none;
 }
 
 .rail > * {
@@ -2537,7 +2554,7 @@ body.has-wallpaper .vec-pane__term {
    ProjectBar's switcher dropdown (ProjectBar.tsx) — keep them here. */
 .rail__menu-head {
   padding: 4px 8px 6px;
-  font-size: 10.5px;
+  font-size: var(--fs-1);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2555,7 +2572,7 @@ body.has-wallpaper .vec-pane__term {
 .rail__menu-target-name {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 12px;
+  font-size: var(--fs-2);
   color: var(--text-2);
   white-space: nowrap;
   overflow: hidden;
@@ -2574,9 +2591,9 @@ body.has-wallpaper .vec-pane__term {
   border-radius: 7px;
   background: transparent;
   color: var(--text-2);
-  font-size: 11px;
+  font-size: var(--fs-1);
   font-weight: 600;
-  cursor: pointer;
+  cursor: default;
 }
 .rail__menu-target-btn:hover {
   color: var(--text);
@@ -2584,7 +2601,7 @@ body.has-wallpaper .vec-pane__term {
 }
 .rail__menu-empty {
   padding: 6px 10px 10px;
-  font-size: 12.5px;
+  font-size: var(--fs-3);
   color: var(--muted);
 }
 .rail__proj {
@@ -2596,7 +2613,7 @@ body.has-wallpaper .vec-pane__term {
   background: transparent;
   border: none;
   border-radius: var(--r-sm);
-  cursor: pointer;
+  cursor: default;
   transition: background var(--dur-select) var(--ease-out);
 }
 .rail__proj:hover {
@@ -2612,7 +2629,7 @@ body.has-wallpaper .vec-pane__term {
   display: grid;
   place-items: center;
   border-radius: 9px;
-  font-size: 13px;
+  font-size: var(--fs-3);
   font-weight: 700;
   color: #fff;
   background: linear-gradient(150deg, var(--accent-2), var(--accent));
@@ -2625,7 +2642,7 @@ body.has-wallpaper .vec-pane__term {
   flex: 1;
 }
 .rail__proj-name {
-  font-size: 13px;
+  font-size: var(--fs-3);
   font-weight: 600;
   color: var(--text);
   white-space: nowrap;
@@ -2633,7 +2650,7 @@ body.has-wallpaper .vec-pane__term {
   text-overflow: ellipsis;
 }
 .rail__proj-path {
-  font-size: 11px;
+  font-size: var(--fs-1);
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
@@ -2641,7 +2658,7 @@ body.has-wallpaper .vec-pane__term {
 }
 .rail__proj-check {
   flex: 0 0 auto;
-  color: var(--accent);
+  color: var(--accent-ink);
   font-weight: 700;
 }
 .rail__menu-item--danger:hover {
@@ -2670,7 +2687,7 @@ body.has-wallpaper .vec-pane__term {
   color: var(--muted);
   background: transparent;
   border: 1px solid transparent;
-  cursor: pointer;
+  cursor: default;
   transition: color var(--dur-select) var(--ease-out),
     background var(--dur-select) var(--ease-out),
     border-color var(--dur-select) var(--ease-out),
@@ -2683,10 +2700,11 @@ body.has-wallpaper .vec-pane__term {
   height: calc(var(--dock) * 0.5);
 }
 
+/* Tone only. The lift was the stock hover-boop: a control that jumps when the
+   pointer crosses it. Hover changes what the icon IS, not where it sits. */
 .rail-btn:hover:not(:disabled) {
   color: var(--text);
   background: var(--hover-bg-soft);
-  transform: translateY(-1px);
 }
 
 .rail-btn:active:not(:disabled) {
@@ -2699,7 +2717,6 @@ body.has-wallpaper .vec-pane__term {
 }
 
 /* ---------- Dock tooltips — CSS-only, opening rightward off each control.
-   position: absolute (NOT fixed: .rail's backdrop-filter makes it the
    containing block for fixed descendants, which would mis-anchor them).
    The dock has no overflow clipping, so the bubble escapes the pill freely,
    same as the count badge does. ---------- */
@@ -2714,7 +2731,7 @@ body.has-wallpaper .vec-pane__term {
   translate: 0 -50%;
   white-space: nowrap;
   padding: 5px 10px;
-  font-size: 12px;
+  font-size: var(--fs-2);
   font-weight: 500;
   line-height: 1.35;
   color: var(--text);
@@ -2745,7 +2762,7 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .rail-btn.is-active {
-  color: var(--accent);
+  color: var(--accent-ink);
   background: rgba(var(--accent-rgb), 0.12);
   border-color: rgba(var(--accent-rgb), 0.3);
   box-shadow: 0 0 16px rgba(var(--accent-rgb), 0.3);
@@ -2757,10 +2774,9 @@ body.has-wallpaper .vec-pane__term {
 
 .rail-btn--primary,
 .rail-btn--primary:hover:not(:disabled) {
-  color: #fff;
+  color: var(--sub-1);
   background: linear-gradient(180deg, var(--accent-2), var(--accent));
-  border-color: rgba(255, 255, 255, 0.22);
-  /* Accent glow — the button "shines". */
+  border-color: rgba(255, 240, 235, 0.22);
   box-shadow:
     0 0 20px rgba(var(--accent-rgb), 0.6),
     0 3px 14px rgba(var(--accent-rgb), 0.45);
@@ -2773,13 +2789,13 @@ body.has-wallpaper .vec-pane__term {
 /* Attention button: only appears when an agent needs you. Amber, with a count. */
 .rail-btn--attention {
   color: var(--status-attention);
-  background: rgba(255, 159, 10, 0.12);
-  border-color: rgba(255, 159, 10, 0.28);
+  background: rgba(201, 146, 78, 0.12);
+  border-color: rgba(201, 146, 78, 0.28);
 }
 
 .rail-btn--attention:hover:not(:disabled) {
   color: var(--status-attention);
-  background: rgba(255, 159, 10, 0.18);
+  background: rgba(201, 146, 78, 0.18);
 }
 
 .rail-btn__badge {
@@ -2791,7 +2807,7 @@ body.has-wallpaper .vec-pane__term {
   padding: 0 4px;
   display: grid;
   place-items: center;
-  font-size: 10px;
+  font-size: var(--fs-1);
   font-weight: 700;
   color: #1a1205;
   background: var(--status-attention);
@@ -2832,12 +2848,12 @@ body.has-wallpaper .vec-pane__term {
 .rail__menu-item {
   text-align: left;
   padding: 8px 11px;
-  font-size: 12.5px;
+  font-size: var(--fs-3);
   color: var(--text);
   background: transparent;
   border: none;
   border-radius: var(--r-xs);
-  cursor: pointer;
+  cursor: default;
   transition: background var(--dur-select) var(--ease-out), color var(--dur-select) var(--ease-out);
 }
 
@@ -2846,7 +2862,7 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .rail__menu-item.is-active {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 /* Project switcher anchors to the top of the dock instead of the bottom. */
@@ -2887,7 +2903,7 @@ body.has-wallpaper .vec-pane__term {
 }
 .rail__menu-hint {
   margin-left: auto;
-  font-size: 11px;
+  font-size: var(--fs-1);
   color: var(--muted);
 }
 
@@ -2904,9 +2920,12 @@ body.has-wallpaper .vec-pane__term {
   z-index: 100;
   display: grid;
   place-items: center;
-  background: rgba(4, 8, 14, 0.5);
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
+  /* Was 50% at 5px blur, which left the wordmark and the accent button on the
+     screen behind clearly legible through the dialog — the backdrop competed
+     with the content in front of it. A dialog's job is to take the foreground. */
+  background: rgba(10, 7, 6, 0.72);
+  backdrop-filter: blur(14px) saturate(120%);
+  -webkit-backdrop-filter: blur(14px) saturate(120%);
 }
 
 /* Shown only while a lazy overlay chunk is still loading. No blur here: the
@@ -2922,7 +2941,7 @@ body.has-wallpaper .vec-pane__term {
   height: 26px;
   border-radius: 50%;
   border: 2px solid var(--line-2);
-  border-top-color: var(--accent);
+  border-top-color: var(--accent-ink);
   animation: modal-spin 700ms linear infinite;
 }
 @keyframes modal-spin {
@@ -2933,7 +2952,7 @@ body.has-wallpaper .vec-pane__term {
 @media (prefers-reduced-motion: reduce) {
   /* Pulse instead of spin — still reads as "working", without the rotation. */
   .modal__spinner {
-    animation: overlay-in 900ms ease-in-out infinite alternate;
+    animation: none;
   }
 }
 
@@ -2948,12 +2967,12 @@ body.has-wallpaper .vec-pane__term {
   overflow: hidden;
   background:
     linear-gradient(160deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.025) 48%),
-    rgba(15, 21, 32, 0.66);
+    rgba(20, 16, 15, 0.66);
   backdrop-filter: var(--blur-lg);
   -webkit-backdrop-filter: var(--blur-lg);
-  border: 1px solid var(--line-2);
+  border: 0;
   box-shadow:
-    var(--glass-specular),
+    var(--seam-strong),
     var(--shadow-pop);
 }
 
@@ -2967,7 +2986,7 @@ body.has-wallpaper .vec-pane__term {
 
 .settings__title {
   font-family: var(--font-serif);
-  font-size: 16px;
+  font-size: var(--fs-5);
   font-weight: 600;
   color: var(--ink-strong);
 }
@@ -2981,7 +3000,7 @@ body.has-wallpaper .vec-pane__term {
   background: transparent;
   border: none;
   border-radius: 7px;
-  cursor: pointer;
+  cursor: default;
 }
 
 .settings__close:hover {
@@ -3009,14 +3028,14 @@ body.has-wallpaper .vec-pane__term {
   gap: 11px;
   padding: 9px 11px;
   font-family: var(--font-serif);
-  font-size: 13.5px;
+  font-size: var(--fs-4);
   font-weight: 500;
   text-align: left;
   color: var(--muted);
   background: transparent;
   border: none;
   border-radius: var(--r-sm);
-  cursor: pointer;
+  cursor: default;
   transition:
     color var(--dur-select) var(--ease-out),
     background var(--dur-select) var(--ease-out);
@@ -3035,7 +3054,7 @@ body.has-wallpaper .vec-pane__term {
 }
 .settings__nav-item.is-active svg {
   opacity: 1;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .settings__body {
@@ -3060,7 +3079,7 @@ body.has-wallpaper .vec-pane__term {
   margin-right: auto;
   order: -1;
   padding: 5px 8px;
-  font-size: 12px;
+  font-size: var(--fs-2);
   color: var(--muted);
   user-select: text;
   cursor: text;
@@ -3071,12 +3090,12 @@ body.has-wallpaper .vec-pane__term {
   align-items: center;
   gap: 9px;
   padding: 5px 8px;
-  font-size: 12px;
+  font-size: var(--fs-2);
   color: var(--muted);
   background: transparent;
   border: none;
   border-radius: var(--r-xs);
-  cursor: pointer;
+  cursor: default;
   transition: color var(--dur-select) var(--ease-out);
 }
 
@@ -3097,7 +3116,7 @@ body.has-wallpaper .vec-pane__term {
   appearance: none;
   background: rgba(255, 255, 255, 0.14);
   border-radius: 999px;
-  cursor: pointer;
+  cursor: default;
 }
 .settings__slider input[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -3108,11 +3127,10 @@ body.has-wallpaper .vec-pane__term {
   background: #fff;
   border: 1px solid rgba(0, 0, 0, 0.2);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
-  cursor: pointer;
+  cursor: default;
   transition: transform var(--dur-select) var(--ease-out);
 }
 .settings__slider input[type='range']::-webkit-slider-thumb:hover {
-  transform: scale(1.12);
 }
 .settings__slider .settings__value {
   min-width: 48px;
@@ -3120,7 +3138,7 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .settings__section {
-  font-size: 11px;
+  font-size: var(--fs-1);
   text-transform: uppercase;
   letter-spacing: 0.7px;
   color: var(--muted);
@@ -3132,20 +3150,29 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .settings__row {
-  display: flex;
+  display: grid;
+  /* A shared control column. This was `justify-content: space-between`, which
+     let every row's control begin wherever its own label happened to end —
+     selects, sliders and checkboxes each sat on a different left edge, and the
+     column read as ragged. A fixed track puts them all on one axis. */
+  grid-template-columns: 1fr 190px;
   align-items: center;
-  justify-content: space-between;
   gap: 14px;
   padding: 9px 0;
 }
+/* Controls fill the track and align to its right edge, so a narrow checkbox and
+   a wide select still share the same outer margin. */
+.settings__row > *:last-child {
+  justify-self: end;
+}
 
 .settings__row--toggle {
-  cursor: pointer;
+  cursor: default;
 }
 
 .settings__label {
   font-family: var(--font-serif);
-  font-size: 13.5px;
+  font-size: var(--fs-4);
   color: var(--text);
   display: flex;
   flex-direction: column;
@@ -3153,14 +3180,14 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .settings__hint {
-  font-size: 11.5px;
+  font-size: var(--fs-2);
   color: var(--muted);
 }
 
 .settings__select {
   min-width: 190px;
   padding: 7px 10px;
-  font-size: 12.5px;
+  font-size: var(--fs-3);
   color: var(--text);
   background: var(--surface-input);
   border: 1px solid var(--glass-border);
@@ -3177,7 +3204,7 @@ body.has-wallpaper .vec-pane__term {
 
 /* Shortcut-capture button (styled like a select; highlights while recording). */
 .settings__shortcut {
-  cursor: pointer;
+  cursor: default;
   text-align: center;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.04em;
@@ -3189,7 +3216,7 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .settings__select option {
-  background: #0e1726;
+  background: #221b19;
   color: var(--text);
 }
 
@@ -3204,12 +3231,12 @@ body.has-wallpaper .vec-pane__term {
   height: 26px;
   display: grid;
   place-items: center;
-  font-size: 15px;
+  font-size: var(--fs-5);
   color: var(--text);
   background: var(--glass-bg-strong);
   border: 1px solid var(--glass-border);
   border-radius: var(--r-xs);
-  cursor: pointer;
+  cursor: default;
   transition: border-color var(--dur-select) var(--ease-out),
     background var(--dur-select) var(--ease-out);
 }
@@ -3221,12 +3248,12 @@ body.has-wallpaper .vec-pane__term {
 
 .settings__btn {
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: var(--fs-2);
   color: var(--text);
   background: var(--glass-bg-strong);
   border: 1px solid var(--glass-border);
   border-radius: var(--r-xs);
-  cursor: pointer;
+  cursor: default;
   transition: background var(--dur-select) var(--ease-out),
     border-color var(--dur-select) var(--ease-out);
 }
@@ -3267,13 +3294,13 @@ body.has-wallpaper .vec-pane__term {
 .settings__seg-btn {
   padding: 5px 13px;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-2);
   font-weight: 500;
   color: var(--muted);
   background: transparent;
   border: none;
   border-radius: calc(var(--r-xs) - 2px);
-  cursor: pointer;
+  cursor: default;
   transition: color var(--dur-select) var(--ease-out),
     background var(--dur-select) var(--ease-out);
 }
@@ -3285,7 +3312,7 @@ body.has-wallpaper .vec-pane__term {
 
 /* White-on-accent in BOTH themes (like the dock's segmented toggle). */
 .settings__seg-btn.is-active {
-  color: #fff;
+  color: var(--sub-1);
   background: linear-gradient(180deg, var(--accent-2), var(--accent));
   box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.35);
 }
@@ -3295,13 +3322,14 @@ body.has-wallpaper .vec-pane__term {
   box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.6);
 }
 
+/* Five per row rather than free wrapping: ten swatches at 22px were breaking
+   7 + 3, which reads as an accident rather than a grid. */
 .settings__swatches {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(5, 22px);
+  justify-content: end;
   align-items: center;
-  justify-content: flex-end;
   gap: 8px;
-  max-width: 230px;
 }
 
 .settings__swatch {
@@ -3310,18 +3338,17 @@ body.has-wallpaper .vec-pane__term {
   padding: 0;
   border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  cursor: pointer;
+  cursor: default;
   position: relative;
   transition: transform var(--dur-select) var(--ease-out);
 }
 
 .settings__swatch:hover {
-  transform: scale(1.12);
 }
 
 .settings__swatch.is-active {
   box-shadow:
-    0 0 0 2px rgba(16, 18, 24, 0.9),
+    0 0 0 2px rgba(34, 27, 25, 0.9),
     0 0 0 4px #fff;
 }
 
@@ -3329,13 +3356,13 @@ body.has-wallpaper .vec-pane__term {
   overflow: hidden;
   background: conic-gradient(
     from 0deg,
-    #f43f5e,
-    #f59e0b,
-    #22c55e,
-    #14b8a6,
-    #2f6bff,
-    #8b5cf6,
-    #f43f5e
+    #d97a68,
+    #c9924e,
+    #b9a184,
+    #7d9b6a,
+    #8a9b8c,
+    #a06a72,
+    #d97a68
   );
 }
 
@@ -3347,18 +3374,18 @@ body.has-wallpaper .vec-pane__term {
   opacity: 0;
   border: none;
   padding: 0;
-  cursor: pointer;
+  cursor: default;
 }
 
 .settings__value {
   min-width: 22px;
   text-align: center;
-  font-size: 13px;
+  font-size: var(--fs-3);
   color: var(--text);
 }
 
 .settings__soon {
-  font-size: 12px;
+  font-size: var(--fs-2);
   color: var(--muted);
   line-height: 1.7;
 }
@@ -3374,18 +3401,18 @@ body.has-wallpaper .vec-pane__term {
   overflow: hidden;
   background:
     linear-gradient(160deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.025) 48%),
-    rgba(15, 21, 32, 0.72);
+    rgba(34, 27, 25, 0.72);
   backdrop-filter: var(--blur-lg);
   -webkit-backdrop-filter: var(--blur-lg);
-  border: 1px solid var(--line-2);
+  border: 0;
   box-shadow:
-    var(--glass-specular),
+    var(--seam-strong),
     var(--shadow-pop);
 }
 
 .palette__input {
   padding: 16px 18px;
-  font-size: 15px;
+  font-size: var(--fs-5);
   color: var(--text);
   background: transparent;
   border: none;
@@ -3402,7 +3429,7 @@ body.has-wallpaper .vec-pane__term {
 /* Section header between command groups (browse mode only). */
 .palette__head {
   padding: 10px 12px 4px;
-  font-size: 10.5px;
+  font-size: var(--fs-1);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -3420,12 +3447,12 @@ body.has-wallpaper .vec-pane__term {
   width: 100%;
   padding: 9px 12px;
   text-align: left;
-  font-size: 13.5px;
+  font-size: var(--fs-4);
   color: var(--text);
   background: transparent;
   border: none;
   border-radius: var(--r-xs);
-  cursor: pointer;
+  cursor: default;
   transition: background var(--dur-select) var(--ease-out);
 }
 
@@ -3438,7 +3465,7 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .palette__item-hint {
-  font-size: 11px;
+  font-size: var(--fs-1);
   color: var(--muted);
 }
 
@@ -3447,14 +3474,14 @@ body.has-wallpaper .vec-pane__term {
   color: var(--muted);
   font-family: var(--font-serif);
   font-style: italic;
-  font-size: 13.5px;
+  font-size: var(--fs-4);
 }
 
 /* ---------- Keycap (shortcut chords in the help overlay & settings) ---------- */
 .kbd {
   padding: 2px 7px;
   font-family: inherit;
-  font-size: 11px;
+  font-size: var(--fs-1);
   font-weight: 500;
   line-height: 1.5;
   white-space: nowrap;
@@ -3479,12 +3506,12 @@ body.has-wallpaper .vec-pane__term {
   overflow: hidden;
   background:
     linear-gradient(160deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.025) 48%),
-    rgba(15, 21, 32, 0.66);
+    rgba(20, 16, 15, 0.66);
   backdrop-filter: var(--blur-lg);
   -webkit-backdrop-filter: var(--blur-lg);
-  border: 1px solid var(--line-2);
+  border: 0;
   box-shadow:
-    var(--glass-specular),
+    var(--seam-strong),
     var(--shadow-pop);
 }
 
@@ -3527,7 +3554,7 @@ body.has-wallpaper .vec-pane__term {
 
 .shortcuts__heading {
   margin: 0 0 7px;
-  font-size: 11px;
+  font-size: var(--fs-1);
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -3539,7 +3566,7 @@ body.has-wallpaper .vec-pane__term {
   align-items: center;
   gap: 9px;
   padding: 3.5px 0;
-  font-size: 12.5px;
+  font-size: var(--fs-3);
   color: var(--text);
 }
 
@@ -3552,7 +3579,7 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .shortcuts__note {
-  font-size: 11px;
+  font-size: var(--fs-1);
   color: var(--muted);
   white-space: nowrap;
 }
@@ -3565,25 +3592,25 @@ body.has-wallpaper .vec-pane__term {
   border-radius: var(--r-lg);
   background:
     linear-gradient(160deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02) 50%),
-    rgba(15, 21, 32, 0.72);
+    rgba(34, 27, 25, 0.72);
   backdrop-filter: var(--blur-lg);
   -webkit-backdrop-filter: var(--blur-lg);
-  border: 1px solid var(--line-2);
+  border: 0;
   box-shadow:
-    var(--glass-specular),
+    var(--seam-strong),
     var(--shadow-pop);
 }
 
 .confirm__title {
   font-family: var(--font-serif);
-  font-size: 16px;
+  font-size: var(--fs-5);
   font-weight: 600;
   color: var(--ink-strong);
   margin-bottom: 8px;
 }
 
 .confirm__body {
-  font-size: 13px;
+  font-size: var(--fs-3);
   color: var(--text-2);
   line-height: 1.55;
 }
@@ -3602,12 +3629,12 @@ body.has-wallpaper .vec-pane__term {
 
 .confirm__btn {
   padding: 8px 14px;
-  font-size: 12.5px;
+  font-size: var(--fs-3);
   color: var(--text);
   background: var(--glass-bg-strong);
   border: 1px solid var(--glass-border);
   border-radius: var(--r-xs);
-  cursor: pointer;
+  cursor: default;
   transition: background var(--dur-select) var(--ease-out),
     border-color var(--dur-select) var(--ease-out);
 }
@@ -3617,7 +3644,7 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .confirm__btn--safe {
-  color: #cfe0ff;
+  color: #e8ded9;
   border-color: rgba(var(--accent-rgb), 0.45);
 }
 
@@ -3640,12 +3667,12 @@ body.has-wallpaper .vec-pane__term {
   overflow: hidden;
   background:
     linear-gradient(160deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.025) 48%),
-    rgba(15, 21, 32, 0.66);
+    rgba(20, 16, 15, 0.66);
   backdrop-filter: var(--blur-lg);
   -webkit-backdrop-filter: var(--blur-lg);
-  border: 1px solid var(--line-2);
+  border: 0;
   box-shadow:
-    var(--glass-specular),
+    var(--seam-strong),
     var(--shadow-pop);
 }
 .feedback__body {
@@ -3656,7 +3683,7 @@ body.has-wallpaper .vec-pane__term {
 }
 .feedback__intro {
   margin: 0;
-  font-size: 12.5px;
+  font-size: var(--fs-3);
   line-height: 1.5;
   color: var(--text-2);
 }
@@ -3680,13 +3707,13 @@ body.has-wallpaper .vec-pane__term {
   min-height: 122px;
   resize: vertical;
   padding: 10px 12px;
-  font-size: 13px;
+  font-size: var(--fs-3);
   line-height: 1.5;
   border-radius: var(--r-sm);
 }
 .feedback__email {
   padding: 9px 12px;
-  font-size: 12.5px;
+  font-size: var(--fs-3);
   border-radius: var(--r-xs);
 }
 .feedback__text::placeholder,
@@ -3706,7 +3733,7 @@ body.has-wallpaper .vec-pane__term {
   border-top: 1px solid var(--hairline);
 }
 .feedback__meta {
-  font-size: 11.5px;
+  font-size: var(--fs-2);
   color: var(--muted);
   user-select: text;
 }
@@ -3716,13 +3743,13 @@ body.has-wallpaper .vec-pane__term {
   gap: 7px;
   padding: 8px 16px;
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--fs-3);
   font-weight: 600;
   color: var(--text);
   background: var(--accent);
   border: none;
   border-radius: var(--r-xs);
-  cursor: pointer;
+  cursor: default;
   transition: filter var(--dur-select) var(--ease-out);
 }
 .feedback__send:hover:not(:disabled) {
@@ -3747,12 +3774,12 @@ body.has-wallpaper .vec-pane__term {
   overflow: hidden;
   background:
     linear-gradient(160deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02) 50%),
-    rgba(15, 21, 32, 0.74);
+    rgba(34, 27, 25, 0.74);
   backdrop-filter: var(--blur-lg);
   -webkit-backdrop-filter: var(--blur-lg);
-  border: 1px solid var(--line-2);
+  border: 0;
   box-shadow:
-    var(--glass-specular),
+    var(--seam-strong),
     var(--shadow-pop);
 }
 
@@ -3774,13 +3801,13 @@ body.has-wallpaper .vec-pane__term {
 
 .review__name {
   font-family: var(--font-serif);
-  font-size: 16px;
+  font-size: var(--fs-5);
   font-weight: 600;
   color: var(--ink-strong);
 }
 
 .review__branch {
-  font-size: 11.5px;
+  font-size: var(--fs-2);
   color: var(--muted);
   font-family: var(--font-mono);
   white-space: nowrap;
@@ -3794,14 +3821,14 @@ body.has-wallpaper .vec-pane__term {
   margin-left: auto;
   margin-right: 8px;
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--fs-2);
   white-space: nowrap;
 }
 .review__sum-files {
   color: var(--text-2);
 }
 .review__sum-add {
-  color: #6fe0b4;
+  color: #9bb98a;
   font-weight: 600;
 }
 .review__sum-del {
@@ -3815,7 +3842,7 @@ body.has-wallpaper .vec-pane__term {
   padding: 8px 0;
   min-height: 140px;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-2);
   line-height: 1.55;
 }
 
@@ -3824,10 +3851,10 @@ body.has-wallpaper .vec-pane__term {
   margin: 4px 14px 12px;
   padding: 9px 12px;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: var(--fs-2);
   color: #ffd9a0;
-  background: rgba(255, 159, 10, 0.1);
-  border: 1px solid rgba(255, 159, 10, 0.28);
+  background: rgba(201, 146, 78, 0.1);
+  border: 1px solid rgba(201, 146, 78, 0.28);
   border-radius: var(--r-sm);
 }
 
@@ -3845,14 +3872,12 @@ body.has-wallpaper .vec-pane__term {
   gap: 9px;
   padding: 7px 14px;
   font-family: var(--font-ui);
-  background: linear-gradient(180deg, rgba(24, 30, 42, 0.97), rgba(20, 26, 36, 0.95));
+  background: linear-gradient(180deg, rgba(34, 27, 25, 0.97), rgba(34, 27, 25, 0.95));
   border-top: 1px solid var(--line-1);
   border-bottom: 1px solid var(--line-1);
-  backdrop-filter: var(--blur-sm);
-  -webkit-backdrop-filter: var(--blur-sm);
 }
 .review__file--untracked {
-  background: linear-gradient(180deg, rgba(20, 34, 28, 0.95), rgba(18, 30, 26, 0.92));
+  background: linear-gradient(180deg, rgba(30, 36, 26, 0.95), rgba(28, 33, 24, 0.92));
 }
 .review__fstat {
   flex: 0 0 auto;
@@ -3862,12 +3887,12 @@ body.has-wallpaper .vec-pane__term {
   height: 18px;
   border-radius: 5px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-1);
   font-weight: 700;
 }
 .review__fstat--add {
-  color: #6fe0b4;
-  background: rgba(64, 200, 150, 0.16);
+  color: #9bb98a;
+  background: rgba(125, 155, 106, 0.16);
 }
 .review__fstat--del {
   color: #ff9b94;
@@ -3878,8 +3903,8 @@ body.has-wallpaper .vec-pane__term {
   background: rgba(255, 180, 60, 0.16);
 }
 .review__fstat--ren {
-  color: #8fb8ff;
-  background: rgba(90, 140, 255, 0.16);
+  color: #c4ab8a;
+  background: rgba(185, 161, 132, 0.16);
 }
 /* Per-file include checkbox — drives merge-vs-partial-apply in the footer. */
 .review__fcheck {
@@ -3888,7 +3913,7 @@ body.has-wallpaper .vec-pane__term {
   height: 14px;
   margin: 0;
   accent-color: rgba(var(--accent-rgb), 0.9);
-  cursor: pointer;
+  cursor: default;
 }
 .review__fcheck:disabled {
   opacity: 0.4;
@@ -3897,7 +3922,7 @@ body.has-wallpaper .vec-pane__term {
 .review__fname {
   flex: 1;
   min-width: 0;
-  font-size: 12.5px;
+  font-size: var(--fs-3);
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
@@ -3908,7 +3933,7 @@ body.has-wallpaper .vec-pane__term {
   display: flex;
   gap: 8px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-1);
 }
 
 .review__empty {
@@ -3917,7 +3942,7 @@ body.has-wallpaper .vec-pane__term {
   color: var(--muted);
   font-family: var(--font-serif);
   font-style: italic;
-  font-size: 13.5px;
+  font-size: var(--fs-4);
 }
 
 .review__empty--ok {
@@ -3927,7 +3952,7 @@ body.has-wallpaper .vec-pane__term {
 
 .review__error {
   padding: 9px 18px;
-  font-size: 12px;
+  font-size: var(--fs-2);
   color: #ff9b94;
   background: rgba(255, 90, 90, 0.1);
   border-top: 1px solid var(--line-1);
@@ -3938,9 +3963,9 @@ body.has-wallpaper .vec-pane__term {
 .review__conflict {
   padding: 12px 18px;
   font-family: var(--font-ui);
-  font-size: 12px;
-  background: rgba(255, 159, 10, 0.08);
-  border-top: 1px solid rgba(255, 159, 10, 0.28);
+  font-size: var(--fs-2);
+  background: rgba(201, 146, 78, 0.08);
+  border-top: 1px solid rgba(201, 146, 78, 0.28);
 }
 .review__conflict-title {
   font-weight: 600;
@@ -3951,7 +3976,7 @@ body.has-wallpaper .vec-pane__term {
   overflow: auto;
   margin: 8px 0;
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--fs-2);
   line-height: 1.6;
   color: #ffd9a0;
 }
@@ -3962,10 +3987,10 @@ body.has-wallpaper .vec-pane__term {
 .review__conflict-hint code {
   padding: 1px 5px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-1);
   color: #ffd9a0;
-  background: rgba(255, 159, 10, 0.12);
-  border: 1px solid rgba(255, 159, 10, 0.22);
+  background: rgba(201, 146, 78, 0.12);
+  border: 1px solid rgba(201, 146, 78, 0.22);
   border-radius: 4px;
 }
 
@@ -3988,7 +4013,7 @@ body.has-wallpaper .vec-pane__term {
   flex: 1;
   min-width: 0;
   padding: 8px 12px;
-  font-size: 13px;
+  font-size: var(--fs-3);
   color: var(--text);
   background: var(--surface-input);
   border: 1px solid var(--glass-border);
@@ -4005,12 +4030,12 @@ body.has-wallpaper .vec-pane__term {
 
 .review__btn {
   padding: 8px 16px;
-  font-size: 12.5px;
+  font-size: var(--fs-3);
   color: var(--text);
   background: var(--glass-bg-strong);
   border: 1px solid var(--glass-border);
   border-radius: var(--r-sm);
-  cursor: pointer;
+  cursor: default;
   white-space: nowrap;
   transition: background var(--dur-select) var(--ease-out), filter var(--dur-select) var(--ease-out);
 }
@@ -4025,9 +4050,9 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .review__btn--merge {
-  color: #06121c;
+  color: #14100f;
   font-weight: 600;
-  background: linear-gradient(180deg, #5fe0b0, #34c08a);
+  background: linear-gradient(180deg, #8fb07e, #6d8a5c);
   border-color: rgba(255, 255, 255, 0.25);
 }
 
@@ -4047,9 +4072,9 @@ body.has-wallpaper .vec-pane__term {
 /* Clickable branch chip (opens the review) */
 .vec-pane__branch--btn {
   font: inherit;
-  font-size: 10px;
+  font-size: var(--fs-1);
   line-height: 1.4;
-  cursor: pointer;
+  cursor: default;
   transition: background var(--dur-select) var(--ease-out),
     border-color var(--dur-select) var(--ease-out), color var(--dur-select) var(--ease-out);
 }
@@ -4064,7 +4089,7 @@ body.has-wallpaper .vec-pane__term {
   flex: 1;
   min-width: 0;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fs-2);
   color: var(--ink-strong);
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid var(--accent);
@@ -4100,28 +4125,16 @@ body.has-wallpaper .vec-pane__term {
   display: flex;
   flex-direction: column;
   align-items: center;
-  animation: home-rise 620ms var(--ease-decelerate) both;
+  animation: home-rise 300ms var(--ease-decelerate) both;
 }
 /* A soft accent spotlight behind the hero so the emblem + title sit in their own
    pool of light (depth without a hard card). */
 .home__hero::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 18%;
-  width: 560px;
-  height: 360px;
-  transform: translate(-50%, -50%);
-  background: radial-gradient(
-    circle,
-    rgba(var(--accent-rgb), 0.18),
-    rgba(var(--accent-rgb), 0.06) 38%,
-    transparent 68%
-  );
-  filter: blur(8px);
-  pointer-events: none;
-  z-index: -1;
-  animation: hero-glow 6s ease-in-out infinite;
+  /* Was a pulsing radial accent bloom behind the wordmark. A concentric glow
+     sitting behind a hero object is decoration standing in for composition,
+     and it was animating forever besides. The wordmark carries the hero on
+     its own. */
+  content: none;
 }
 /* (`.home__hero > svg, > img` rules removed — the hero renders a masked
    `.home__wordmark` heading now, so these matched nothing. `home-float` is
@@ -4135,14 +4148,15 @@ body.has-wallpaper .vec-pane__term {
     transform: translateY(-7px);
   }
 }
+/* Animates POSITION ONLY. This used to start at opacity 0, which made the Home
+   screen's existence depend on an animation completing — if it never ran, the
+   launcher rendered blank. Content is visible by default; motion moves what is
+   already on screen, it never gates whether it is there. */
 @keyframes home-rise {
   from {
-    opacity: 0;
     transform: translateY(14px);
   }
   to {
-    opacity: 1;
-    transform: none;
   }
 }
 @keyframes hero-glow {
@@ -4175,18 +4189,18 @@ body.has-wallpaper .vec-pane__term {
   color: var(--text-2);
   font-family: var(--font-serif);
   font-style: italic;
-  font-size: 16px;
+  font-size: var(--fs-5);
   line-height: 1.5;
 }
 .home__open {
   padding: 12px 24px;
-  font-size: 14px;
+  font-size: var(--fs-4);
   font-weight: 600;
   color: #fff;
   background: linear-gradient(180deg, var(--accent-2), var(--accent));
   border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: var(--r-md);
-  cursor: pointer;
+  cursor: default;
   box-shadow:
     0 0 22px rgba(var(--accent-rgb), 0.5),
     0 8px 22px rgba(var(--accent-rgb), 0.3);
@@ -4196,7 +4210,6 @@ body.has-wallpaper .vec-pane__term {
 }
 .home__open:hover {
   filter: brightness(1.07);
-  transform: translateY(-1px);
 }
 .home__open:active {
   transform: scale(0.97);
@@ -4205,10 +4218,7 @@ body.has-wallpaper .vec-pane__term {
    ring on keyboard focus, not Chromium's faint default outline on the gradient. */
 .home__open:focus-visible {
   outline: none;
-  box-shadow:
-    0 0 0 2px rgba(var(--accent-rgb), 0.75),
-    0 0 22px rgba(var(--accent-rgb), 0.5),
-    0 8px 22px rgba(var(--accent-rgb), 0.3);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.75), var(--shadow-float);
 }
 /* Windows High Contrast drops background-clip:text, leaving the gradient wordmark
    invisible — restore a solid colour there. */
@@ -4244,23 +4254,12 @@ body.has-wallpaper .vec-pane__term {
   aspect-ratio: 627 / 291;
   -webkit-mask: url('./assets/wordmark.svg') center / contain no-repeat;
   mask: url('./assets/wordmark.svg') center / contain no-repeat;
-  background: linear-gradient(
-    100deg,
-    #ffffff 0%,
-    #ffffff 38%,
-    var(--accent-2) 50%,
-    #ffffff 62%,
-    #ffffff 100%
-  );
-  background-size: 220% 100%;
-  /* Both animations live here: a separate `.home__hero > .home__wordmark` rule
-     would outrank this one and silently drop the sheen. Filter runs after the
-     mask, so the glow traces the letterforms rather than a box. */
-  filter: drop-shadow(0 0 34px rgba(var(--accent-rgb), 0.5));
-  animation:
-    title-sheen 9s ease-in-out infinite,
-    home-float 6s ease-in-out infinite;
-  will-change: transform;
+  /* Flat ink. This was a gradient poured through the mask, with a travelling
+     sheen, a drop-shadow glow tracing the letterforms, and a float loop — four
+     decorative effects on one element. A wordmark is a signature; it does not
+     need to shimmer to be looked at. The mask stays, because it still lets the
+     ink follow the theme instead of being baked into the asset. */
+  background: var(--text);
 }
 @media (prefers-reduced-motion: reduce) {
   .home__wordmark {
@@ -4299,13 +4298,13 @@ body.has-wallpaper .vec-pane__term {
   width: 20px;
   height: 20px;
   padding: 0;
-  font-size: 12px;
+  font-size: var(--fs-2);
   line-height: 1;
   color: var(--text-2);
   background: transparent;
   border: none;
   border-radius: var(--r-xs);
-  cursor: pointer;
+  cursor: default;
   opacity: 0.7;
   transition: opacity var(--dur-select) var(--ease-out);
 }
@@ -4315,13 +4314,13 @@ body.has-wallpaper .vec-pane__term {
 .review__empty-sub {
   display: block;
   margin-top: 8px;
-  font-size: 12.5px;
+  font-size: var(--fs-3);
   color: var(--text-2);
 }
 .home__hint {
   margin: 22px auto 0;
   max-width: 440px;
-  font-size: 13px;
+  font-size: var(--fs-3);
   line-height: 1.6;
   color: var(--text-2);
   padding: 12px 16px;
@@ -4335,7 +4334,7 @@ body.has-wallpaper .vec-pane__term {
   background: none;
   border: none;
   padding: 0;
-  cursor: pointer;
+  cursor: default;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -4344,11 +4343,11 @@ body.has-wallpaper .vec-pane__term {
 }
 .home__recents {
   width: min(720px, 92%);
-  animation: home-rise 620ms var(--ease-decelerate) 80ms both;
+  animation: home-rise 300ms var(--ease-decelerate) 80ms both;
 }
 .home__recents-head {
   font-family: var(--font-serif);
-  font-size: 13px;
+  font-size: var(--fs-3);
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--muted);
@@ -4370,11 +4369,11 @@ body.has-wallpaper .vec-pane__term {
   border-radius: var(--r-md);
   background:
     linear-gradient(160deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.015) 60%),
-    rgba(15, 21, 32, 0.6);
+    rgba(34, 27, 25, 0.6);
   border: 1px solid var(--line-2);
-  cursor: pointer;
+  cursor: default;
   /* Staggered rise on first paint (delay set inline per card). */
-  animation: card-rise 460ms var(--ease-decelerate) both;
+  animation: card-rise 300ms var(--ease-decelerate) both;
   transition:
     transform var(--dur-select) var(--ease-out),
     border-color var(--dur-select) var(--ease-out),
@@ -4392,10 +4391,8 @@ body.has-wallpaper .vec-pane__term {
   pointer-events: none;
 }
 .home__card:hover::after {
-  transform: translateX(130%);
 }
 .home__card:hover {
-  transform: translateY(-2px);
   border-color: rgba(var(--accent-rgb), 0.6);
   box-shadow:
     0 12px 30px rgba(0, 0, 0, 0.4),
@@ -4409,14 +4406,12 @@ body.has-wallpaper .vec-pane__term {
   border-color: rgba(var(--accent-rgb), 0.7);
   box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.6);
 }
+/* Position only — same reason as home-rise above. */
 @keyframes card-rise {
   from {
-    opacity: 0;
     transform: translateY(10px);
   }
   to {
-    opacity: 1;
-    transform: none;
   }
 }
 .home__card-emblem {
@@ -4426,7 +4421,7 @@ body.has-wallpaper .vec-pane__term {
   display: grid;
   place-items: center;
   border-radius: 11px;
-  font-size: 17px;
+  font-size: var(--fs-5);
   font-weight: 700;
   color: #fff;
   background: linear-gradient(150deg, var(--accent-2), var(--accent));
@@ -4438,7 +4433,7 @@ body.has-wallpaper .vec-pane__term {
   min-width: 0;
 }
 .home__card-name {
-  font-size: 14px;
+  font-size: var(--fs-4);
   font-weight: 600;
   color: var(--text);
   white-space: nowrap;
@@ -4446,7 +4441,7 @@ body.has-wallpaper .vec-pane__term {
   text-overflow: ellipsis;
 }
 .home__card-path {
-  font-size: 12px;
+  font-size: var(--fs-2);
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
@@ -4461,9 +4456,7 @@ body.has-wallpaper .vec-pane__term {
   border-radius: var(--r-xl);
   background:
     linear-gradient(160deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.015) 50%),
-    rgba(15, 21, 32, 0.5);
-  backdrop-filter: var(--blur-md);
-  -webkit-backdrop-filter: var(--blur-md);
+    rgba(34, 27, 25, 0.5);
   border: 1px solid var(--line-2);
   box-shadow:
     var(--glass-specular),
@@ -4491,27 +4484,21 @@ body.has-wallpaper .vec-pane__term {
 .empty__btn {
   margin-top: 16px;
   padding: 11px 20px;
-  font-size: 14px;
+  font-size: var(--fs-4);
   color: #fff;
   font-weight: 600;
   background: linear-gradient(180deg, var(--accent-2), var(--accent));
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: var(--r-md);
-  cursor: pointer;
-  box-shadow:
-    0 0 18px rgba(var(--accent-rgb), 0.45),
-    0 6px 20px rgba(var(--accent-rgb), 0.32),
-    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  cursor: default;
+  box-shadow: var(--seam), var(--shadow-float);
   transition: filter var(--dur-select) var(--ease-out),
     box-shadow var(--dur-select) var(--ease-out);
 }
 
 .empty__btn:hover {
   filter: brightness(1.06);
-  box-shadow:
-    0 0 24px rgba(var(--accent-rgb), 0.55),
-    0 8px 26px rgba(var(--accent-rgb), 0.42),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  box-shadow: var(--seam), var(--shadow-float);
 }
 
 /* Two actions sit side by side on a folderless stage ("Open a folder…" +
@@ -4544,7 +4531,7 @@ body.has-wallpaper .vec-pane__term {
   inset: 0;
   display: flex;
   flex-direction: column;
-  background: rgba(10, 16, 26, 0.92);
+  background: rgba(20, 16, 15, 0.92);
 }
 
 .diff__bar {
@@ -4560,18 +4547,18 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .diff__base {
-  font-size: 11px;
+  font-size: var(--fs-1);
   color: var(--muted);
 }
 
 .diff__btn {
-  font-size: 11px;
+  font-size: var(--fs-1);
   color: var(--text);
   background: var(--card-bg-strong);
   border: 1px solid var(--glass-border);
   border-radius: 8px;
   padding: 4px 11px;
-  cursor: pointer;
+  cursor: default;
 }
 
 .diff__btn:disabled {
@@ -4580,9 +4567,9 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .diff__btn--merge {
-  color: #06121c;
+  color: #14100f;
   font-weight: 600;
-  background: linear-gradient(180deg, #5fe0b0, #34c08a);
+  background: linear-gradient(180deg, #8fb07e, #6d8a5c);
   border-color: rgba(255, 255, 255, 0.25);
 }
 
@@ -4593,9 +4580,9 @@ body.has-wallpaper .vec-pane__term {
 
 .diff__msg {
   padding: 7px 11px;
-  font-size: 12px;
+  font-size: var(--fs-2);
   color: var(--text);
-  background: rgba(220, 235, 255, 0.05);
+  background: rgba(242, 236, 233, 0.05);
   border-bottom: 1px solid var(--glass-border);
   white-space: pre-wrap;
 }
@@ -4605,7 +4592,7 @@ body.has-wallpaper .vec-pane__term {
   overflow: auto;
   padding: 6px 0;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-2);
   line-height: 1.5;
 }
 
@@ -4622,8 +4609,8 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .diff__line--add {
-  background: rgba(64, 200, 150, 0.16);
-  color: #9bf0cf;
+  background: rgba(125, 155, 106, 0.16);
+  color: #b3cba4;
 }
 
 .diff__line--del {
@@ -4632,11 +4619,11 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .diff__line--new {
-  color: #9bf0cf;
+  color: #b3cba4;
 }
 
 .diff__line--hunk {
-  color: #6fd0e0;
+  color: #c9a97e;
 }
 
 .diff__line--meta {
@@ -4649,7 +4636,7 @@ body.has-wallpaper .vec-pane__term {
   padding: 5px 10px;
   font-family: var(--font-serif);
   font-style: italic;
-  font-size: 12.5px;
+  font-size: var(--fs-3);
   color: var(--muted);
   background: var(--hover-bg-soft);
   border: 1px dashed var(--line-2);
@@ -4672,7 +4659,7 @@ body.has-wallpaper .vec-pane__term {
   place-items: center;
   padding: 32px;
   background: radial-gradient(900px 500px at 50% -10%, rgba(var(--accent-rgb), 0.18), transparent 60%),
-    #0a0c10;
+    #14100f;
   -webkit-app-region: drag;
 }
 .crash__card {
@@ -4687,19 +4674,19 @@ body.has-wallpaper .vec-pane__term {
 }
 .crash__title {
   font-family: var(--font-display);
-  font-size: 22px;
+  font-size: var(--fs-6);
   margin: 0 0 10px;
   color: var(--text);
 }
 .crash__msg {
-  font-size: 14px;
+  font-size: var(--fs-4);
   line-height: 1.6;
   color: var(--text-2);
   margin: 0 0 16px;
 }
 .crash__detail {
   font-family: 'Cascadia Code', Consolas, monospace;
-  font-size: 12px;
+  font-size: var(--fs-2);
   text-align: left;
   color: #ffb0a9;
   background: rgba(255, 90, 90, 0.1);
@@ -4717,406 +4704,152 @@ body.has-wallpaper .vec-pane__term {
   font: inherit;
   font-weight: 600;
   color: #fff;
-  cursor: pointer;
+  cursor: default;
   padding: 10px 22px;
   border-radius: 11px;
   border: 1px solid rgba(255, 255, 255, 0.22);
   background: linear-gradient(180deg, var(--accent-2), var(--accent));
-  box-shadow: 0 0 22px rgba(var(--accent-rgb), 0.45);
+  box-shadow: var(--seam), var(--shadow-float);
 }
 .crash__btn:hover {
   filter: brightness(1.07);
 }
+/* Per-agent override: a terminal can still be flipped to a paper interior if a
+   CLI's own output assumes a light background. Independent of app chrome, which
+   no longer has a theme to follow. */
+.vec-pane__term[data-term-theme='light'] {
+  background: rgba(255, 253, 252, var(--term-alpha, 0.92));
+}
+
 
 /* ----------------------------------------------------------------------------
-   Light theme — component overrides. Everything the token flip above can't
-   reach: hardcoded dark surfaces, white-highlight gradients, and status tints
-   that assumed a dark backdrop. Grouped here (instead of inline next to each
-   rule) so the dark cascade above stays byte-for-byte untouched.
+   Reduced transparency. Sits alongside prefers-reduced-motion: a user who asks
+   the OS to cut translucency gets solid surfaces, not a weaker blur. Glass
+   survives on transient surfaces only (palette, menus, modals, toasts), so this
+   is the complete list of what has to solidify.
+---------------------------------------------------------------------------- */
+@media (prefers-reduced-transparency: reduce) {
+  .palette,
+  .menu,
+  .toast,
+  .modal,
+  .confirm,
+  .feedback,
+  .settings,
+  .shortcuts {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: var(--sub-4) !important;
+  }
+}
+
+
+/* ----------------------------------------------------------------------------
+   Tabular figures. Any number that changes while the user is looking at it
+   holds its digits in fixed-width columns — otherwise the glyphs differ in
+   advance width and everything beside them twitches on each tick.
+---------------------------------------------------------------------------- */
+.tab__count,
+.rail-btn__badge,
+.vec-pane__timer,
+.diff__stat,
+.review__stat {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+
+/* ----------------------------------------------------------------------------
+   Native desktop behaviour. Three rules that account for most of the "this is a
+   web page in a window" feeling, all of them things real desktop apps do and
+   almost no Electron app bothers with.
 ---------------------------------------------------------------------------- */
 
-/* Warm paper-white scene instead of the dark veil. */
-:root[data-theme='light'] body {
-  background:
-    radial-gradient(1200px 820px at 18% -6%, rgba(var(--brand-rgb), 0.08), transparent 55%),
-    linear-gradient(180deg, #f5f4f0, #edece7);
+/* 1. The arrow cursor, everywhere. A hand cursor over a button is a browser
+      convention; native controls do not do it. External links keep it, because
+      there the hand is telling the truth: you are leaving the app. */
+body {
+  cursor: default;
+}
+a[href^='http'],
+a[target='_blank'] {
+  cursor: pointer;
 }
 
-/* Wallpaper scrim flips to a light veil so light chrome stays legible over it. */
-:root[data-theme='light'] .wallpaper::after {
-  background: linear-gradient(180deg, rgba(246, 245, 242, 0.3), rgba(246, 245, 242, 0.5));
+/* 2. Interface text is not selectable. Dragging across a toolbar and
+      highlighting the labels is a web behaviour. Anything that is CONTENT
+      rather than chrome opts back in. */
+body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+.vec-pane__term,
+.xterm,
+.fileview,
+.diff__body,
+.review__body,
+input,
+textarea,
+[contenteditable='true'] {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
-/* Aurora stays, but desaturated and quieter so the background reads airy, not
-   murky — on paper-white the full-strength orbs looked like bruises. */
-:root[data-theme='light'] .aurora__orb--1 {
-  background: radial-gradient(circle, rgba(var(--brand-rgb), 0.16), transparent 62%);
-}
-:root[data-theme='light'] .aurora__orb--2 {
-  background: radial-gradient(circle, rgba(46, 132, 162, 0.12), transparent 62%);
-}
-:root[data-theme='light'] .aurora__orb--3 {
-  background: radial-gradient(circle, rgba(122, 92, 222, 0.09), transparent 62%);
-}
-
-/* Film grain: overlay blend brightens on light — keep it fainter. */
-:root[data-theme='light'] .grain {
-  opacity: 0.03;
+/* 3. Unfocused panes recede rather than the focused one being marked. Dimming
+      and desaturating the others adds no ink to an already dense interface,
+      where a ring around the active pane would. The focused pane is simply the
+      one that has not receded. */
+.stage__panes .vec-pane:not(.is-selected):not(.is-focused) {
+  opacity: 0.82;
+  filter: saturate(0.7);
+  transition:
+    opacity var(--dur-select) var(--ease-out),
+    filter var(--dur-select) var(--ease-out);
 }
 
-/* Modal scrim: still a dark dim (standard on light UIs) but softer. */
-:root[data-theme='light'] .modal {
-  background: rgba(34, 40, 54, 0.32);
+/* 4. The whole window desaturates when it loses focus — the window-level
+      version of the same idea. windowFocus.ts stamps the class. */
+body.is-window-blurred .app {
+  filter: saturate(0.55);
+  transition: filter 200ms var(--ease-out);
 }
 
-/* ---- Project bar ---- */
-:root[data-theme='light'] .projbar__btn {
-  background: linear-gradient(150deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.45) 58%),
-    rgba(250, 250, 252, 0.72);
-  box-shadow:
-    var(--glass-specular),
-    inset 0 0 0 0.5px rgba(255, 255, 255, 0.5),
-    0 1px 0 rgba(255, 255, 255, 0.4),
-    0 12px 30px rgba(31, 38, 54, 0.16);
-}
-:root[data-theme='light'] .projbar__btn:hover {
-  background: linear-gradient(150deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.6) 58%),
-    rgba(252, 252, 254, 0.8);
-  box-shadow:
-    var(--glass-specular),
-    0 0 0 1px rgba(var(--accent-rgb), 0.12),
-    0 0 22px rgba(var(--accent-rgb), 0.18),
-    0 14px 34px rgba(31, 38, 54, 0.18);
-}
-:root[data-theme='light'] .projbar__btn.is-open {
-  box-shadow:
-    var(--glass-specular),
-    0 0 0 1px rgba(var(--accent-rgb), 0.18),
-    0 0 24px rgba(var(--accent-rgb), 0.22),
-    0 14px 34px rgba(31, 38, 54, 0.18);
-}
-:root[data-theme='light'] .projbar__btn:focus-visible {
-  box-shadow:
-    var(--glass-specular),
-    0 0 0 2px rgba(var(--accent-rgb), 0.6),
-    0 12px 30px rgba(31, 38, 54, 0.16);
-}
-:root[data-theme='light'] .projbar__emblem--empty {
-  background: rgba(18, 22, 32, 0.07);
-}
-/* Standing-caution chip: darker amber ink for contrast on the light pill row. */
-:root[data-theme='light'] .projbar__chip {
-  color: #8a5a00;
-  background: linear-gradient(150deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.15) 58%),
-    rgba(199, 120, 0, 0.1);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.4),
-    0 6px 18px rgba(31, 38, 54, 0.12);
-}
-/* Workspace tab bar: light surface so the dark solid defaults don't invert. The
-   accent-lit active tab already works in both themes. */
-:root[data-theme='light'] .tabbar__tabs,
-:root[data-theme='light'] .tabbar__add {
-  background: rgba(250, 250, 252, 0.94);
-  box-shadow:
-    var(--glass-specular),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5),
-    0 8px 22px rgba(31, 38, 54, 0.14);
-}
-:root[data-theme='light'] .tab:hover {
-  background: rgba(18, 22, 32, 0.05);
-}
-:root[data-theme='light'] .tab__close:hover {
-  background: rgba(18, 22, 32, 0.1);
+/* Terminal ligatures off. Agent output is full of `--`, `==`, `->` and `!=`
+   used as DRAWING — box rules, diff markers, progress bars — not as operators.
+   Ligating them corrupts the picture the tool meant to paint. */
+.vec-pane__term,
+.xterm,
+.xterm-rows {
+  font-variant-ligatures: none;
+  font-feature-settings: 'liga' 0, 'calt' 0;
 }
 
-/* ---- Dock / rail ---- */
-:root[data-theme='light'] .rail {
-  background:
-    linear-gradient(150deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.5) 55%),
-    rgba(248, 248, 250, 0.78);
-}
-:root[data-theme='light'] .rail__seg {
-  background: rgba(18, 22, 32, 0.06);
-}
-:root[data-theme='light'] .rail__menu-item--danger:hover {
-  background: rgba(208, 69, 60, 0.1);
-  color: #b3382f;
+
+/* ----------------------------------------------------------------------------
+   Native control colours. Chromium paints the <select> popup list, the caret,
+   checkboxes and the text-selection highlight itself, and on Windows those
+   default to the system blue regardless of what the surrounding surface says.
+   Nothing above reaches them; these three rules do.
+---------------------------------------------------------------------------- */
+
+/* Checkboxes, radios, range thumbs, progress. */
+:root {
+  accent-color: var(--accent-ink);
 }
 
-/* ---- Terminal cards: light chrome, deliberately dark terminal wells ---- */
-/* A touch stronger card border so the light header + dark body read as one
-   intentional card, not a hole in the page. */
-:root[data-theme='light'] .vec-pane {
-  border-color: rgba(16, 20, 30, 0.28);
-}
-:root[data-theme='light'] .vec-pane__header {
-  background: linear-gradient(180deg, rgba(250, 250, 252, 0.92), rgba(242, 243, 246, 0.86));
-}
-/* Light terminals: a translucent WHITE veil (black text above it, via the
-   light xterm palette). The full opacity-slider range works again — a white
-   veil blending toward the light stage stays readable at any alpha, unlike
-   the old dark veil that had to be clamped near-opaque. */
-:root[data-theme='light'] .vec-pane__term {
-  background: rgba(255, 255, 255, var(--term-alpha, 0.8));
-}
-/* Per-pane theme override (context menu → Terminal theme): the pinned veil
-   must beat BOTH theme-scoped rules above, hence the doubled selectors. */
-.vec-pane__term[data-term-theme='dark'],
-:root[data-theme='light'] .vec-pane__term[data-term-theme='dark'] {
-  background: rgba(10, 13, 18, var(--term-alpha, 0.8));
-}
-.vec-pane__term[data-term-theme='light'],
-:root[data-theme='dark'] .vec-pane__term[data-term-theme='light'] {
-  background: rgba(255, 255, 255, var(--term-alpha, 0.8));
-}
-:root[data-theme='light'] .vec-pane__branch {
-  background: rgba(18, 26, 44, 0.05);
-}
-:root[data-theme='light'] .vec-pane__branch--shared {
-  color: #9a5f2e;
-}
-:root[data-theme='light'] .vec-pane__close:hover {
-  color: #b3382f;
-}
-/* The spawn-error panel sits on the still-dark terminal well: keep its text
-   light-on-dark in both themes (the flipped tokens would make it unreadable). */
-:root[data-theme='light'] .vec-pane__error-title {
-  color: #ff6b63;
-}
-:root[data-theme='light'] .vec-pane__error-msg {
-  color: rgba(235, 235, 245, 0.55);
-}
-:root[data-theme='light'] .vec-pane__retry {
-  color: rgba(255, 255, 255, 0.95);
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.14);
-}
-:root[data-theme='light'] .vec-pane__retry:hover {
-  background: rgba(255, 255, 255, 0.14);
-}
-/* Same story for the "process ended" bar floating over the dark well. */
-:root[data-theme='light'] .vec-pane__ended {
-  color: rgba(235, 235, 245, 0.6);
-}
-/* The find bar goes light with the chrome; its input recesses with dark ink. */
-:root[data-theme='light'] .vec-pane__search-input {
-  background: rgba(18, 22, 32, 0.06);
-}
-:root[data-theme='light'] .vec-pane__rename {
-  background: rgba(255, 255, 255, 0.75);
-}
-:root[data-theme='light'] .vec-pane__menu {
-  box-shadow: 0 16px 40px rgba(31, 38, 54, 0.22);
+/* Text selection. Unstyled, this is the browser's blue. */
+::selection {
+  background: rgba(var(--accent-rgb), 0.3);
+  color: var(--text);
 }
 
-/* ---- Toasts ---- */
-:root[data-theme='light'] .toast {
-  box-shadow:
-    var(--glass-specular),
-    0 14px 36px rgba(31, 38, 54, 0.2);
-}
-/* Action button is white-on-accent; --text flipped to dark ink, so restate. */
-:root[data-theme='light'] .toast__action {
-  color: #fff;
+/* The popup list of a native <select>. Both properties are required on Windows:
+   set only the background and the text stays dark-on-dark. */
+select,
+option,
+optgroup {
+  background-color: var(--sub-3);
+  color: var(--text);
 }
 
-/* ---- Scrollbars & keycaps ---- */
-:root[data-theme='light'] .review__body::-webkit-scrollbar-thumb,
-:root[data-theme='light'] .palette__list::-webkit-scrollbar-thumb,
-:root[data-theme='light'] .settings__body::-webkit-scrollbar-thumb,
-:root[data-theme='light'] .rail__menu::-webkit-scrollbar-thumb,
-:root[data-theme='light'] .diff__body::-webkit-scrollbar-thumb {
-  background: rgba(16, 20, 30, 0.28);
-  background-clip: padding-box;
-}
-:root[data-theme='light'] .review__body::-webkit-scrollbar-thumb:hover,
-:root[data-theme='light'] .palette__list::-webkit-scrollbar-thumb:hover,
-:root[data-theme='light'] .settings__body::-webkit-scrollbar-thumb:hover,
-:root[data-theme='light'] .rail__menu::-webkit-scrollbar-thumb:hover,
-:root[data-theme='light'] .diff__body::-webkit-scrollbar-thumb:hover {
-  background: rgba(16, 20, 30, 0.42);
-  background-clip: padding-box;
-}
-:root[data-theme='light'] .kbd {
-  background: linear-gradient(180deg, #ffffff, #f0f0f2);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.85),
-    0 1px 0 rgba(16, 20, 30, 0.2);
-}
-:root[data-theme='light'] .shortcuts__dots {
-  border-bottom-color: rgba(16, 20, 30, 0.22);
-}
 
-/* ---- Overlay panels (settings / palette / shortcuts / confirm / review) ---- */
-:root[data-theme='light'] .settings,
-:root[data-theme='light'] .shortcuts {
-  background:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.55) 48%),
-    rgba(247, 247, 249, 0.82);
-}
-:root[data-theme='light'] .palette {
-  background:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.55) 48%),
-    rgba(247, 247, 249, 0.85);
-}
-:root[data-theme='light'] .confirm,
-:root[data-theme='light'] .review {
-  background:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.5) 50%),
-    rgba(247, 247, 249, 0.86);
-}
-:root[data-theme='light'] .palette__item:hover {
-  background: rgba(18, 22, 32, 0.05);
-}
-:root[data-theme='light'] .settings__select option {
-  background: #ffffff;
-}
-:root[data-theme='light'] .settings__slider input[type='range'] {
-  background: rgba(16, 20, 30, 0.16);
-}
-:root[data-theme='light'] .settings__swatch {
-  border-color: rgba(16, 20, 30, 0.2);
-}
-/* Active-swatch ring inverts: white gap against the panel, dark outer ring. */
-:root[data-theme='light'] .settings__swatch.is-active {
-  box-shadow:
-    0 0 0 2px rgba(255, 255, 255, 0.9),
-    0 0 0 4px #1a1d24;
-}
-:root[data-theme='light'] .confirm__btn--safe {
-  color: #31519c;
-}
-:root[data-theme='light'] .confirm__btn--danger {
-  color: #b3382f;
-}
-:root[data-theme='light'] .confirm__btn--danger:hover {
-  background: rgba(208, 69, 60, 0.1);
-}
-
-/* ---- Review / diff: green-red tints re-inked for a light backdrop ---- */
-:root[data-theme='light'] .review__sum-add {
-  color: #1a7a4a;
-}
-:root[data-theme='light'] .review__sum-del,
-:root[data-theme='light'] .review__error,
-:root[data-theme='light'] .review__btn--discard,
-:root[data-theme='light'] .diff__btn--discard {
-  color: #b3382f;
-}
-:root[data-theme='light'] .review__btn--discard:hover:not(:disabled) {
-  background: rgba(208, 69, 60, 0.1);
-}
-:root[data-theme='light'] .review__file {
-  background: linear-gradient(180deg, rgba(249, 250, 252, 0.97), rgba(242, 244, 247, 0.95));
-}
-:root[data-theme='light'] .review__file--untracked {
-  background: linear-gradient(180deg, rgba(235, 246, 239, 0.97), rgba(228, 241, 233, 0.95));
-}
-:root[data-theme='light'] .review__fstat--add {
-  color: #1a7a4a;
-  background: rgba(31, 157, 69, 0.14);
-}
-:root[data-theme='light'] .review__fstat--del {
-  color: #b3382f;
-  background: rgba(208, 69, 60, 0.12);
-}
-:root[data-theme='light'] .review__fstat--mod {
-  color: #8a5a00;
-  background: rgba(199, 120, 0, 0.14);
-}
-:root[data-theme='light'] .review__fstat--ren {
-  color: #2f5cc4;
-  background: rgba(60, 110, 240, 0.12);
-}
-:root[data-theme='light'] .review__note {
-  color: #8a5a00;
-}
-:root[data-theme='light'] .review__conflict-title {
-  color: #8a5a00;
-}
-:root[data-theme='light'] .review__conflict-files {
-  color: #7a5200;
-}
-:root[data-theme='light'] .review__conflict-hint code {
-  color: #7a5200;
-}
-:root[data-theme='light'] .diff {
-  background: rgba(248, 248, 250, 0.94);
-}
-:root[data-theme='light'] .diff__msg {
-  background: rgba(18, 26, 44, 0.04);
-}
-:root[data-theme='light'] .diff__line--add {
-  background: rgba(31, 157, 69, 0.13);
-  color: #14713a;
-}
-:root[data-theme='light'] .diff__line--del {
-  background: rgba(208, 69, 60, 0.11);
-  color: #a32e26;
-}
-:root[data-theme='light'] .diff__line--new {
-  color: #177a41;
-}
-:root[data-theme='light'] .diff__line--hunk {
-  color: #0f6b8a;
-}
-
-/* ---- Home / empty state ---- */
-/* Wordmark inverts on light: near-black ink, accent sheen still sweeping.
-   background-size must be restated — the shorthand above would reset it. */
-:root[data-theme='light'] .home__wordmark {
-  background: linear-gradient(
-    100deg,
-    #1a1d24 0%,
-    #1a1d24 38%,
-    var(--accent) 50%,
-    #1a1d24 62%,
-    #1a1d24 100%
-  );
-  background-size: 220% 100%;
-  /* The dark theme's white glow reads as haze on a light background. */
-  filter: drop-shadow(0 0 24px rgba(var(--accent-rgb), 0.28));
-}
-/* Wordmark inverts: near-black letters, the accent sheen still sweeps across.
-   background-size must be restated — the shorthand here would reset it. */
-:root[data-theme='light'] .home__title {
-  background: linear-gradient(
-    100deg,
-    #1a1d24 0%,
-    #1a1d24 38%,
-    var(--accent) 50%,
-    #1a1d24 62%,
-    #1a1d24 100%
-  );
-  background-size: 220% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-}
-:root[data-theme='light'] .home__card {
-  background:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.45) 60%),
-    rgba(250, 250, 252, 0.7);
-}
-:root[data-theme='light'] .home__card:hover {
-  box-shadow:
-    0 12px 30px rgba(31, 38, 54, 0.16),
-    0 0 0 1px rgba(var(--accent-rgb), 0.35);
-}
-:root[data-theme='light'] .empty__card {
-  background:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.4) 50%),
-    rgba(250, 250, 252, 0.65);
-  box-shadow:
-    var(--glass-specular),
-    0 30px 80px rgba(31, 38, 54, 0.24);
-}
-
-/* ---- Crash screen ---- */
-:root[data-theme='light'] .crash {
-  background: radial-gradient(900px 500px at 50% -10%, rgba(var(--accent-rgb), 0.12), transparent 60%),
-    #f2f1ed;
-}
-:root[data-theme='light'] .crash__detail {
-  color: #a32e26;
-}

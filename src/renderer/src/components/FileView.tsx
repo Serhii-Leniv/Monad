@@ -461,7 +461,7 @@ export default function FileView({
         {kind === 'toolarge' && (
           <div className="fileview__placeholder">File too large to preview (&gt;2 MB)</div>
         )}
-        {kind === 'binary' && <div className="fileview__placeholder">Binary file — not shown</div>}
+        {kind === 'binary' && <div className="fileview__placeholder">Binary file, not shown</div>}
         {kind === 'image' && dataUrl && (
           <img className="fileview__img" src={dataUrl} alt={loadedRel ?? ''} />
         )}

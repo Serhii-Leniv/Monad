@@ -1,24 +1,36 @@
 /**
- * A brief particle burst for the "agent's work landed" moment (merge success).
- * Pure DOM + CSS animation, removed after a second; hidden entirely under
- * prefers-reduced-motion (see .confetti in styles.css).
+ * The merge moment.
+ *
+ * Merging is the rarest and most consequential thing that happens in this app —
+ * it is the only path that lands an agent's work on the user's real branch — so
+ * it is the one place expressive motion is earned. Everywhere else, motion in a
+ * tool used hundreds of times a day costs more than it returns.
+ *
+ * What it shows is the app's own idea rather than a generic celebration. A
+ * monad is a sealed unit; separate units never touch, yet they resolve into one
+ * whole. So two hairlines travel in from opposite edges and meet: the seam
+ * closing. It reads as harmony rather than applause, and it is drawn in the
+ * app's own accent rather than in party colours.
+ *
+ * This replaced a 26-particle confetti burst that used five colours, three of
+ * which (a cyan, a purple, a yellow) appeared nowhere else in the interface.
+ *
+ * Pure DOM plus a compositor-only transform animation, removed once it has run,
+ * and suppressed entirely under prefers-reduced-motion — see `.merge-seal` in
+ * styles.css.
  */
 export function celebrate(): void {
   const host = document.createElement('div')
-  host.className = 'confetti'
-  const colors = ['var(--accent)', '#30d158', '#ffd60a', '#64d2ff', '#bf5af2']
-  const N = 26
-  for (let i = 0; i < N; i++) {
-    const p = document.createElement('i')
-    const angle = (i / N) * Math.PI * 2 + Math.random() * 0.5
-    const speed = 90 + Math.random() * 150
-    p.style.setProperty('--dx', `${Math.cos(angle) * speed}px`)
-    p.style.setProperty('--dy', `${Math.sin(angle) * speed - 60}px`)
-    p.style.setProperty('--rz', `${Math.random() * 540 - 270}deg`)
-    p.style.background = colors[i % colors.length]
-    p.style.animationDelay = `${Math.random() * 60}ms`
-    host.appendChild(p)
-  }
+  host.className = 'merge-seal'
+
+  // Two halves of one line. They are separate elements rather than one scaling
+  // element because a seam is two rules meeting, not one rule growing.
+  host.appendChild(document.createElement('i'))
+  host.appendChild(document.createElement('i'))
+
   document.body.appendChild(host)
-  setTimeout(() => host.remove(), 1100)
+
+  // Comfortably past the 300ms animation so the node is gone before anything
+  // else could re-trigger it, without the removal itself being visible.
+  setTimeout(() => host.remove(), 600)
 }

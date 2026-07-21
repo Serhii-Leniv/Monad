@@ -342,7 +342,7 @@ export default function DiffPanel(): JSX.Element {
   return (
     <Modal
       className={'review' + (merged ? ' is-merged' : '')}
-      label={`Review changes — ${label}`}
+      label={`Review changes: ${label}`}
       onClose={close}
     >
       <div className="review__head">
@@ -389,7 +389,7 @@ export default function DiffPanel(): JSX.Element {
               {mergedInto || baseBranch || 'the current branch'}.
               <br />
               <span className="review__empty-sub">
-                This branch still has unmerged work — the terminal and its worktree are
+                This branch still has unmerged work. The terminal and its worktree are
                 untouched, so the agent can keep going and you can merge the rest later.
               </span>
             </div>
@@ -398,7 +398,7 @@ export default function DiffPanel(): JSX.Element {
               ✓ Merged into {mergedInto || baseBranch || 'the base branch'}.
               <br />
               <span className="review__empty-sub">
-                The terminal’s worktree is still on disk — remove it to clean up, or keep it to
+                The terminal’s worktree is still on disk. Remove it to clean up, or keep it to
                 keep working on the branch.
               </span>
             </div>
@@ -449,7 +449,7 @@ export default function DiffPanel(): JSX.Element {
       {conflictFiles && !merged ? (
         <div className="review__conflict">
           <div className="review__conflict-title">
-            Merge conflict — {conflictFiles.length} file
+            Merge conflict: {conflictFiles.length} file
             {conflictFiles.length === 1 ? '' : 's'} couldn’t merge automatically
           </div>
           <div className="review__conflict-files">
@@ -458,10 +458,10 @@ export default function DiffPanel(): JSX.Element {
             ))}
           </div>
           <div className="review__conflict-hint">
-            The merge was safely rolled back — {baseBranch || 'your base branch'} is untouched. The
+            The merge was safely rolled back. {baseBranch || 'your base branch'} is untouched. The
             easiest fix: ask the agent to pull the base branch into its own branch and resolve the
-            conflicts there — paste <code>git merge {baseBranch || '<base-branch>'}</code> into its
-            terminal — then retry the merge here.
+            conflicts there: paste <code>git merge {baseBranch || '<base-branch>'}</code> into its
+            terminal, then retry the merge here.
           </div>
         </div>
       ) : (
@@ -476,8 +476,8 @@ export default function DiffPanel(): JSX.Element {
               onClick={close}
               title={
                 appliedCount > 0
-                  ? 'Keep the terminal and its worktree — the branch still has unmerged work'
-                  : 'Keep the terminal and its worktree — you can keep working on this branch'
+                  ? 'Keep the terminal and its worktree. The branch still has unmerged work'
+                  : 'Keep the terminal and its worktree. You can keep working on this branch'
               }
             >
               Keep terminal
@@ -490,7 +490,7 @@ export default function DiffPanel(): JSX.Element {
               }}
               title={
                 appliedCount > 0
-                  ? 'Remove the terminal and delete its worktree + branch — unmerged work on it is lost'
+                  ? 'Remove the terminal and delete its worktree + branch. Unmerged work on it is lost'
                   : 'Remove the terminal and delete its now-merged worktree + branch'
               }
             >
@@ -511,7 +511,7 @@ export default function DiffPanel(): JSX.Element {
             />
             <button
               className={'review__btn review__btn--discard' + (confirmDiscard ? ' is-armed' : '')}
-              title="Deletes this branch and worktree — committed and uncommitted work on it is lost"
+              title="Deletes this branch and worktree. Committed and uncommitted work on it is lost"
               onClick={doDiscard}
               disabled={busy}
             >
@@ -526,7 +526,7 @@ export default function DiffPanel(): JSX.Element {
               title={
                 allSelected
                   ? undefined
-                  : 'Takes the agent’s version of the selected files onto the current branch as a normal commit — not a merge; the branch stays unmerged'
+                  : 'Takes the agent’s version of the selected files onto the current branch as a normal commit, not a merge; the branch stays unmerged'
               }
             >
               {busy
