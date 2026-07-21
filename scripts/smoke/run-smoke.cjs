@@ -68,12 +68,17 @@ const killTree = () => {
   }
 }
 
-// Decide here rather than falling through to 'close': after a hang there is no
-// guarantee 'close' ever arrives.
+// The verdict decides every path, including this one. Hanging during shutdown is
+// the same class of event as crashing during shutdown: if the smoke already
+// printed its result, it already did its job. Checking `out` only in the 'close'
+// handler failed a CI run where agentfolder printed RESULT: PASS and then wedged
+// on the way out -- the exact false failure this wrapper exists to stop.
+//
+// Decided here rather than by falling through to 'close', because after a hang
+// there is no guarantee 'close' ever arrives.
 const cap = setTimeout(() => {
-  console.error(`[run-smoke] ${name}: FAIL — no verdict within ${HARD_CAP_MS / 1000}s (hung)`)
   killTree()
-  process.exit(1)
+  decide(null, true)
 }, HARD_CAP_MS)
 
 child.on('error', (e) => {
@@ -82,22 +87,36 @@ child.on('error', (e) => {
   process.exit(1)
 })
 
-child.on('close', (code) => {
-  clearTimeout(cap)
-
+/** The single decision point. `code` is the child's exit code, or null if we gave
+ *  up waiting for it. Every path judges the same thing: what did the smoke say? */
+function decide(code, hung) {
   const passed = /RESULT: PASS/.test(out)
   const failed = /RESULT: FAIL/.test(out)
 
   if (failed || !passed) {
-    const why = failed ? 'reported RESULT: FAIL' : 'printed no RESULT line (crashed before finishing?)'
-    console.error(`[run-smoke] ${name}: FAIL — ${why} (exit code ${code})`)
+    const why = failed
+      ? 'reported RESULT: FAIL'
+      : hung
+        ? `printed no RESULT line within ${HARD_CAP_MS / 1000}s (hung before finishing)`
+        : 'printed no RESULT line (crashed before finishing?)'
+    console.error(`[run-smoke] ${name}: FAIL — ${why}${code === null ? '' : ` (exit code ${code})`}`)
     process.exit(1)
   }
 
-  // Passed. Say so plainly, and if the process still died badly on the way out,
-  // print that too — it's tolerated, not hidden. A change in how often this line
-  // appears is worth someone's attention.
-  if (code === 0) console.log(`[run-smoke] ${name}: PASS`)
-  else console.log(`[run-smoke] ${name}: PASS — tolerated dirty exit (code ${code}) after the verdict`)
+  // Passed. Say so plainly, and if it still ended badly, print that too — it's
+  // tolerated, not hidden. A change in how often these lines appear is worth
+  // someone's attention.
+  if (hung) {
+    console.log(`[run-smoke] ${name}: PASS — tolerated hang during shutdown, after the verdict`)
+  } else if (code !== 0) {
+    console.log(`[run-smoke] ${name}: PASS — tolerated dirty exit (code ${code}) after the verdict`)
+  } else {
+    console.log(`[run-smoke] ${name}: PASS`)
+  }
   process.exit(0)
+}
+
+child.on('close', (code) => {
+  clearTimeout(cap)
+  decide(code, false)
 })
