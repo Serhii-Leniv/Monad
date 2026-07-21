@@ -17,6 +17,26 @@ const setPlatform = (value: string): void => {
 
 const realPlatform = process.platform
 
+// detectAgents runs on every window focus. Ruling OUT an agent that isn't
+// installed means sweeping all of PATH x every executable extension, so on
+// Windows the full scan reaches ~1000 synchronous existsSync calls — on the
+// main thread, which is also the thread pumping PTY output to the renderer.
+// Alt-tabbing in and out used to pay that each time.
+describe('detectAgents caching', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  it('reuses the previous result instead of re-scanning PATH', async () => {
+    const { detectAgents } = await import('./shells')
+    // Identity, not deep equality: an uncached implementation returns a freshly
+    // built array every call, so `toBe` is exactly the distinction under test.
+    // (Asserted without mocking fs — vitest externalizes node builtins, per the
+    // note above, so the real scan runs and is simply expected to run once.)
+    expect(detectAgents()).toBe(detectAgents())
+  })
+})
+
 describe('detectShells spawn args', () => {
   beforeEach(() => {
     vi.resetModules()

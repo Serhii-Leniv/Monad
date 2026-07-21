@@ -151,6 +151,13 @@ const api = {
     list: (): Promise<unknown> => ipcRenderer.invoke('agents:list')
   },
   openExternal: (url: string): Promise<boolean> => ipcRenderer.invoke('open:external', url),
+
+  /** Frosted-desktop window backdrop. Off is cheaper — see WinState.translucent. */
+  window: {
+    getTranslucency: (): Promise<boolean> => ipcRenderer.invoke('window:get-translucency'),
+    setTranslucency: (on: boolean): Promise<boolean> =>
+      ipcRenderer.invoke('window:set-translucency', on)
+  },
   file: {
     exists: (base: string, raw: string): Promise<boolean> =>
       ipcRenderer.invoke('path:exists', { base, raw }),

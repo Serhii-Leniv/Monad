@@ -70,6 +70,7 @@ export default function App(): JSX.Element {
   const accent = useStore((s) => s.settings.accent)
   const wallpaper = useStore((s) => s.settings.wallpaper)
   const terminalOpacity = useStore((s) => s.settings.terminalOpacity)
+  const windowTranslucency = useStore((s) => s.settings.windowTranslucency)
   const [wallpaperUrl, setWallpaperUrl] = useState<string | null>(null)
   // Ids snapshotted when a bulk close is requested (⌘W on a multi-selection, or
   // the palette command) — one confirm closes all. Store-held (on the active
@@ -347,6 +348,15 @@ export default function App(): JSX.Element {
   useEffect(() => {
     document.body.classList.toggle('has-wallpaper', !!wallpaperUrl)
   }, [wallpaperUrl])
+
+  // Window backdrop. The main process owns the real setting (it needs it before
+  // the renderer exists), so push ours to it and let CSS paint an opaque scene
+  // when the desktop is no longer showing through. Runs on mount too, which
+  // keeps the two copies in step if either drifts.
+  useEffect(() => {
+    document.body.classList.toggle('is-opaque-window', !windowTranslucency)
+    void window.api.window.setTranslucency(windowTranslucency)
+  }, [windowTranslucency])
 
   // Accent colour drives the whole palette.
   useEffect(() => {
@@ -627,7 +637,6 @@ export default function App(): JSX.Element {
       {wallpaperUrl && (
         <div className="wallpaper" style={{ backgroundImage: `url(${wallpaperUrl})` }} />
       )}
-      <div className="grain" aria-hidden="true" />
       <Titlebar />
       <ProjectBar />
       <UpdateBanner />

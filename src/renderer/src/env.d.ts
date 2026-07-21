@@ -205,6 +205,10 @@ interface Window {
       list: () => Promise<AgentCli[]>
     }
     openExternal: (url: string) => Promise<boolean>
+    window: {
+      getTranslucency: () => Promise<boolean>
+      setTranslucency: (on: boolean) => Promise<boolean>
+    }
     file: {
       exists: (base: string, raw: string) => Promise<boolean>
       open: (base: string, raw: string) => Promise<boolean>
