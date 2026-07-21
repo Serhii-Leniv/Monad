@@ -40,6 +40,30 @@ describe('design tokens', () => {
     expect(cycles).toEqual([])
   })
 
+  // The + dropdown carries BOTH classes (`rail__menu tabbar__menu`). They were
+  // equally specific, so source order picked the winner — and .rail__menu sits
+  // ~1300 lines later, which meant every anchoring override in .tabbar__menu was
+  // silently dropped. The menu took the rail's `left` (opening beside the dock
+  // instead of under the +) and its `bottom: 0`, pinning both edges of an
+  // absolutely positioned box so it was sized by the gap between them rather
+  // than by its content — it rendered as a collapsed black slab over the stage.
+  // Nothing else catches this: the CSS is valid and the build is silent.
+  it('lets the tabbar dropdown out-specify the rail menu chrome it reuses', () => {
+    const tabbar = css.match(/^([^\n{]*tabbar__menu[^\n{]*)\{/m)
+    expect(tabbar, 'no rule targets .tabbar__menu any more').toBeTruthy()
+    const selector = tabbar![1]
+    const shared = ['bottom', 'left', 'min-width']
+
+    // Either it out-specifies .rail__menu, or it is authored after it. Anything
+    // else and these declarations lose again.
+    const qualified = /\.rail__menu\s*\.?tabbar__menu|\.rail__menu\.tabbar__menu/.test(selector)
+    const later = css.indexOf(selector) > css.indexOf('\n.rail__menu {')
+    expect(
+      qualified || later,
+      `"${selector.trim()}" ties with .rail__menu but is authored before it, so ${shared.join('/')} are ignored`
+    ).toBe(true)
+  })
+
   // The dark theme is the default, so a token missing here is what users see.
   it('gives the floating-chrome shadows a real value in the dark base', () => {
     const root = baseRoot()

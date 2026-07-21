@@ -1484,13 +1484,23 @@ body.has-wallpaper .aurora {
 }
 /* Reuses .rail__menu's chrome; only the anchoring differs (the rail's menu
    opens from a left-edge button, this one hangs below the strip). */
-.tabbar__menu {
+/* Both classes are on the element (`rail__menu tabbar__menu`) and both rules are
+   single-class, so SOURCE ORDER decided the winner — and .rail__menu is ~1300
+   lines further down. Every override here silently lost: the menu inherited the
+   rail's `left: calc(var(--dock) + 14px)` (so it opened next to the dock, not
+   under the +) and its `bottom: 0`, which pinned both edges of an absolutely
+   positioned box and sized it by the gap between them instead of by its
+   content — the collapsed black slab. Qualifying with .rail__menu raises
+   specificity so the anchoring actually applies, order be damned. */
+.rail__menu.tabbar__menu {
   position: absolute;
   top: calc(100% + 6px);
+  bottom: auto;
   left: 50%;
+  right: auto;
   transform: translateX(-50%);
   min-width: 168px;
-  z-index: 40;
+  z-index: 41;
 }
 
 .app__main {
