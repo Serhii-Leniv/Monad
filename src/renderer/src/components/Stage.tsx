@@ -3,6 +3,8 @@ import Moveable from 'react-moveable'
 import Selecto from 'react-selecto'
 import TerminalPane from './TerminalPane'
 import { useStore, wsById, type AgentInstance } from '../store'
+import { nearestSlotIndex, type Slot } from '../dragSlot'
+import { pickFolderForWorkspace } from '../openProject'
 import { terminals } from '../terminalRegistry'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -25,6 +27,11 @@ function Stage({ workspaceId }: { workspaceId: string }): JSX.Element {
   const panY = useStore((s) => s.panY)
   const zoom = useStore((s) => s.zoom)
   const focusedId = useStore((s) => wsById(s, workspaceId)?.focusedId ?? null)
+  // A workspace created via "New workspace" has no folder yet. Both facts drive
+  // the empty state below — without it the stage renders as a blank rectangle
+  // with no way out, because the rail hides its tools until a folder exists.
+  const defaultPath = useStore((s) => wsById(s, workspaceId)?.defaultPath ?? null)
+  const addAgent = useStore((s) => s.addAgent)
 
   // Mutable (not RefObject) because the callback ref below assigns it directly.
   const stageRef = useRef<HTMLDivElement | null>(null)
@@ -70,27 +77,16 @@ function Stage({ workspaceId }: { workspaceId: string }): JSX.Element {
   const idOf = (el: HTMLElement | null): string | undefined =>
     (el?.closest('.vec-pane') as HTMLElement | null)?.dataset.id
 
-  // Where does this drop land? The slot whose centre is nearest the dragged
-  // card's centre — that index becomes the card's new place in the order.
-  const nearestIndex = (cx: number, cy: number): number => {
-    const ws = wsById(useStore.getState(), workspaceId)
-    const list = ws?.agents ?? EMPTY_AGENTS
-    const dragId = ws?.draggingId ?? null
-    let best = 0
-    let bestD = Infinity
-    list.forEach((g, i) => {
-      // Skip the dragged card: its x/y stay pinned at its pre-drag slot (laidOut
-      // only stashes drop*), so leaving it in would let its own stale slot compete
-      // with the cursor and make the card resist swapping — a sticky, jittery drag.
-      if (g.id === dragId) return
-      const d = (g.x + g.w / 2 - cx) ** 2 + (g.y + g.h / 2 - cy) ** 2
-      if (d < bestD) {
-        bestD = d
-        best = i
-      }
-    })
-    return best
-  }
+  // The slots as currently laid out. The dragged card's own x/y are pinned at its
+  // pre-drag position and mean nothing mid-gesture — its real slot is the gap
+  // laidOut stashed in drop*, so use that. Including it is what lets the hit test
+  // answer "stay where you are"; skipping it made every pointer-move a reorder.
+  const slotsOf = (list: AgentInstance[], dragId: string | null): Slot[] =>
+    list.map((g) =>
+      g.id === dragId && g.dropX != null
+        ? { x: g.dropX, y: g.dropY!, w: g.dropW!, h: g.dropH! }
+        : { x: g.x, y: g.y, w: g.w, h: g.h }
+    )
 
   // No drag while a pane is maximized — Moveable's inline transform would fight
   // the focus geometry, and reordering makes no sense with one pane on screen.
@@ -128,6 +124,39 @@ function Stage({ workspaceId }: { workspaceId: string }): JSX.Element {
         ))}
       </div>
 
+      {/* An empty stage used to render as a blank rectangle. A workspace opened
+          via "New workspace" starts with no folder AND no agents, and the rail
+          hides its tools until a folder exists — so there was literally nothing
+          to click. Deliberately a sibling of .stage__panes, not a child: panes
+          carry the pan/zoom transform, and this must stay put and clickable.
+          Offer the terminal in both cases — addAgent has no path requirement
+          (a folderless agent starts in the home directory). */}
+      {agentCount === 0 && (
+        <div className="empty">
+          <div className="empty__card">
+            <h1>{defaultPath ? 'No terminals open' : 'This workspace has no folder yet'}</h1>
+            <p>
+              {defaultPath
+                ? 'Start a terminal to get going.'
+                : 'Choose a folder to get per-agent git isolation — or start a terminal right away and it’ll open in your home directory.'}
+            </p>
+            <div className="empty__actions">
+              {!defaultPath && (
+                <button className="empty__btn" onClick={() => void pickFolderForWorkspace(workspaceId)}>
+                  Open a folder…
+                </button>
+              )}
+              <button
+                className={'empty__btn' + (defaultPath ? '' : ' empty__btn--ghost')}
+                onClick={() => addAgent({ workspaceId })}
+              >
+                New terminal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Moveable
         ref={moveableRef}
         target={targets}
@@ -158,11 +187,20 @@ function Stage({ workspaceId }: { workspaceId: string }): JSX.Element {
           const id = idOf(e.target)
           const t = e.translate
           if (!id || !t) return
-          const list = wsById(useStore.getState(), workspaceId)?.agents ?? EMPTY_AGENTS
+          const ws = wsById(useStore.getState(), workspaceId)
+          const list = ws?.agents ?? EMPTY_AGENTS
           const a = list.find((x) => x.id === id)
           if (!a) return
           const cur = list.findIndex((x) => x.id === id)
-          const target = nearestIndex(t[0] + a.w / 2, t[1] + a.h / 2)
+          const target = nearestSlotIndex(
+            slotsOf(list, ws?.draggingId ?? null),
+            t[0] + a.w / 2,
+            t[1] + a.h / 2,
+            cur
+          )
+          // nearestSlotIndex returns `cur` for "stay" — and it MUST stay a no-op.
+          // Reordering on every move re-tiles the stage each frame: the other cards
+          // never finish their reflow transition and the whole board vibrates.
           if (target !== cur) reorderAgent(id, target)
         }}
         onDragEnd={(e: any) => {

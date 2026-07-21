@@ -1470,13 +1470,23 @@ body.has-wallpaper .aurora {
 }
 /* Reuses .rail__menu's chrome; only the anchoring differs (the rail's menu
    opens from a left-edge button, this one hangs below the strip). */
-.tabbar__menu {
+/* Both classes are on the element (`rail__menu tabbar__menu`) and both rules are
+   single-class, so SOURCE ORDER decided the winner — and .rail__menu is ~1300
+   lines further down. Every override here silently lost: the menu inherited the
+   rail's `left: calc(var(--dock) + 14px)` (so it opened next to the dock, not
+   under the +) and its `bottom: 0`, which pinned both edges of an absolutely
+   positioned box and sized it by the gap between them instead of by its
+   content — the collapsed black slab. Qualifying with .rail__menu raises
+   specificity so the anchoring actually applies, order be damned. */
+.rail__menu.tabbar__menu {
   position: absolute;
   top: calc(100% + 6px);
+  bottom: auto;
   left: 50%;
+  right: auto;
   transform: translateX(-50%);
   min-width: 168px;
-  z-index: 40;
+  z-index: 41;
 }
 
 .app__main {
@@ -4502,6 +4512,30 @@ body.has-wallpaper .vec-pane__term {
     0 0 24px rgba(var(--accent-rgb), 0.55),
     0 8px 26px rgba(var(--accent-rgb), 0.42),
     inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+/* Two actions sit side by side on a folderless stage ("Open a folder…" +
+   "New terminal"), so the card needs a row rather than one stacked button. */
+.empty__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* Secondary action — same metrics as .empty__btn so the pair aligns, but glass
+   instead of accent so only one button in the card carries the emphasis. */
+.empty__btn--ghost {
+  color: var(--ink-strong);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line-2);
+  box-shadow: var(--glass-specular);
+}
+
+.empty__btn--ghost:hover {
+  filter: none;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: var(--glass-specular);
 }
 
 /* ---------- Diff panel (solid-translucent; inside transform) ---------- */

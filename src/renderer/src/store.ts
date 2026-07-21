@@ -578,7 +578,12 @@ export function laidOut(
       // empty gap that the other cards reflow around. We stash that slot in
       // drop* so the stage can draw a placeholder there.
       if (skipId && a.id === skipId) {
-        out.push({ ...a, dropX: x, dropY: y, dropW: cw, dropH: ch })
+        // Same identity rule as the branch below: a fresh object each relayout
+        // re-rendered the pane the user is holding — the worst one to churn,
+        // because its xterm work lands mid-gesture and the card stutters.
+        const same =
+          a.dropX === x && a.dropY === y && a.dropW === cw && a.dropH === ch
+        out.push(same ? a : { ...a, dropX: x, dropY: y, dropW: cw, dropH: ch })
       } else {
         // Reuse the SAME object when its slot is unchanged — a fresh `{...a}` every
         // relayout would give each pane a new identity and defeat TerminalPane's
