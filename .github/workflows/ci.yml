@@ -39,15 +39,22 @@ jobs:
       - run: npm run test
       # The phase smokes drive the REAL built bundles (out/) + IPC.
       - run: npm run build
-      - run: npm run smoke:pty
-      - run: npm run smoke:p1
-      - run: npm run smoke:p2
-      - run: npm run smoke:p3
+      # Run via run-smoke.cjs, which judges each smoke by the RESULT line it
+      # PRINTS rather than its exit code. Electron with a live node-pty can't be
+      # trusted to exit with the code it asks for — it raced its own shutdown
+      # (exit 1) and segfaulted in native teardown (139), both AFTER printing
+      # RESULT: PASS, failing CI on tests that had passed. A crash before the
+      # verdict, a RESULT: FAIL, or a hang all still fail. See the header of
+      # run-smoke.cjs for the full reasoning.
+      - run: node scripts/smoke/run-smoke.cjs pty
+      - run: node scripts/smoke/run-smoke.cjs p1
+      - run: node scripts/smoke/run-smoke.cjs p2
+      - run: node scripts/smoke/run-smoke.cjs p3
       # These four existed but were never wired in — which is exactly why a
       # regression that disabled worktree isolation on every restart shipped
       # unnoticed. wspersist covers that path directly.
-      - run: npm run smoke:file
-      - run: npm run smoke:ws
-      - run: npm run smoke:tabs
-      - run: npm run smoke:wspersist
-      - run: npm run smoke:agentfolder
+      - run: node scripts/smoke/run-smoke.cjs file
+      - run: node scripts/smoke/run-smoke.cjs ws
+      - run: node scripts/smoke/run-smoke.cjs tabs
+      - run: node scripts/smoke/run-smoke.cjs wspersist
+      - run: node scripts/smoke/run-smoke.cjs agentfolder

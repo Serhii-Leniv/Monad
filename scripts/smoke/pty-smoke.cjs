@@ -30,7 +30,10 @@ app.whenReady().then(() => {
     console.log('[smoke] pty module loaded : true')
     console.log('[smoke] echo round-trip  : ' + ok)
     console.log('[smoke] shell exit code  : ' + exitCode)
-    app.exit(ok ? 0 : 2)
+    // RESULT line so run-smoke.cjs can judge this one by its printed verdict too
+    // (it spawns a real pty, so its exit code is as unreliable as the others').
+    console.log('[smoke] RESULT: ' + (ok ? 'PASS' : 'FAIL'))
+    setTimeout(() => app.exit(ok ? 0 : 2), 250)
   })
 
   setTimeout(() => {
