@@ -186,9 +186,13 @@
         gap: 9px;
         color: var(--ink);
       }
-      .brand svg {
-        width: 26px;
-        height: 26px;
+      .brand img {
+        /* 34px, not the 22px the old wordmark-flanked mark used: this mark
+           carries the knocked-out M right to the disc edge and turns to mush
+           below about 30px. The nav is 60px, so it still has room to breathe. */
+        width: 34px;
+        height: 34px;
+        display: block;
       }
       .nav-right {
         display: flex;
@@ -755,32 +759,14 @@
   </head>
 
   <body>
-    <!-- The M-disc as vector: near-white disc, mark knocked out to the page
-         beneath. Solid rather than gradient so it matches the favicon and the
-         og-image, and so the M keeps its contrast at header size. The shipped
-         PNG variants are a near-white mark on a near-white disc and vanish on
-         dark, so the site draws its own. -->
-    <svg width="0" height="0" style="position: absolute" aria-hidden="true" focusable="false">
-      <defs>
-        <mask id="mk">
-          <circle cx="569" cy="470" r="400" fill="#fff" />
-          <g fill="#000">
-            <rect x="306" y="344" width="96" height="356" />
-            <rect x="622" y="344" width="96" height="356" />
-            <polygon points="306,344 402,344 560,566 464,566" />
-            <polygon points="718,344 622,344 464,566 560,566" />
-            <circle cx="782" cy="300" r="50" />
-          </g>
-        </mask>
-      </defs>
-    </svg>
-
     <nav class="nav" id="nav">
       <div class="wrap nav-inner">
+        <!-- The mark ships as a PNG, not a vector: every SVG in build/ still
+             carries the older simplified M. This is the same file the README
+             uses at the top (build/mark-knockout-light-1024.png), so the
+             README, the favicon and the header all draw the one mark. -->
         <a class="brand" href="#top" aria-label="Monad — home">
-          <svg viewBox="169 70 800 800" aria-hidden="true" focusable="false">
-            <circle cx="569" cy="470" r="400" fill="#f4f4f6" mask="url(#mk)" />
-          </svg>
+          <img src="logo-mark-white.png" alt="" width="34" height="34" />
         </a>
         <div class="nav-right">
           <a class="hide-sm" href="#isolation">how&nbsp;it&nbsp;works</a>
