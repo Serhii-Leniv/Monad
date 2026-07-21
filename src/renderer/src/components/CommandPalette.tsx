@@ -1,10 +1,9 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { useStore, activeWs, useActiveAgents, useActiveProjectPath, MAX_AGENTS } from '../store'
+import { useStore, activeWs, useActiveAgents, MAX_AGENTS } from '../store'
 import {
   openProjectInteractive,
   openProjectByPath,
   closeCurrentProject,
-  pickFolderForWorkspace
 } from '../openProject'
 import { modLabel } from '../shortcuts'
 import Modal from './Modal'
@@ -57,7 +56,6 @@ export default function CommandPalette(): JSX.Element {
   const liveWorkspaces = useStore((s) => s.liveWorkspaces)
   const activeWorkspaceId = useStore((s) => s.activeWorkspaceId)
   const agents = useActiveAgents()
-  const projectPath = useActiveProjectPath()
 
   const [query, setQuery] = useState('')
   const [idx, setIdx] = useState(0)
@@ -101,28 +99,22 @@ export default function CommandPalette(): JSX.Element {
     liveWorkspaces
       .filter((w) => w.id !== activeWorkspaceId)
       .forEach((w) =>
-        list.push({ id: 'switch-' + w.id, title: `Switch to ${w.name}`, group: 'Workspace', run: () => setActiveWorkspace(w.id) })
+        list.push({ id: 'switch-' + w.id, title: `Switch to ${w.name}`, group: 'Folder', run: () => setActiveWorkspace(w.id) })
       )
-    list.push({ id: 'open', title: 'Open project…', group: 'Workspace', run: openProjectInteractive })
-    list.push({ id: 'new-workspace', title: 'New workspace', group: 'Workspace', run: () => useStore.getState().createWorkspace() })
-    // Attach a folder to the workspace already on screen, rather than opening a
-    // new tab for it — the only other route was the small "set folder" chip.
-    if (activeWorkspaceId && !projectPath) {
-      list.push({ id: 'set-folder', title: 'Open folder in this workspace…', group: 'Workspace', run: () => void pickFolderForWorkspace(activeWorkspaceId) })
-    }
+    list.push({ id: 'open', title: 'Open a folder…', group: 'Folder', run: openProjectInteractive })
     // Recents not already open → open as a new live tab.
     workspaces
       .filter((w) => !liveWorkspaces.some((lw) => lw.defaultPath === w.path))
       .forEach((w) =>
-        list.push({ id: 'open-' + w.path, title: `Open ${w.name}`, group: 'Workspace', run: () => void openProjectByPath(w) })
+        list.push({ id: 'open-' + w.path, title: `Open ${w.name}`, group: 'Folder', run: () => void openProjectByPath(w) })
       )
     // Gated on there being a workspace at all, not on it having a folder — a
     // folderless tab is exactly the one you're most likely to want to close.
     if (activeWorkspaceId) {
-      list.push({ id: 'close-workspace', title: 'Close workspace', group: 'Workspace', run: closeCurrentProject })
+      list.push({ id: 'close-workspace', title: 'Close folder', group: 'Folder', run: closeCurrentProject })
     }
     return list
-  }, [projectPath, shells, agentClis, workspaces, liveWorkspaces, activeWorkspaceId, agents, lastClosed, addAgent, focusTerminal, reopenLast, setActiveWorkspace])
+  }, [shells, agentClis, workspaces, liveWorkspaces, activeWorkspaceId, agents, lastClosed, addAgent, focusTerminal, reopenLast, setActiveWorkspace])
 
   const q = query.trim().toLowerCase()
   const items = useMemo<Cmd[]>(() => {

@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
   useStore,
@@ -43,55 +42,24 @@ function WorkspaceTab({ id }: { id: string }): JSX.Element {
       }
     })
   )
-  const [editing, setEditing] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (!editing) return
-    inputRef.current?.focus()
-    inputRef.current?.select()
-  }, [editing])
-
-  const commit = (value: string): void => {
-    setEditing(false)
-    if (value.trim() && value !== name) useStore.getState().renameWorkspace(id, value)
-  }
-
   return (
     <div
       className={'tab' + (active ? ' is-active' : '')}
       role="tab"
       aria-selected={active}
-      title={path || 'No folder yet — double-click to rename'}
+      title={path || name}
       onClick={() => setActiveWorkspace(id)}
-      onDoubleClick={() => setEditing(true)}
     >
       <span className={'tab__dot tab__dot--' + status} aria-hidden="true" />
-      {editing ? (
-        <input
-          ref={inputRef}
-          className="tab__rename"
-          defaultValue={name}
-          aria-label="Workspace name"
-          onClick={(e) => e.stopPropagation()}
-          onDoubleClick={(e) => e.stopPropagation()}
-          onBlur={(e) => commit(e.currentTarget.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') commit(e.currentTarget.value)
-            // Escape must not bubble — App binds it to clearing selection.
-            else if (e.key === 'Escape') {
-              e.stopPropagation()
-              setEditing(false)
-            }
-          }}
-        />
-      ) : (
-        <span className="tab__name">{name}</span>
-      )}
+      {/* The folder's name, and only that. Renaming a tab is gone: a tab IS a
+          folder now, so a name of its own could only drift from the thing it
+          names. The store still holds a `name` — it seeds from the folder's
+          basename and stays the label — so nothing on disk changed. */}
+      <span className="tab__name">{name}</span>
       {count > 0 && (
         <span
           className="tab__count"
-          title={`${count} agent${count > 1 ? 's' : ''} in this workspace`}
+          title={`${count} agent${count > 1 ? 's' : ''} in this folder`}
         >
           {count}
         </span>
@@ -131,8 +99,6 @@ export default function ProjectBar(): JSX.Element {
   const ids = useStore(useShallow((s) => s.liveWorkspaces.map((w) => w.id)))
   const atCap = useStore((s) => s.liveWorkspaces.length >= MAX_LIVE_WORKSPACES)
   const setPaletteOpen = useStore((s) => s.setPaletteOpen)
-  const setOpenMenu = useStore((s) => s.setOpenMenu)
-  const addOpen = useStore((s) => s.openMenu === 'tabbar-add')
   const activeId = useStore((s) => s.activeWorkspaceId)
   const activePath = useStore((s) => activeWs(s)?.defaultPath ?? null)
   const activeIsGit = useStore((s) => activeWs(s)?.isGit ?? true)
@@ -148,17 +114,16 @@ export default function ProjectBar(): JSX.Element {
         </div>
       )}
 
-      {/* With no tabs yet the + collapses to a single labelled "Open a project"
-          action — a menu would be a pointless extra click on an empty app. */}
+      {/* One tab = one folder, so + goes straight to the folder picker. It used
+          to open a menu offering "New workspace", which created a tab with no
+          folder — an idea that no longer exists. */}
       <div className="tabbar__addwrap">
         <button
           className={'tabbar__add' + (empty ? ' tabbar__add--labeled' : '')}
-          onClick={() => (empty ? void openProjectInteractive() : setOpenMenu(addOpen ? null : 'tabbar-add'))}
+          onClick={() => void openProjectInteractive()}
           disabled={atCap}
-          title={atCap ? `Up to ${MAX_LIVE_WORKSPACES} workspaces at once` : 'New workspace'}
-          aria-label={empty ? 'Open a project' : 'New workspace'}
-          aria-haspopup={empty ? undefined : 'menu'}
-          aria-expanded={empty ? undefined : addOpen}
+          title={atCap ? `Up to ${MAX_LIVE_WORKSPACES} folders open at once` : 'Open a folder'}
+          aria-label="Open a folder"
         >
           <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
             <path
@@ -172,33 +137,6 @@ export default function ProjectBar(): JSX.Element {
           {empty && <span className="tabbar__add-label">Open a project</span>}
         </button>
 
-        {addOpen && (
-          <>
-            <div className="rail__backdrop" onClick={() => setOpenMenu(null)} />
-            <div className="rail__menu tabbar__menu" role="menu">
-              <button
-                className="rail__menu-item"
-                role="menuitem"
-                onClick={() => {
-                  setOpenMenu(null)
-                  useStore.getState().createWorkspace()
-                }}
-              >
-                New workspace
-              </button>
-              <button
-                className="rail__menu-item"
-                role="menuitem"
-                onClick={() => {
-                  setOpenMenu(null)
-                  void openProjectInteractive()
-                }}
-              >
-                Open a folder…
-              </button>
-            </div>
-          </>
-        )}
       </div>
 
       {/* Quick-launcher affordance — the palette is otherwise invisible (⌘K only). */}
