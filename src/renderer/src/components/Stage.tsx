@@ -3,6 +3,7 @@ import Moveable from 'react-moveable'
 import Selecto from 'react-selecto'
 import TerminalPane from './TerminalPane'
 import { useStore, wsById, type AgentInstance } from '../store'
+import { pickFolderForWorkspace } from '../openProject'
 import { terminals } from '../terminalRegistry'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -25,6 +26,11 @@ export default function Stage({ workspaceId }: { workspaceId: string }): JSX.Ele
   const panY = useStore((s) => s.panY)
   const zoom = useStore((s) => s.zoom)
   const focusedId = useStore((s) => wsById(s, workspaceId)?.focusedId ?? null)
+  // A workspace created via "New workspace" has no folder yet. Both facts drive
+  // the empty state below — without it the stage renders as a blank rectangle
+  // with no way out, because the rail hides its tools until a folder exists.
+  const defaultPath = useStore((s) => wsById(s, workspaceId)?.defaultPath ?? null)
+  const addAgent = useStore((s) => s.addAgent)
 
   // Mutable (not RefObject) because the callback ref below assigns it directly.
   const stageRef = useRef<HTMLDivElement | null>(null)
@@ -127,6 +133,39 @@ export default function Stage({ workspaceId }: { workspaceId: string }): JSX.Ele
           <TerminalPane key={a.id} agent={a} workspaceId={workspaceId} />
         ))}
       </div>
+
+      {/* An empty stage used to render as a blank rectangle. A workspace opened
+          via "New workspace" starts with no folder AND no agents, and the rail
+          hides its tools until a folder exists — so there was literally nothing
+          to click. Deliberately a sibling of .stage__panes, not a child: panes
+          carry the pan/zoom transform, and this must stay put and clickable.
+          Offer the terminal in both cases — addAgent has no path requirement
+          (a folderless agent starts in the home directory). */}
+      {agentCount === 0 && (
+        <div className="empty">
+          <div className="empty__card">
+            <h1>{defaultPath ? 'No terminals open' : 'This workspace has no folder yet'}</h1>
+            <p>
+              {defaultPath
+                ? 'Start a terminal to get going.'
+                : 'Choose a folder to get per-agent git isolation — or start a terminal right away and it’ll open in your home directory.'}
+            </p>
+            <div className="empty__actions">
+              {!defaultPath && (
+                <button className="empty__btn" onClick={() => void pickFolderForWorkspace(workspaceId)}>
+                  Open a folder…
+                </button>
+              )}
+              <button
+                className={'empty__btn' + (defaultPath ? '' : ' empty__btn--ghost')}
+                onClick={() => addAgent({ workspaceId })}
+              >
+                New terminal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Moveable
         ref={moveableRef}

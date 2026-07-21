@@ -189,6 +189,25 @@ describe('createWorkspace / renameWorkspace', () => {
     expect(st().liveWorkspaces.map((w) => w.name)).toContain('Workspace 2')
   })
 
+  // Regression: a workspace made this way starts with defaultPath === null, and
+  // the UI used to hide every launch affordance behind that path — the rail
+  // rendered empty and the stage was a blank rectangle, so a new workspace was
+  // a dead end. The store never required a path; the gates were the bug. If the
+  // empty-state/rail fix is reverted this still passes, so it guards the
+  // contract those gates now rely on: a folderless workspace CAN hold agents.
+  it('starts with no folder but still accepts terminals', () => {
+    st().createWorkspace('Folderless')
+    expect(ws().defaultPath).toBeNull()
+
+    st().addAgent()
+    expect(ws().agents).toHaveLength(1)
+    // No folder → nothing to isolate into, so it must fall back to shared
+    // rather than claiming a worktree it can't have.
+    expect(ws().agents[0].isolation).toBe('shared')
+    // Inherits the workspace default (null) rather than pinning a stray path.
+    expect(ws().agents[0].projectPath).toBeUndefined()
+  })
+
   it('trims a supplied name and ignores a blank one', () => {
     st().createWorkspace('  Padded  ')
     expect(ws().name).toBe('Padded')

@@ -87,121 +87,120 @@ export default function Rail(): JSX.Element {
   return (
     <div className="rail-dock">
       <div className="rail">
-        {projectPath && (
-          <>
-            <div className="rail__new">
-              <button
-                className="rail-btn rail-btn--primary"
-                onClick={() => (agentClis.length ? setNewOpen(!newOpen) : addAgent())}
-                disabled={full}
-                aria-label="New terminal"
-                data-tip={
-                  full ? `Maximum ${MAX_AGENTS} terminals` : `New terminal · ${modLabel('T')}`
-                }
-                title={full ? `Maximum ${MAX_AGENTS} terminals` : undefined}
-              >
-                <IconTerminal />
-              </button>
-              {newOpen && (
-                <>
-                  <div className="rail__backdrop" onClick={() => setNewOpen(false)} />
-                  <div className="rail__menu rail__newmenu">
+        {/* Deliberately NOT gated on projectPath. A folderless workspace still
+            needs its terminal button: addAgent has no path requirement and the
+            PTY falls back to the home directory. Hiding it made "New workspace"
+            a dead end — the rail rendered empty with no way to add anything. */}
+        <div className="rail__new">
+          <button
+            className="rail-btn rail-btn--primary"
+            onClick={() => (agentClis.length ? setNewOpen(!newOpen) : addAgent())}
+            disabled={full}
+            aria-label="New terminal"
+            data-tip={full ? `Maximum ${MAX_AGENTS} terminals` : `New terminal · ${modLabel('T')}`}
+            title={full ? `Maximum ${MAX_AGENTS} terminals` : undefined}
+          >
+            <IconTerminal />
+          </button>
+          {newOpen && (
+            <>
+              <div className="rail__backdrop" onClick={() => setNewOpen(false)} />
+              <div className="rail__menu rail__newmenu">
+                <button
+                  className="rail__menu-item"
+                  onClick={() => {
+                    setNewOpen(false)
+                    addAgent(withTarget())
+                  }}
+                >
+                  New terminal
+                </button>
+                <div className="rail__menu-sep" />
+                <div className="rail__menu-head">Agents</div>
+                {agentClis.map((a) => (
+                  <button
+                    key={a.id}
+                    className="rail__menu-item"
+                    onClick={() => {
+                      setNewOpen(false)
+                      addAgent(withTarget({ command: a.command, agentLabel: a.label, agentId: a.id }))
+                    }}
+                  >
+                    Start {a.label}
+                  </button>
+                ))}
+                {/* Where the launches above will run. Shown rather than
+                    hidden, because one workspace can hold agents across
+                    several repos and "which folder" is no longer obvious. */}
+                <div className="rail__menu-sep" />
+                <div className="rail__menu-head">Folder</div>
+                <div className="rail__menu-target">
+                  <span
+                    className={'rail__menu-target-name' + (target ? ' is-override' : '')}
+                    title={target?.path ?? projectPath ?? 'Agents will start in your home directory'}
+                  >
+                    {targetLabel}
+                  </span>
+                  {target ? (
                     <button
-                      className="rail__menu-item"
-                      onClick={() => {
-                        setNewOpen(false)
-                        addAgent(withTarget())
-                      }}
+                      className="rail__menu-target-btn"
+                      onClick={() => setTarget(null)}
+                      title="Go back to this workspace’s folder"
                     >
-                      New terminal
+                      Reset
                     </button>
-                    <div className="rail__menu-sep" />
-                    <div className="rail__menu-head">Agents</div>
-                    {agentClis.map((a) => (
-                      <button
-                        key={a.id}
-                        className="rail__menu-item"
-                        onClick={() => {
-                          setNewOpen(false)
-                          addAgent(
-                            withTarget({ command: a.command, agentLabel: a.label, agentId: a.id })
-                          )
-                        }}
-                      >
-                        Start {a.label}
-                      </button>
-                    ))}
-                    {/* Where the launches above will run. Shown rather than
-                        hidden, because one workspace can hold agents across
-                        several repos and "which folder" is no longer obvious. */}
-                    <div className="rail__menu-sep" />
-                    <div className="rail__menu-head">Folder</div>
-                    <div className="rail__menu-target">
-                      <span
-                        className={'rail__menu-target-name' + (target ? ' is-override' : '')}
-                        title={target?.path ?? projectPath ?? 'Agents will start in your home directory'}
-                      >
-                        {targetLabel}
-                      </span>
-                      {target ? (
-                        <button
-                          className="rail__menu-target-btn"
-                          onClick={() => setTarget(null)}
-                          title="Go back to this workspace’s folder"
-                        >
-                          Reset
-                        </button>
-                      ) : (
-                        <button
-                          className="rail__menu-target-btn"
-                          onClick={() => void chooseTarget()}
-                          title="Run the next agent in a different folder"
-                        >
-                          Change…
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
+                  ) : (
+                    <button
+                      className="rail__menu-target-btn"
+                      onClick={() => void chooseTarget()}
+                      title="Run the next agent in a different folder"
+                    >
+                      Change…
+                    </button>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
 
-            {/* Layout is one choice → one segmented control, not two buttons.
-               Grid and columns only diverge at 3+ panes, so the toggle stays
-               hidden below that — it would be an inert control. */}
-            {agents.length >= LAYOUT_TOGGLE_MIN && (
-            <div className="rail__seg" role="group" aria-label="Layout" data-mode={layoutMode}>
-              <button
-                className={'rail__seg-btn' + (layoutMode === 'grid' ? ' is-active' : '')}
-                onClick={() => setLayoutMode('grid')}
-                aria-label="Grid layout"
-                data-tip={`Grid · ${modLabel('1')}`}
-              >
-                <IconGrid />
-              </button>
-              <button
-                className={'rail__seg-btn' + (layoutMode === 'columns' ? ' is-active' : '')}
-                onClick={() => setLayoutMode('columns')}
-                aria-label="Columns layout"
-                data-tip={`Columns · ${modLabel('2')}`}
-              >
-                <IconColumns />
-              </button>
-            </div>
-            )}
-
-            {/* Files: one clean toggle for the right-side explorer, at project
-               root scope. Active state mirrors the panel's open flag. */}
+        {/* Layout is one choice → one segmented control, not two buttons.
+           Grid and columns only diverge at 3+ panes, so the toggle stays
+           hidden below that — it would be an inert control. */}
+        {agents.length >= LAYOUT_TOGGLE_MIN && (
+          <div className="rail__seg" role="group" aria-label="Layout" data-mode={layoutMode}>
             <button
-              className={'rail-btn' + (filePanelOpen ? ' is-active' : '')}
-              onClick={() => (filePanelOpen ? closeFilePanel() : openFilePanel({ kind: 'root' }))}
-              aria-label="Toggle file explorer"
-              aria-pressed={filePanelOpen}
-              data-tip={`Files · ${modLabel('E')}`}
+              className={'rail__seg-btn' + (layoutMode === 'grid' ? ' is-active' : '')}
+              onClick={() => setLayoutMode('grid')}
+              aria-label="Grid layout"
+              data-tip={`Grid · ${modLabel('1')}`}
             >
-              <IconFiles size={19} />
+              <IconGrid />
             </button>
-          </>
+            <button
+              className={'rail__seg-btn' + (layoutMode === 'columns' ? ' is-active' : '')}
+              onClick={() => setLayoutMode('columns')}
+              aria-label="Columns layout"
+              data-tip={`Columns · ${modLabel('2')}`}
+            >
+              <IconColumns />
+            </button>
+          </div>
+        )}
+
+        {/* Files: one clean toggle for the right-side explorer, at project
+           root scope. Active state mirrors the panel's open flag. This one DOES
+           need a folder — the explorer is rooted at the workspace path. */}
+        {projectPath && (
+          <button
+            className={'rail-btn' + (filePanelOpen ? ' is-active' : '')}
+            onClick={() => (filePanelOpen ? closeFilePanel() : openFilePanel({ kind: 'root' }))}
+            aria-label="Toggle file explorer"
+            aria-pressed={filePanelOpen}
+            data-tip={`Files · ${modLabel('E')}`}
+          >
+            <IconFiles size={19} />
+          </button>
         )}
 
         <div className="rail__spacer" />

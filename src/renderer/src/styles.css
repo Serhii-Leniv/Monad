@@ -4549,6 +4549,30 @@ body.has-wallpaper .vec-pane__term {
     inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
+/* Two actions sit side by side on a folderless stage ("Open a folder…" +
+   "New terminal"), so the card needs a row rather than one stacked button. */
+.empty__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* Secondary action — same metrics as .empty__btn so the pair aligns, but glass
+   instead of accent so only one button in the card carries the emphasis. */
+.empty__btn--ghost {
+  color: var(--ink-strong);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line-2);
+  box-shadow: var(--glass-specular);
+}
+
+.empty__btn--ghost:hover {
+  filter: none;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: var(--glass-specular);
+}
+
 /* ---------- Diff panel (solid-translucent; inside transform) ---------- */
 .diff {
   position: absolute;
