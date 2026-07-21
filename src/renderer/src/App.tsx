@@ -295,7 +295,7 @@ export default function App(): JSX.Element {
         st.setAgentClis(next)
         for (const c of next) {
           if (!prevIds.includes(c.id)) {
-            st.pushToast(`${c.label} detected — available under +`, 'success')
+            st.pushToast(`${c.label} detected. Available under +`, 'success')
           }
         }
       })
@@ -687,7 +687,7 @@ export default function App(): JSX.Element {
           <div className="confirm__title" id="bulk-close-title">Close {bulkCloseIds.length} terminals?</div>
           <div className="confirm__body">
             This ends their processes. Isolated terminals keep their branches and worktrees on
-            disk — no work is lost, and you can merge or clean them up later.
+            disk. No work is lost, and you can merge or clean them up later.
           </div>
           <div className="confirm__actions">
             <button className="confirm__btn" onClick={clearBulkClose}>
@@ -724,9 +724,9 @@ export default function App(): JSX.Element {
               <div className="confirm__title" id="ws-close-title">Close “{closingWs.name}”?</div>
               <div className="confirm__body">
                 {busy > 0
-                  ? `${busy === 1 ? 'An agent is' : `${busy} agents are`} still busy in this workspace — closing the tab stops ${busy === 1 ? 'it' : 'them'}. `
+                  ? `${busy === 1 ? 'An agent is' : `${busy} agents are`} still busy in this workspace. Closing the tab stops ${busy === 1 ? 'it' : 'them'}. `
                   : 'This ends the workspace’s terminals. '}
-                Worktrees and branches stay on disk, and the stage is saved — reopen the
+                Worktrees and branches stay on disk, and the stage is saved, so you can reopen the
                 project to pick up where you left off.
               </div>
               <div className="confirm__actions">

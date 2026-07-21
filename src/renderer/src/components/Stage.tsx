@@ -138,7 +138,7 @@ function Stage({ workspaceId }: { workspaceId: string }): JSX.Element {
             <p>
               {defaultPath
                 ? 'Start a terminal to get going.'
-                : 'Choose a folder to get per-agent git isolation — or start a terminal right away and it’ll open in your home directory.'}
+                : 'Choose a folder to get per-agent git isolation, or start a terminal right away and it’ll open in your home directory.'}
             </p>
             <div className="empty__actions">
               {!defaultPath && (

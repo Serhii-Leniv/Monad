@@ -630,7 +630,7 @@ function TerminalPane({
         kind === 'attention'
           ? 'Waiting for your input'
           : kind === 'done'
-            ? 'Finished — ready for you'
+            ? 'Finished, ready for you'
             : kind === 'error'
               ? 'Process exited with an error'
               : 'Process finished'
@@ -803,7 +803,7 @@ function TerminalPane({
       // pass as a silent "shared" tag; say why so the user can fix it (e.g. make an
       // initial commit) instead of unknowingly editing the shared project dir.
       if (agent.isolation === 'worktree' && !wt.isolated && wt.reason) {
-        useStore.getState().pushToast(`“${labelOf()}” isn’t isolated — ${wt.reason}`, 'error')
+        useStore.getState().pushToast(`“${labelOf()}” isn’t isolated: ${wt.reason}`, 'error')
       }
 
       let pid: string
@@ -1320,7 +1320,7 @@ function TerminalPane({
         {downgraded ? (
           <span
             className="vec-pane__branch vec-pane__branch--shared"
-            title="Worktree isolation unavailable — running in the shared project directory"
+            title="Worktree isolation unavailable: running in the shared project directory"
           >
             shared
           </span>
@@ -1578,7 +1578,7 @@ function TerminalPane({
                         {closePrompt.count > 0 ? closePrompt.count : 'uncommitted'}{' '}
                         {closePrompt.count === 1 ? 'change' : 'changes'}
                       </b>{' '}
-                      that aren’t merged yet. Deleting the worktree permanently loses them —
+                      that aren’t merged yet. Deleting the worktree permanently loses them.
                       committed and uncommitted alike.
                     </>
                   ) : (

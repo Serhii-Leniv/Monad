@@ -58,10 +58,39 @@
   --seam-outer: rgba(0, 0, 0, 0.5);
   --seam: inset 0 0 0 1px var(--seam-inner), 0 0 0 1px var(--seam-outer);
 
-  /* Warm ink ramp — same hue family as the substrate, three steps. */
+  /* --- The strong seam ------------------------------------------------------
+     The doubled edge with a real gap of bare substrate between the rules: a lit
+     inner lip, a hair of canvas, then the outer groove. This is the geometry
+     --seam was meant to have; at 1px per rule with no gap it collapsed into a
+     single line and was not perceptible at all — verified at 8x magnification.
+
+     Deliberately NOT on panes. Up to nine tile at once, and doubling every edge
+     would put six rules in each 12px gutter, which reads as noise rather than
+     craft. It goes on surfaces that are single objects with space around them,
+     where an edge reads as an object's rim: the dock, palette, menus, modals.
+     The plate has a defined rim; the cells cut into it are cut simply. */
+  --seam-strong:
+    inset 0 0 0 1px rgba(255, 240, 235, 0.09),
+    0 0 0 1px var(--sub-1),
+    0 0 0 1px rgba(0, 0, 0, 0.38);
+
+  /* Warm ink ramp — same hue family as the substrate, three steps.
+
+     The two lower steps were measured against every surface with APCA and both
+     failed: --text-2 landed at Lc 54-56 (under the 60 a secondary label needs)
+     and --muted at Lc 31-33, below even the 45 floor for large text and icons,
+     with its WCAG ratio dropping to 3.79 on the overlay surface — under the
+     4.5:1 that 12-13px text requires. They were de-emphasised past the point of
+     being readable.
+
+     Raised to clear Lc 75 and Lc 60 against the LIGHTEST surface (--sub-4, the
+     hardest case), so they hold on all four. Both keep the substrate's hue, so
+     they still recede the way a hue-matched ink does rather than sitting on the
+     page as flat grey — which is what lets them read as quiet at a contrast
+     ratio this high. */
   --text: #f2ece9;
-  --text-2: #b5a8a3;
-  --muted: #8a7b76;
+  --text-2: #d6cfcc;
+  --muted: #bdb5b2;
 
   /* Accent: a LIGHTNESS step inside the substrate's own family, never a
      saturated fill. This is why it cannot float or fringe the way #ff453a
@@ -71,6 +100,13 @@
   --accent-2: #e3907f; /* lifted */
   --accent-active: #b35f4f; /* pressed */
   --accent-muted: rgba(var(--accent-rgb), 0.16);
+  /* The accent as INK. A colour tuned to work as a fill is not contrast-safe as
+     text: --accent measures Lc 42-44 against the substrate, under the 45 floor
+     for even large text and icons, and it is used as the colour of active tab
+     labels and dock glyphs. This is the same split Radix draws between its
+     solid step and its text step — one hue, two jobs, two values. Lc 60+ on
+     every surface. */
+  --accent-ink: #e6a79b;
   /* Kept as an alias so nothing referencing --brand breaks; the navy ambient
      it used to drive is gone. Points at the substrate now, not a second hue. */
   --brand-rgb: 217, 122, 104;
@@ -426,7 +462,6 @@ body.has-wallpaper .aurora {
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
 
@@ -441,15 +476,13 @@ body.has-wallpaper .aurora {
   0%,
   100% {
     box-shadow:
-      0 0 0 1px rgba(255, 159, 10, 0.5),
-      0 0 14px rgba(255, 159, 10, 0.26),
+      0 0 0 1px rgba(201, 146, 78, 0.5),
       var(--shadow-card-heavy),
       inset 0 1px 0 var(--glass-highlight);
   }
   50% {
     box-shadow:
-      0 0 0 1px rgba(255, 159, 10, 0.72),
-      0 0 30px rgba(255, 159, 10, 0.5),
+      0 0 0 1px rgba(201, 146, 78, 0.72),
       var(--shadow-card-heavy),
       inset 0 1px 0 var(--glass-highlight);
   }
@@ -465,8 +498,7 @@ body.has-wallpaper .aurora {
   }
   50% {
     box-shadow:
-      0 1px 4px rgba(0, 0, 0, 0.5),
-      0 0 12px rgba(255, 159, 10, 0.85);
+      0 1px 4px rgba(0, 0, 0, 0.5);
   }
 }
 
@@ -497,7 +529,6 @@ body.has-wallpaper .aurora {
 .empty__btn:hover::after,
 .home__open:hover::after,
 .review__btn--merge:hover::after {
-  transform: none;
 }
 
 /* Merge succeeded → a green flash + the checkmark pops in. */
@@ -530,7 +561,6 @@ body.has-wallpaper .aurora {
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
 
@@ -552,10 +582,9 @@ body.has-wallpaper .aurora {
   }
   24% {
     box-shadow:
-      0 0 0 1px rgba(125, 155, 106, 0.55),
-      0 0 24px rgba(125, 155, 106, 0.3),
-      var(--shadow-card),
-      inset 0 1px 0 var(--glass-highlight);
+      inset 0 0 0 1px var(--status-done),
+      0 0 0 1px var(--seam-outer),
+      var(--shadow-card);
   }
 }
 .vec-pane__done-check {
@@ -675,7 +704,9 @@ body.has-wallpaper .aurora {
   backdrop-filter: var(--blur-md);
   -webkit-backdrop-filter: var(--blur-md);
   border: 1px solid var(--line-2);
-  border-left: 3px solid var(--accent);
+  /* No accent bar. A single bright stripe down one edge of a box is decoration
+     standing in for hierarchy — the toast's own text carries its meaning, and
+     its variants differ by ink, not by a stripe. */
   border-radius: var(--r-sm);
   box-shadow:
     var(--glass-specular),
@@ -734,7 +765,6 @@ body.has-wallpaper .aurora {
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
 
@@ -789,7 +819,7 @@ body.has-wallpaper .aurora {
 }
 .updbar__icon {
   flex: 0 0 auto;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .updbar--urgent .updbar__icon {
   color: var(--danger);
@@ -844,7 +874,6 @@ body.has-wallpaper .aurora {
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1021,7 +1050,7 @@ body.has-wallpaper .aurora {
     var(--glass-specular),
     0 0 0 1px rgba(var(--accent-rgb), 0.12),
     0 0 22px rgba(var(--accent-rgb), 0.22),
-    0 14px 34px rgba(0, 0, 0, 0.52);
+    var(--shadow-float);
 }
 .projbar__btn:active {
   transform: translateY(1px) scale(0.985);
@@ -1032,7 +1061,7 @@ body.has-wallpaper .aurora {
     var(--glass-specular),
     0 0 0 1px rgba(var(--accent-rgb), 0.18),
     0 0 24px rgba(var(--accent-rgb), 0.28),
-    0 14px 34px rgba(0, 0, 0, 0.52);
+    var(--shadow-float);
 }
 .projbar__btn:focus-visible {
   outline: none;
@@ -1119,12 +1148,10 @@ body.has-wallpaper .aurora {
   white-space: nowrap;
   color: #ffbe66;
   background: linear-gradient(150deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.01) 58%),
-    rgba(255, 159, 10, 0.1);
-  border: 1px solid rgba(255, 159, 10, 0.32);
+    rgba(201, 146, 78, 0.1);
+  border: 1px solid rgba(201, 146, 78, 0.32);
   border-radius: 999px;
   cursor: default;
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.07),
     0 6px 18px rgba(0, 0, 0, 0.35);
@@ -1134,18 +1161,17 @@ body.has-wallpaper .aurora {
     box-shadow var(--dur-select) var(--ease-out);
 }
 .projbar__chip:hover {
-  border-color: rgba(255, 159, 10, 0.55);
+  border-color: rgba(201, 146, 78, 0.55);
   background: linear-gradient(150deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.02) 58%),
-    rgba(255, 159, 10, 0.16);
+    rgba(201, 146, 78, 0.16);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.09),
-    0 0 16px rgba(255, 159, 10, 0.18),
     0 6px 18px rgba(0, 0, 0, 0.38);
 }
 .projbar__chip:focus-visible {
   outline: none;
-  border-color: rgba(255, 159, 10, 0.7);
-  box-shadow: 0 0 0 2px rgba(255, 159, 10, 0.45);
+  border-color: rgba(201, 146, 78, 0.7);
+  box-shadow: 0 0 0 2px rgba(201, 146, 78, 0.45);
 }
 /* Command-palette launcher chip beside the project pill — neutral glass so it
    reads as a quiet utility, not a status like the amber isolation chip. */
@@ -1162,8 +1188,6 @@ body.has-wallpaper .aurora {
   border: 1px solid var(--line-2);
   border-radius: 999px;
   cursor: default;
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
     0 6px 18px rgba(0, 0, 0, 0.32);
@@ -1180,7 +1204,7 @@ body.has-wallpaper .aurora {
 }
 .projbar__cmdk:focus-visible {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--accent-ink);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 .projbar__cmdk-key {
@@ -1357,7 +1381,7 @@ body.has-wallpaper .aurora {
 }
 .tab__dot--attention {
   background: var(--status-attention);
-  box-shadow: 0 0 6px rgba(255, 159, 10, 0.5);
+  box-shadow: 0 0 6px rgba(201, 146, 78, 0.5);
 }
 /* Close x — a reserved, contained slot (opacity-toggled, never display:none) so
    it can't shift layout or spill outside the tab; text-2 ink keeps the glyph
@@ -1483,7 +1507,6 @@ body.has-wallpaper .aurora {
 
    Background layers get `content-visibility: hidden`, not just `visibility`:
    a merely-invisible subtree is still laid out and composited every frame, so
-   background xterm instances kept re-rendering behind a dozen backdrop-filtered
    glass surfaces — with 3 workspaces × 3 agents that's a constant GPU draw for
    panes nobody can see. Skipping the subtree entirely costs one refit on
    activation instead (App runs it on the second rAF, once layout is restored;
@@ -1519,8 +1542,6 @@ body.has-wallpaper .aurora {
   background:
     linear-gradient(160deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015) 50%),
     var(--menu-bg);
-  backdrop-filter: var(--blur-md);
-  -webkit-backdrop-filter: var(--blur-md);
   border-left: 1px solid var(--glass-border);
   box-shadow: -18px 0 46px rgba(0, 0, 0, 0.34);
 }
@@ -1725,8 +1746,8 @@ body.has-wallpaper .aurora {
 .fileview__conflict {
   padding: 10px 12px;
   font-size: var(--fs-2);
-  background: rgba(255, 159, 10, 0.08);
-  border-bottom: 1px solid rgba(255, 159, 10, 0.28);
+  background: rgba(201, 146, 78, 0.08);
+  border-bottom: 1px solid rgba(201, 146, 78, 0.28);
 }
 .fileview__guard-text,
 .fileview__conflict-text {
@@ -1846,7 +1867,7 @@ body.has-wallpaper .aurora {
   inset: 0;
   overflow: hidden;
   background: transparent;
-  --moveable-color: var(--accent);
+  --moveable-color: var(--accent-ink);
 }
 
 .stage__panes {
@@ -1988,20 +2009,20 @@ body.has-wallpaper .aurora {
 
 /* Apple selection: crisp 1px accent ring, no glow. */
 .vec-pane.is-selected {
-  border-color: var(--accent);
+  border-color: var(--accent-ink);
   box-shadow:
-    0 0 0 1px var(--accent),
+    inset 0 0 0 1px var(--accent),
     0 0 22px rgba(var(--accent-rgb), 0.38),
-    var(--shadow-card-heavy),
-    inset 0 1px 0 var(--glass-highlight);
+    0 0 0 1px var(--seam-outer),
+    var(--shadow-card-heavy);
 }
 
 /* Status rings — quiet, only when the card isn't selected (selection wins).
    Restrained: a 1px tinted ring, no glow, no loop. */
 .vec-pane.is-attention:not(.is-selected) {
-  border-color: rgba(255, 159, 10, 0.55);
+  border-color: rgba(201, 146, 78, 0.55);
   box-shadow:
-    0 0 0 1px rgba(255, 159, 10, 0.5),
+    0 0 0 1px rgba(201, 146, 78, 0.5),
     var(--shadow-card-heavy),
     inset 0 1px 0 var(--glass-highlight);
 }
@@ -2408,7 +2429,7 @@ body.has-wallpaper .vec-pane__term {
 }
 /* Radio-style checkmark for the theme picker. */
 .vec-pane__menu-item.is-checked {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .vec-pane__menu-item.is-checked::after {
   content: ' ✓';
@@ -2504,7 +2525,7 @@ body.has-wallpaper .vec-pane__term {
   background: var(--sub-2);
   border: 0;
   border-radius: var(--r-xl);
-  box-shadow: var(--seam), var(--shadow-float);
+  box-shadow: var(--seam-strong), var(--shadow-float);
 }
 
 /* Sheen layer retired — --glass-sheen is `none` now. Kept as a nulled rule so
@@ -2637,7 +2658,7 @@ body.has-wallpaper .vec-pane__term {
 }
 .rail__proj-check {
   flex: 0 0 auto;
-  color: var(--accent);
+  color: var(--accent-ink);
   font-weight: 700;
 }
 .rail__menu-item--danger:hover {
@@ -2696,7 +2717,6 @@ body.has-wallpaper .vec-pane__term {
 }
 
 /* ---------- Dock tooltips — CSS-only, opening rightward off each control.
-   position: absolute (NOT fixed: .rail's backdrop-filter makes it the
    containing block for fixed descendants, which would mis-anchor them).
    The dock has no overflow clipping, so the bubble escapes the pill freely,
    same as the count badge does. ---------- */
@@ -2742,7 +2762,7 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .rail-btn.is-active {
-  color: var(--accent);
+  color: var(--accent-ink);
   background: rgba(var(--accent-rgb), 0.12);
   border-color: rgba(var(--accent-rgb), 0.3);
   box-shadow: 0 0 16px rgba(var(--accent-rgb), 0.3);
@@ -2754,10 +2774,9 @@ body.has-wallpaper .vec-pane__term {
 
 .rail-btn--primary,
 .rail-btn--primary:hover:not(:disabled) {
-  color: #fff;
+  color: var(--sub-1);
   background: linear-gradient(180deg, var(--accent-2), var(--accent));
-  border-color: rgba(255, 255, 255, 0.22);
-  /* Accent glow — the button "shines". */
+  border-color: rgba(255, 240, 235, 0.22);
   box-shadow:
     0 0 20px rgba(var(--accent-rgb), 0.6),
     0 3px 14px rgba(var(--accent-rgb), 0.45);
@@ -2770,13 +2789,13 @@ body.has-wallpaper .vec-pane__term {
 /* Attention button: only appears when an agent needs you. Amber, with a count. */
 .rail-btn--attention {
   color: var(--status-attention);
-  background: rgba(255, 159, 10, 0.12);
-  border-color: rgba(255, 159, 10, 0.28);
+  background: rgba(201, 146, 78, 0.12);
+  border-color: rgba(201, 146, 78, 0.28);
 }
 
 .rail-btn--attention:hover:not(:disabled) {
   color: var(--status-attention);
-  background: rgba(255, 159, 10, 0.18);
+  background: rgba(201, 146, 78, 0.18);
 }
 
 .rail-btn__badge {
@@ -2843,7 +2862,7 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .rail__menu-item.is-active {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 /* Project switcher anchors to the top of the dock instead of the bottom. */
@@ -2901,9 +2920,12 @@ body.has-wallpaper .vec-pane__term {
   z-index: 100;
   display: grid;
   place-items: center;
-  background: rgba(10, 7, 6, 0.5);
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
+  /* Was 50% at 5px blur, which left the wordmark and the accent button on the
+     screen behind clearly legible through the dialog — the backdrop competed
+     with the content in front of it. A dialog's job is to take the foreground. */
+  background: rgba(10, 7, 6, 0.72);
+  backdrop-filter: blur(14px) saturate(120%);
+  -webkit-backdrop-filter: blur(14px) saturate(120%);
 }
 
 /* Shown only while a lazy overlay chunk is still loading. No blur here: the
@@ -2919,7 +2941,7 @@ body.has-wallpaper .vec-pane__term {
   height: 26px;
   border-radius: 50%;
   border: 2px solid var(--line-2);
-  border-top-color: var(--accent);
+  border-top-color: var(--accent-ink);
   animation: modal-spin 700ms linear infinite;
 }
 @keyframes modal-spin {
@@ -2948,9 +2970,9 @@ body.has-wallpaper .vec-pane__term {
     rgba(20, 16, 15, 0.66);
   backdrop-filter: var(--blur-lg);
   -webkit-backdrop-filter: var(--blur-lg);
-  border: 1px solid var(--line-2);
+  border: 0;
   box-shadow:
-    var(--glass-specular),
+    var(--seam-strong),
     var(--shadow-pop);
 }
 
@@ -3032,7 +3054,7 @@ body.has-wallpaper .vec-pane__term {
 }
 .settings__nav-item.is-active svg {
   opacity: 1;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .settings__body {
@@ -3128,11 +3150,20 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .settings__row {
-  display: flex;
+  display: grid;
+  /* A shared control column. This was `justify-content: space-between`, which
+     let every row's control begin wherever its own label happened to end —
+     selects, sliders and checkboxes each sat on a different left edge, and the
+     column read as ragged. A fixed track puts them all on one axis. */
+  grid-template-columns: 1fr 190px;
   align-items: center;
-  justify-content: space-between;
   gap: 14px;
   padding: 9px 0;
+}
+/* Controls fill the track and align to its right edge, so a narrow checkbox and
+   a wide select still share the same outer margin. */
+.settings__row > *:last-child {
+  justify-self: end;
 }
 
 .settings__row--toggle {
@@ -3281,7 +3312,7 @@ body.has-wallpaper .vec-pane__term {
 
 /* White-on-accent in BOTH themes (like the dock's segmented toggle). */
 .settings__seg-btn.is-active {
-  color: #fff;
+  color: var(--sub-1);
   background: linear-gradient(180deg, var(--accent-2), var(--accent));
   box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.35);
 }
@@ -3291,13 +3322,14 @@ body.has-wallpaper .vec-pane__term {
   box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.6);
 }
 
+/* Five per row rather than free wrapping: ten swatches at 22px were breaking
+   7 + 3, which reads as an accident rather than a grid. */
 .settings__swatches {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(5, 22px);
+  justify-content: end;
   align-items: center;
-  justify-content: flex-end;
   gap: 8px;
-  max-width: 230px;
 }
 
 .settings__swatch {
@@ -3372,9 +3404,9 @@ body.has-wallpaper .vec-pane__term {
     rgba(34, 27, 25, 0.72);
   backdrop-filter: var(--blur-lg);
   -webkit-backdrop-filter: var(--blur-lg);
-  border: 1px solid var(--line-2);
+  border: 0;
   box-shadow:
-    var(--glass-specular),
+    var(--seam-strong),
     var(--shadow-pop);
 }
 
@@ -3477,9 +3509,9 @@ body.has-wallpaper .vec-pane__term {
     rgba(20, 16, 15, 0.66);
   backdrop-filter: var(--blur-lg);
   -webkit-backdrop-filter: var(--blur-lg);
-  border: 1px solid var(--line-2);
+  border: 0;
   box-shadow:
-    var(--glass-specular),
+    var(--seam-strong),
     var(--shadow-pop);
 }
 
@@ -3563,9 +3595,9 @@ body.has-wallpaper .vec-pane__term {
     rgba(34, 27, 25, 0.72);
   backdrop-filter: var(--blur-lg);
   -webkit-backdrop-filter: var(--blur-lg);
-  border: 1px solid var(--line-2);
+  border: 0;
   box-shadow:
-    var(--glass-specular),
+    var(--seam-strong),
     var(--shadow-pop);
 }
 
@@ -3638,9 +3670,9 @@ body.has-wallpaper .vec-pane__term {
     rgba(20, 16, 15, 0.66);
   backdrop-filter: var(--blur-lg);
   -webkit-backdrop-filter: var(--blur-lg);
-  border: 1px solid var(--line-2);
+  border: 0;
   box-shadow:
-    var(--glass-specular),
+    var(--seam-strong),
     var(--shadow-pop);
 }
 .feedback__body {
@@ -3745,9 +3777,9 @@ body.has-wallpaper .vec-pane__term {
     rgba(34, 27, 25, 0.74);
   backdrop-filter: var(--blur-lg);
   -webkit-backdrop-filter: var(--blur-lg);
-  border: 1px solid var(--line-2);
+  border: 0;
   box-shadow:
-    var(--glass-specular),
+    var(--seam-strong),
     var(--shadow-pop);
 }
 
@@ -3821,8 +3853,8 @@ body.has-wallpaper .vec-pane__term {
   font-family: var(--font-ui);
   font-size: var(--fs-2);
   color: #ffd9a0;
-  background: rgba(255, 159, 10, 0.1);
-  border: 1px solid rgba(255, 159, 10, 0.28);
+  background: rgba(201, 146, 78, 0.1);
+  border: 1px solid rgba(201, 146, 78, 0.28);
   border-radius: var(--r-sm);
 }
 
@@ -3843,8 +3875,6 @@ body.has-wallpaper .vec-pane__term {
   background: linear-gradient(180deg, rgba(34, 27, 25, 0.97), rgba(34, 27, 25, 0.95));
   border-top: 1px solid var(--line-1);
   border-bottom: 1px solid var(--line-1);
-  backdrop-filter: var(--blur-sm);
-  -webkit-backdrop-filter: var(--blur-sm);
 }
 .review__file--untracked {
   background: linear-gradient(180deg, rgba(30, 36, 26, 0.95), rgba(28, 33, 24, 0.92));
@@ -3934,8 +3964,8 @@ body.has-wallpaper .vec-pane__term {
   padding: 12px 18px;
   font-family: var(--font-ui);
   font-size: var(--fs-2);
-  background: rgba(255, 159, 10, 0.08);
-  border-top: 1px solid rgba(255, 159, 10, 0.28);
+  background: rgba(201, 146, 78, 0.08);
+  border-top: 1px solid rgba(201, 146, 78, 0.28);
 }
 .review__conflict-title {
   font-weight: 600;
@@ -3959,8 +3989,8 @@ body.has-wallpaper .vec-pane__term {
   font-family: var(--font-mono);
   font-size: var(--fs-1);
   color: #ffd9a0;
-  background: rgba(255, 159, 10, 0.12);
-  border: 1px solid rgba(255, 159, 10, 0.22);
+  background: rgba(201, 146, 78, 0.12);
+  border: 1px solid rgba(201, 146, 78, 0.22);
   border-radius: 4px;
 }
 
@@ -4127,7 +4157,6 @@ body.has-wallpaper .vec-pane__term {
     transform: translateY(14px);
   }
   to {
-    transform: none;
   }
 }
 @keyframes hero-glow {
@@ -4189,10 +4218,7 @@ body.has-wallpaper .vec-pane__term {
    ring on keyboard focus, not Chromium's faint default outline on the gradient. */
 .home__open:focus-visible {
   outline: none;
-  box-shadow:
-    0 0 0 2px rgba(var(--accent-rgb), 0.75),
-    0 0 22px rgba(var(--accent-rgb), 0.5),
-    0 8px 22px rgba(var(--accent-rgb), 0.3);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.75), var(--shadow-float);
 }
 /* Windows High Contrast drops background-clip:text, leaving the gradient wordmark
    invisible — restore a solid colour there. */
@@ -4365,7 +4391,6 @@ body.has-wallpaper .vec-pane__term {
   pointer-events: none;
 }
 .home__card:hover::after {
-  transform: none;
 }
 .home__card:hover {
   border-color: rgba(var(--accent-rgb), 0.6);
@@ -4387,7 +4412,6 @@ body.has-wallpaper .vec-pane__term {
     transform: translateY(10px);
   }
   to {
-    transform: none;
   }
 }
 .home__card-emblem {
@@ -4433,8 +4457,6 @@ body.has-wallpaper .vec-pane__term {
   background:
     linear-gradient(160deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.015) 50%),
     rgba(34, 27, 25, 0.5);
-  backdrop-filter: var(--blur-md);
-  -webkit-backdrop-filter: var(--blur-md);
   border: 1px solid var(--line-2);
   box-shadow:
     var(--glass-specular),
@@ -4469,20 +4491,14 @@ body.has-wallpaper .vec-pane__term {
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: var(--r-md);
   cursor: default;
-  box-shadow:
-    0 0 18px rgba(var(--accent-rgb), 0.45),
-    0 6px 20px rgba(var(--accent-rgb), 0.32),
-    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  box-shadow: var(--seam), var(--shadow-float);
   transition: filter var(--dur-select) var(--ease-out),
     box-shadow var(--dur-select) var(--ease-out);
 }
 
 .empty__btn:hover {
   filter: brightness(1.06);
-  box-shadow:
-    0 0 24px rgba(var(--accent-rgb), 0.55),
-    0 8px 26px rgba(var(--accent-rgb), 0.42),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  box-shadow: var(--seam), var(--shadow-float);
 }
 
 /* Two actions sit side by side on a folderless stage ("Open a folder…" +
@@ -4693,7 +4709,7 @@ body.has-wallpaper .vec-pane__term {
   border-radius: 11px;
   border: 1px solid rgba(255, 255, 255, 0.22);
   background: linear-gradient(180deg, var(--accent-2), var(--accent));
-  box-shadow: 0 0 22px rgba(var(--accent-rgb), 0.45);
+  box-shadow: var(--seam), var(--shadow-float);
 }
 .crash__btn:hover {
   filter: brightness(1.07);
@@ -4818,7 +4834,7 @@ body.is-window-blurred .app {
 
 /* Checkboxes, radios, range thumbs, progress. */
 :root {
-  accent-color: var(--accent);
+  accent-color: var(--accent-ink);
 }
 
 /* Text selection. Unstyled, this is the browser's blue. */

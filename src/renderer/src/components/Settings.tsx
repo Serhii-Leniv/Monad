@@ -267,7 +267,7 @@ export default function Settings(): JSX.Element {
                 <span className="settings__label">
                   Translucent window
                   <span className="settings__hint">
-                    frosted desktop behind the app — costs noticeably more power, especially on
+                    frosted desktop behind the app. Costs noticeably more power, especially on
                     a laptop
                   </span>
                 </span>
@@ -348,7 +348,7 @@ export default function Settings(): JSX.Element {
                 <span className="settings__label">
                   Alert when an agent finishes
                   <span className="settings__hint">
-                    when a long task settles back to idle — popup and/or chime per the toggles here
+                    when a long task settles back to idle: popup and/or chime per the toggles here
                   </span>
                 </span>
                 <input

@@ -39,14 +39,14 @@ export default function Home(): JSX.Element {
         </button>
         {noAgents && (
           <p className="home__hint">
-            No agent CLIs detected yet. Install an agent CLI —{' '}
+            No agent CLIs detected yet. Install an agent CLI:{' '}
             <button
               className="home__hint-link"
               onClick={() => void window.api.openExternal('https://docs.claude.com/en/docs/claude-code/overview')}
             >
               Claude Code
             </button>
-            , Codex, Gemini, Aider, Cursor, opencode or Qwen — and it’ll show up here
+            , Codex, Gemini, Aider, Cursor, opencode or Qwen, and it’ll show up here
             automatically. You can still open a plain terminal in the meantime.
           </p>
         )}
