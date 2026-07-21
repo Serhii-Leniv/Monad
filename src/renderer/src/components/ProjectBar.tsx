@@ -143,7 +143,7 @@ export default function ProjectBar(): JSX.Element {
       <button
         className="projbar__cmdk"
         onClick={() => setPaletteOpen(true)}
-        title="Command palette — run a command or jump to a terminal"
+        title="Command palette: run a command or jump to a terminal"
         aria-label="Open command palette"
       >
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -158,7 +158,7 @@ export default function ProjectBar(): JSX.Element {
       {activeId && !activePath && (
         <button
           className="projbar__chip"
-          title="This workspace has no folder yet — agents will start in your home directory. Click to choose one."
+          title="This workspace has no folder yet. Agents will start in your home directory. Click to choose one."
           onClick={() => void pickFolderForWorkspace(activeId)}
         >
           set folder
@@ -170,7 +170,7 @@ export default function ProjectBar(): JSX.Element {
       {activePath && !activeIsGit && (
         <button
           className="projbar__chip"
-          title="This folder isn’t a git repository — agents share it directly and their changes can collide. Click to initialize git."
+          title="This folder isn’t a git repository. Agents share it directly and their changes can collide. Click to initialize git."
           onClick={() => void initGitForProject(activePath)}
         >
           no isolation

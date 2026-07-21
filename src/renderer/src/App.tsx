@@ -38,8 +38,8 @@ function OverlayLoading(): JSX.Element {
 import { useStore, toPersisted, activeWs, useActiveAgents, NEEDS_ATTENTION } from './store'
 import { restoreWorkspaces, saveWorkspaces, closeWorkspaceById } from './openProject'
 import { installPowerIdle } from './powerIdle'
+import { initWindowFocus } from './windowFocus'
 import { applyAccent } from './accent'
-import { applyTheme } from './theme'
 import {
   handleMenuEdit,
   terminals,
@@ -66,7 +66,6 @@ export default function App(): JSX.Element {
   const filePanelOpen = useStore((s) => activeWs(s)?.filePanel.open ?? false)
   const filePanelWidth = useStore((s) => s.filePanelWidth)
   const zoomFactor = useStore((s) => s.settings.zoomFactor)
-  const theme = useStore((s) => s.settings.theme)
   const accent = useStore((s) => s.settings.accent)
   const wallpaper = useStore((s) => s.settings.wallpaper)
   const terminalOpacity = useStore((s) => s.settings.terminalOpacity)
@@ -104,6 +103,10 @@ export default function App(): JSX.Element {
   // Freeze decorative animation (aurora, emblem glow) while the window is
   // unfocused, hidden, or the user has gone idle — see powerIdle.ts.
   useEffect(() => installPowerIdle(), [])
+
+  // Desaturate the whole UI while this window is not the key window, the way
+  // native apps do — see windowFocus.ts.
+  useEffect(() => initWindowFocus(), [])
 
   // Reopen every live workspace from last session (spawning all their agents) and
   // restore which one was in front. Falls back to the last recent project.
@@ -292,7 +295,7 @@ export default function App(): JSX.Element {
         st.setAgentClis(next)
         for (const c of next) {
           if (!prevIds.includes(c.id)) {
-            st.pushToast(`${c.label} detected — available under +`, 'success')
+            st.pushToast(`${c.label} detected. Available under +`, 'success')
           }
         }
       })
@@ -362,13 +365,6 @@ export default function App(): JSX.Element {
   useEffect(() => {
     applyAccent(accent)
   }, [accent])
-
-  // Theme (dark / light / system) → data-theme on <html>. main.tsx already
-  // applied it pre-paint; this keeps it live when the setting changes (and
-  // applyTheme itself tracks OS switches while set to 'system').
-  useEffect(() => {
-    applyTheme(theme)
-  }, [theme])
 
   // Keyboard shortcuts: ⌘ on macOS, Ctrl+Shift on Windows/Linux (avoids the
   // shell's own Ctrl-key readline bindings).
@@ -691,7 +687,7 @@ export default function App(): JSX.Element {
           <div className="confirm__title" id="bulk-close-title">Close {bulkCloseIds.length} terminals?</div>
           <div className="confirm__body">
             This ends their processes. Isolated terminals keep their branches and worktrees on
-            disk — no work is lost, and you can merge or clean them up later.
+            disk. No work is lost, and you can merge or clean them up later.
           </div>
           <div className="confirm__actions">
             <button className="confirm__btn" onClick={clearBulkClose}>
@@ -728,9 +724,9 @@ export default function App(): JSX.Element {
               <div className="confirm__title" id="ws-close-title">Close “{closingWs.name}”?</div>
               <div className="confirm__body">
                 {busy > 0
-                  ? `${busy === 1 ? 'An agent is' : `${busy} agents are`} still busy in this workspace — closing the tab stops ${busy === 1 ? 'it' : 'them'}. `
+                  ? `${busy === 1 ? 'An agent is' : `${busy} agents are`} still busy in this workspace. Closing the tab stops ${busy === 1 ? 'it' : 'them'}. `
                   : 'This ends the workspace’s terminals. '}
-                Worktrees and branches stay on disk, and the stage is saved — reopen the
+                Worktrees and branches stay on disk, and the stage is saved, so you can reopen the
                 project to pick up where you left off.
               </div>
               <div className="confirm__actions">

@@ -1,14 +1,29 @@
-/** Curated accent presets (all read well on the dark UI). First = default brand red. */
+/**
+ * Accent presets.
+ *
+ * These are all lightness-and-hue steps INSIDE the substrate's warm family, not
+ * a spectrum of saturated fills. The previous set ran Navy, Blue, Indigo,
+ * Violet and Teal — cool, fully saturated hues on a warm ink ground, which is
+ * both the worst case for fringing and a direct contradiction of the palette:
+ * the accent is supposed to be the same material, lit, rather than a different
+ * colour laid on top of it.
+ *
+ * The range is still real — ember through moss covers warm-to-cool WITHIN the
+ * family — so the setting remains a genuine choice rather than a token one.
+ *
+ * First entry is the default and must match `--accent-rgb` in styles.css, since
+ * applyAccent() overwrites that token at runtime.
+ */
 export const ACCENT_PRESETS: { name: string; hex: string }[] = [
-  { name: 'Brand', hex: '#ff453a' },
-  { name: 'Navy', hex: '#3b5bd9' },
-  { name: 'Blue', hex: '#2f6bff' },
-  { name: 'Indigo', hex: '#6366f1' },
-  { name: 'Violet', hex: '#8b5cf6' },
-  { name: 'Teal', hex: '#14b8a6' },
-  { name: 'Green', hex: '#22c55e' },
-  { name: 'Amber', hex: '#f59e0b' },
-  { name: 'Rose', hex: '#f43f5e' }
+  { name: 'Ember', hex: '#d97a68' },
+  { name: 'Rust', hex: '#c2664a' },
+  { name: 'Clay', hex: '#b8705c' },
+  { name: 'Ochre', hex: '#c9924e' },
+  { name: 'Sand', hex: '#b9a184' },
+  { name: 'Moss', hex: '#7d9b6a' },
+  { name: 'Sage', hex: '#8a9b8c' },
+  { name: 'Plum', hex: '#a06a72' },
+  { name: 'Ash', hex: '#8f8580' }
 ]
 
 function hexToRgb(hex: string): [number, number, number] {

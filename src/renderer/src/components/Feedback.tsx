@@ -14,7 +14,7 @@ const CATEGORIES: { id: Category; label: string }[] = [
 const PLACEHOLDER: Record<Category, string> = {
   bug: 'What went wrong, and what were you doing when it happened?',
   idea: 'What would you like Monad to do?',
-  other: 'Anything on your mind — comments, praise, questions…'
+  other: 'Anything on your mind: comments, praise, questions…'
 }
 
 /**
@@ -59,13 +59,13 @@ export default function Feedback(): JSX.Element {
     try {
       const res = await window.api.feedback.send(payload())
       if (res.ok) {
-        pushToast('Thanks — your feedback was sent.', 'success')
+        pushToast('Thanks, your feedback was sent.', 'success')
         close()
         return
       }
       if (res.error === 'not-configured') {
         // The Web3Forms key hasn't been pasted in yet (or this is a dev build).
-        pushToast('In-app sending isn’t set up yet — opening your mail app instead.', 'info')
+        pushToast('In-app sending isn’t set up yet. Opening your mail app instead.', 'info')
         openMailto()
         return
       }
@@ -123,7 +123,7 @@ export default function Feedback(): JSX.Element {
         <input
           className="feedback__email"
           type="email"
-          placeholder="Your email (optional — so I can reply)"
+          placeholder="Your email (optional, so I can reply)"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />

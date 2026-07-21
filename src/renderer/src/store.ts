@@ -435,8 +435,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   copyOnSelect: true,
   confirmClose: true,
   zoomFactor: 1.0,
-  theme: 'dark', // dark is the app's native look — existing users see zero change
-  accent: '#ff453a',
+  // Vestigial: the app has one designed look now and no theme control. The
+  // field stays so an existing user's persisted settings still parse.
+  theme: 'dark',
+  accent: '#d97a68', // Ember — must match --accent-rgb in styles.css
   notifications: true,
   notifyOnDone: true,
   sounds: false,
