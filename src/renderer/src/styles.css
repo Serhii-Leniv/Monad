@@ -283,7 +283,7 @@ body.is-opaque-window {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(6, 8, 12, 0.28), rgba(6, 8, 12, 0.46));
+  background: linear-gradient(180deg, rgba(10, 7, 6, 0.28), rgba(10, 7, 6, 0.46));
 }
 
 .titlebar,
@@ -552,8 +552,8 @@ body.has-wallpaper .aurora {
   }
   24% {
     box-shadow:
-      0 0 0 1px rgba(48, 209, 88, 0.55),
-      0 0 24px rgba(48, 209, 88, 0.3),
+      0 0 0 1px rgba(125, 155, 106, 0.55),
+      0 0 24px rgba(125, 155, 106, 0.3),
       var(--shadow-card),
       inset 0 1px 0 var(--glass-highlight);
   }
@@ -571,7 +571,7 @@ body.has-wallpaper .aurora {
   place-items: center;
   border-radius: 50%;
   background: var(--success);
-  color: #04180b;
+  color: #10200c;
   font-size: var(--fs-1);
   font-weight: 700;
   line-height: 1;
@@ -1016,7 +1016,7 @@ body.has-wallpaper .aurora {
 .projbar__btn:hover {
   border-color: rgba(var(--accent-rgb), 0.55);
   background: linear-gradient(150deg, rgba(255, 255, 255, 0.17), rgba(255, 255, 255, 0.04) 58%),
-    rgba(18, 24, 38, 0.78);
+    rgba(30, 24, 22, 0.78);
   box-shadow:
     var(--glass-specular),
     0 0 0 1px rgba(var(--accent-rgb), 0.12),
@@ -1158,7 +1158,7 @@ body.has-wallpaper .aurora {
   padding: 5px 9px 5px 8px;
   color: var(--muted);
   background: linear-gradient(150deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.015) 58%),
-    rgba(15, 21, 32, 0.4);
+    rgba(34, 27, 25, 0.4);
   border: 1px solid var(--line-2);
   border-radius: 999px;
   cursor: default;
@@ -1176,7 +1176,7 @@ body.has-wallpaper .aurora {
   color: var(--text-2);
   border-color: var(--line-1);
   background: linear-gradient(150deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03) 58%),
-    rgba(15, 21, 32, 0.5);
+    rgba(34, 27, 25, 0.5);
 }
 .projbar__cmdk:focus-visible {
   outline: none;
@@ -1349,11 +1349,11 @@ body.has-wallpaper .aurora {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: rgba(150, 162, 182, 0.7);
+  background: rgba(170, 158, 152, 0.7);
 }
 .tab__dot--working {
   background: var(--status-working);
-  box-shadow: 0 0 6px rgba(48, 209, 88, 0.5);
+  box-shadow: 0 0 6px rgba(125, 155, 106, 0.5);
 }
 .tab__dot--attention {
   background: var(--status-attention);
@@ -1405,7 +1405,7 @@ body.has-wallpaper .aurora {
   padding: 0;
   border-radius: 11px;
   color: var(--muted);
-  background: rgba(13, 18, 28, 0.92);
+  background: rgba(26, 21, 20, 0.92);
   border: 1px solid var(--line-3);
   box-shadow:
     var(--glass-specular),
@@ -2075,7 +2075,7 @@ body.has-wallpaper .aurora {
 .vec-pane__branch {
   font-size: var(--fs-1);
   color: var(--muted);
-  background: rgba(220, 235, 255, 0.07);
+  background: rgba(242, 236, 233, 0.07);
   border: 1px solid var(--glass-border);
   border-radius: 6px;
   padding: 2px 6px;
@@ -2154,7 +2154,7 @@ body.has-wallpaper .aurora {
      wallpaper / frosted desktop shows. backdrop-filter is the most expensive
      thing to animate, so it's enabled ONLY when a wallpaper is set (it has no
      visible benefit over the plain dark scene) — see body.has-wallpaper below. */
-  background: rgba(10, 13, 18, var(--term-alpha, 0.8));
+  background: rgba(26, 21, 20, var(--term-alpha, 0.8));
 }
 
 /* Frosted glass only matters over a wallpaper — keep it off otherwise so the
@@ -2334,7 +2334,7 @@ body.has-wallpaper .vec-pane__term {
   padding: 7px 10px 7px 12px;
   font-size: var(--fs-2);
   color: var(--text-2);
-  background: rgba(16, 18, 24, 0.86);
+  background: rgba(34, 27, 25, 0.86);
   backdrop-filter: var(--blur-sm);
   -webkit-backdrop-filter: var(--blur-sm);
   border: 1px solid var(--line-2);
@@ -2901,7 +2901,7 @@ body.has-wallpaper .vec-pane__term {
   z-index: 100;
   display: grid;
   place-items: center;
-  background: rgba(4, 8, 14, 0.5);
+  background: rgba(10, 7, 6, 0.5);
   backdrop-filter: blur(5px);
   -webkit-backdrop-filter: blur(5px);
 }
@@ -2945,7 +2945,7 @@ body.has-wallpaper .vec-pane__term {
   overflow: hidden;
   background:
     linear-gradient(160deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.025) 48%),
-    rgba(15, 21, 32, 0.66);
+    rgba(20, 16, 15, 0.66);
   backdrop-filter: var(--blur-lg);
   -webkit-backdrop-filter: var(--blur-lg);
   border: 1px solid var(--line-2);
@@ -3185,7 +3185,7 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .settings__select option {
-  background: #0e1726;
+  background: #221b19;
   color: var(--text);
 }
 
@@ -3316,7 +3316,7 @@ body.has-wallpaper .vec-pane__term {
 
 .settings__swatch.is-active {
   box-shadow:
-    0 0 0 2px rgba(16, 18, 24, 0.9),
+    0 0 0 2px rgba(34, 27, 25, 0.9),
     0 0 0 4px #fff;
 }
 
@@ -3324,13 +3324,13 @@ body.has-wallpaper .vec-pane__term {
   overflow: hidden;
   background: conic-gradient(
     from 0deg,
-    #f43f5e,
-    #f59e0b,
-    #22c55e,
-    #14b8a6,
-    #2f6bff,
-    #8b5cf6,
-    #f43f5e
+    #d97a68,
+    #c9924e,
+    #b9a184,
+    #7d9b6a,
+    #8a9b8c,
+    #a06a72,
+    #d97a68
   );
 }
 
@@ -3369,7 +3369,7 @@ body.has-wallpaper .vec-pane__term {
   overflow: hidden;
   background:
     linear-gradient(160deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.025) 48%),
-    rgba(15, 21, 32, 0.72);
+    rgba(34, 27, 25, 0.72);
   backdrop-filter: var(--blur-lg);
   -webkit-backdrop-filter: var(--blur-lg);
   border: 1px solid var(--line-2);
@@ -3474,7 +3474,7 @@ body.has-wallpaper .vec-pane__term {
   overflow: hidden;
   background:
     linear-gradient(160deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.025) 48%),
-    rgba(15, 21, 32, 0.66);
+    rgba(20, 16, 15, 0.66);
   backdrop-filter: var(--blur-lg);
   -webkit-backdrop-filter: var(--blur-lg);
   border: 1px solid var(--line-2);
@@ -3560,7 +3560,7 @@ body.has-wallpaper .vec-pane__term {
   border-radius: var(--r-lg);
   background:
     linear-gradient(160deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02) 50%),
-    rgba(15, 21, 32, 0.72);
+    rgba(34, 27, 25, 0.72);
   backdrop-filter: var(--blur-lg);
   -webkit-backdrop-filter: var(--blur-lg);
   border: 1px solid var(--line-2);
@@ -3612,7 +3612,7 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .confirm__btn--safe {
-  color: #cfe0ff;
+  color: #e8ded9;
   border-color: rgba(var(--accent-rgb), 0.45);
 }
 
@@ -3635,7 +3635,7 @@ body.has-wallpaper .vec-pane__term {
   overflow: hidden;
   background:
     linear-gradient(160deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.025) 48%),
-    rgba(15, 21, 32, 0.66);
+    rgba(20, 16, 15, 0.66);
   backdrop-filter: var(--blur-lg);
   -webkit-backdrop-filter: var(--blur-lg);
   border: 1px solid var(--line-2);
@@ -3742,7 +3742,7 @@ body.has-wallpaper .vec-pane__term {
   overflow: hidden;
   background:
     linear-gradient(160deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02) 50%),
-    rgba(15, 21, 32, 0.74);
+    rgba(34, 27, 25, 0.74);
   backdrop-filter: var(--blur-lg);
   -webkit-backdrop-filter: var(--blur-lg);
   border: 1px solid var(--line-2);
@@ -3796,7 +3796,7 @@ body.has-wallpaper .vec-pane__term {
   color: var(--text-2);
 }
 .review__sum-add {
-  color: #6fe0b4;
+  color: #9bb98a;
   font-weight: 600;
 }
 .review__sum-del {
@@ -3840,14 +3840,14 @@ body.has-wallpaper .vec-pane__term {
   gap: 9px;
   padding: 7px 14px;
   font-family: var(--font-ui);
-  background: linear-gradient(180deg, rgba(24, 30, 42, 0.97), rgba(20, 26, 36, 0.95));
+  background: linear-gradient(180deg, rgba(34, 27, 25, 0.97), rgba(34, 27, 25, 0.95));
   border-top: 1px solid var(--line-1);
   border-bottom: 1px solid var(--line-1);
   backdrop-filter: var(--blur-sm);
   -webkit-backdrop-filter: var(--blur-sm);
 }
 .review__file--untracked {
-  background: linear-gradient(180deg, rgba(20, 34, 28, 0.95), rgba(18, 30, 26, 0.92));
+  background: linear-gradient(180deg, rgba(30, 36, 26, 0.95), rgba(28, 33, 24, 0.92));
 }
 .review__fstat {
   flex: 0 0 auto;
@@ -3861,8 +3861,8 @@ body.has-wallpaper .vec-pane__term {
   font-weight: 700;
 }
 .review__fstat--add {
-  color: #6fe0b4;
-  background: rgba(64, 200, 150, 0.16);
+  color: #9bb98a;
+  background: rgba(125, 155, 106, 0.16);
 }
 .review__fstat--del {
   color: #ff9b94;
@@ -3873,8 +3873,8 @@ body.has-wallpaper .vec-pane__term {
   background: rgba(255, 180, 60, 0.16);
 }
 .review__fstat--ren {
-  color: #8fb8ff;
-  background: rgba(90, 140, 255, 0.16);
+  color: #c4ab8a;
+  background: rgba(185, 161, 132, 0.16);
 }
 /* Per-file include checkbox — drives merge-vs-partial-apply in the footer. */
 .review__fcheck {
@@ -4020,9 +4020,9 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .review__btn--merge {
-  color: #06121c;
+  color: #14100f;
   font-weight: 600;
-  background: linear-gradient(180deg, #5fe0b0, #34c08a);
+  background: linear-gradient(180deg, #8fb07e, #6d8a5c);
   border-color: rgba(255, 255, 255, 0.25);
 }
 
@@ -4343,7 +4343,7 @@ body.has-wallpaper .vec-pane__term {
   border-radius: var(--r-md);
   background:
     linear-gradient(160deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.015) 60%),
-    rgba(15, 21, 32, 0.6);
+    rgba(34, 27, 25, 0.6);
   border: 1px solid var(--line-2);
   cursor: default;
   /* Staggered rise on first paint (delay set inline per card). */
@@ -4432,7 +4432,7 @@ body.has-wallpaper .vec-pane__term {
   border-radius: var(--r-xl);
   background:
     linear-gradient(160deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.015) 50%),
-    rgba(15, 21, 32, 0.5);
+    rgba(34, 27, 25, 0.5);
   backdrop-filter: var(--blur-md);
   -webkit-backdrop-filter: var(--blur-md);
   border: 1px solid var(--line-2);
@@ -4515,7 +4515,7 @@ body.has-wallpaper .vec-pane__term {
   inset: 0;
   display: flex;
   flex-direction: column;
-  background: rgba(10, 16, 26, 0.92);
+  background: rgba(20, 16, 15, 0.92);
 }
 
 .diff__bar {
@@ -4551,9 +4551,9 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .diff__btn--merge {
-  color: #06121c;
+  color: #14100f;
   font-weight: 600;
-  background: linear-gradient(180deg, #5fe0b0, #34c08a);
+  background: linear-gradient(180deg, #8fb07e, #6d8a5c);
   border-color: rgba(255, 255, 255, 0.25);
 }
 
@@ -4566,7 +4566,7 @@ body.has-wallpaper .vec-pane__term {
   padding: 7px 11px;
   font-size: var(--fs-2);
   color: var(--text);
-  background: rgba(220, 235, 255, 0.05);
+  background: rgba(242, 236, 233, 0.05);
   border-bottom: 1px solid var(--glass-border);
   white-space: pre-wrap;
 }
@@ -4593,8 +4593,8 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .diff__line--add {
-  background: rgba(64, 200, 150, 0.16);
-  color: #9bf0cf;
+  background: rgba(125, 155, 106, 0.16);
+  color: #b3cba4;
 }
 
 .diff__line--del {
@@ -4603,11 +4603,11 @@ body.has-wallpaper .vec-pane__term {
 }
 
 .diff__line--new {
-  color: #9bf0cf;
+  color: #b3cba4;
 }
 
 .diff__line--hunk {
-  color: #6fd0e0;
+  color: #c9a97e;
 }
 
 .diff__line--meta {
@@ -4643,7 +4643,7 @@ body.has-wallpaper .vec-pane__term {
   place-items: center;
   padding: 32px;
   background: radial-gradient(900px 500px at 50% -10%, rgba(var(--accent-rgb), 0.18), transparent 60%),
-    #0a0c10;
+    #14100f;
   -webkit-app-region: drag;
 }
 .crash__card {
@@ -4806,4 +4806,32 @@ body.is-window-blurred .app {
 .xterm-rows {
   font-variant-ligatures: none;
   font-feature-settings: 'liga' 0, 'calt' 0;
+}
+
+
+/* ----------------------------------------------------------------------------
+   Native control colours. Chromium paints the <select> popup list, the caret,
+   checkboxes and the text-selection highlight itself, and on Windows those
+   default to the system blue regardless of what the surrounding surface says.
+   Nothing above reaches them; these three rules do.
+---------------------------------------------------------------------------- */
+
+/* Checkboxes, radios, range thumbs, progress. */
+:root {
+  accent-color: var(--accent);
+}
+
+/* Text selection. Unstyled, this is the browser's blue. */
+::selection {
+  background: rgba(var(--accent-rgb), 0.3);
+  color: var(--text);
+}
+
+/* The popup list of a native <select>. Both properties are required on Windows:
+   set only the background and the text stays dark-on-dark. */
+select,
+option,
+optgroup {
+  background-color: var(--sub-3);
+  color: var(--text);
 }
