@@ -89,7 +89,7 @@ app.whenReady().then(async () => {
   } catch (e) {
     console.log('[p2] executeJavaScript failed:', e.message)
     cleanup()
-    process.exit(5)
+    app.exit(5)
   }
 
   const wtCountAfterCreate = worktreeCount()
@@ -131,8 +131,16 @@ app.whenReady().then(async () => {
   console.log('[p2] RESULT: ' + (pass ? 'PASS' : 'FAIL'))
   cleanup()
   clearTimeout(timer)
-  win.destroy()
-  process.exit(pass ? 0 : 2)
+  // Exit via app.exit, and give teardown a beat first.
+  //
+  // process.exit raced Electron's own shutdown: on a loaded runner (two CI jobs
+  // on one box) the process could die with code 1 BEFORE the requested code
+  // landed, reporting a passing smoke as a CI failure.
+  //
+  // The delay matters where a PTY is live — exiting straight into node-pty's
+  // native teardown segfaults (139) or hangs. 250ms lets it settle. app.exit
+  // also closes every window, so the old win.destroy() beforehand isn't needed.
+  setTimeout(() => app.exit(pass ? 0 : 2), 250)
 })
 
 function cleanup() {
@@ -151,5 +159,5 @@ function cleanup() {
 const timer = setTimeout(() => {
   console.log('[p2] TIMEOUT')
   cleanup()
-  process.exit(3)
+  app.exit(3)
 }, 40000)
