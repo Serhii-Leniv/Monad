@@ -46,13 +46,32 @@ const KNOWN_AGENTS: { id: string; label: string; bins: string[] }[] = [
   { id: 'qwen', label: 'Qwen Code', bins: ['qwen'] }
 ]
 
-/** Detect which agent CLIs are installed on PATH, so they can be launched in one click. */
+/**
+ * Detect which agent CLIs are installed on PATH, so they can be launched in one
+ * click.
+ *
+ * Cached, because this is not cheap and it is called on every window focus: a
+ * MISSING agent costs a full sweep of PATH (every directory x every executable
+ * extension) before it can be ruled out, so on Windows the whole scan can run
+ * to ~1000 synchronous existsSync calls — on the main thread, which is also the
+ * thread forwarding PTY output. Alt-tabbing repeatedly used to pay that every
+ * time.
+ *
+ * The TTL exists so a CLI the user installs while Monad is open still shows up
+ * without a restart; it just takes up to a minute.
+ */
+const AGENT_CACHE_MS = 60_000
+let agentCache: { at: number; agents: AgentCli[] } | null = null
+
 export function detectAgents(): AgentCli[] {
+  const now = Date.now()
+  if (agentCache && now - agentCache.at < AGENT_CACHE_MS) return agentCache.agents
   const out: AgentCli[] = []
   for (const a of KNOWN_AGENTS) {
     const bin = a.bins.find((b) => onPath(b))
     if (bin) out.push({ id: a.id, label: a.label, command: bin })
   }
+  agentCache = { at: now, agents: out }
   return out
 }
 

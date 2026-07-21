@@ -404,6 +404,16 @@ export interface AppSettings {
   wallpaper: string | null
   /** Terminal background opacity 0.4–1 (lower reveals the wallpaper behind). */
   terminalOpacity: number
+  /**
+   * Let the desktop show through the window (macOS vibrancy / Windows mica).
+   *
+   * Off by default because it is the app's most expensive single effect: the OS
+   * re-blurs whatever sits behind the window continuously, at the display's
+   * backing resolution, below the web contents where no CSS or idle-pausing can
+   * reach it. Mirrored into the main process, which needs it at window
+   * construction — see WinState.translucent.
+   */
+  windowTranslucency: boolean
 }
 
 /** Monospace stacks offered in Settings (first that's installed wins). */
@@ -431,7 +441,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   notifyOnDone: true,
   sounds: false,
   wallpaper: null,
-  terminalOpacity: 0.55
+  terminalOpacity: 0.55,
+  windowTranslucency: false
 }
 
 function clampNum(n: unknown, lo: number, hi: number, dflt: number): number {
@@ -940,10 +951,14 @@ export const useStore = create<AppState>((set, get) => ({
         stageW: w,
         stageH: h,
         stageReady: true,
-        liveWorkspaces: s.liveWorkspaces.map((ws) => ({
-          ...ws,
-          agents: laidOut(ws.agents, ws.layoutMode, w, h)
-        }))
+        // `laidOut` deliberately returns the SAME array when no slot moved
+        // (see its comment) — spreading unconditionally threw that away and
+        // gave all six workspaces new identities on every resize frame.
+        // setActiveWorkspace already preserves identity this way.
+        liveWorkspaces: s.liveWorkspaces.map((ws) => {
+          const agents = laidOut(ws.agents, ws.layoutMode, w, h)
+          return agents === ws.agents ? ws : { ...ws, agents }
+        })
       }
     }),
 
@@ -1458,6 +1473,13 @@ export const useStore = create<AppState>((set, get) => ({
     set((s) => {
       const ws = wsOfAgent(s, id)
       if (!ws) return {}
+      // A write that changes nothing must not allocate. mapWs mints a new outer
+      // array every call, so a no-op here still re-renders App and, through it,
+      // every live workspace's Stage — Moveable and Selecto included.
+      const cur = ws.agents.find((a) => a.id === id)
+      if (cur && (Object.keys(rt) as Array<keyof AgentInstance>).every((k) => cur[k] === rt[k])) {
+        return {}
+      }
       return {
         liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({
           ...w,
@@ -1470,6 +1492,9 @@ export const useStore = create<AppState>((set, get) => ({
     set((s) => {
       const ws = wsOfAgent(s, id)
       if (!ws) return {}
+      // `evaluateIdle` re-asserts 'idle' at the end of every output burst, so
+      // idle→idle is the common case, not an edge one.
+      if (ws.agents.find((a) => a.id === id)?.status === status) return {}
       return {
         liveWorkspaces: mapWs(s.liveWorkspaces, ws.id, (w) => ({
           ...w,

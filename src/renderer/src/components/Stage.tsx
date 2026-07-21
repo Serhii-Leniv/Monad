@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import Moveable from 'react-moveable'
 import Selecto from 'react-selecto'
 import TerminalPane from './TerminalPane'
@@ -13,7 +13,7 @@ const EMPTY_IDS: string[] = []
 /** One workspace's stage. App mounts one per live workspace (keyed by id) and
  *  only the active one is visible; the rest stay mounted (visibility-hidden) so
  *  their PTYs keep streaming. All scoped reads are for THIS workspace. */
-export default function Stage({ workspaceId }: { workspaceId: string }): JSX.Element {
+function Stage({ workspaceId }: { workspaceId: string }): JSX.Element {
   const agents = useStore((s) => wsById(s, workspaceId)?.agents ?? EMPTY_AGENTS)
   const selectedIds = useStore((s) => wsById(s, workspaceId)?.selectedIds ?? EMPTY_IDS)
   const setSelected = useStore((s) => s.setSelected)
@@ -242,3 +242,12 @@ export default function Stage({ workspaceId }: { workspaceId: string }): JSX.Ele
     </div>
   )
 }
+
+// Memoized, and `workspaceId` is its only prop. mapWs already goes to the
+// trouble of leaving untouched workspace objects reference-equal — its comment
+// says "so only that workspace's Stage/panes re-render" — but that intent was
+// lost without this: App re-renders on any store write, so every live
+// workspace's Stage re-reconciled a <Moveable> and a <Selecto> each time, for
+// workspaces where nothing had changed. TerminalPane was already memoized;
+// this closes the gap above it.
+export default memo(Stage)

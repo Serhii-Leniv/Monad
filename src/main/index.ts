@@ -45,6 +45,20 @@ interface WinState {
   height: number
   x?: number
   y?: number
+  /**
+   * Frosted-desktop window backdrop (macOS vibrancy / Windows mica).
+   *
+   * Lives here rather than with the renderer's other settings because it has to
+   * be known at BrowserWindow construction — reading it from localStorage after
+   * the renderer boots would show the wrong backdrop for the first frames.
+   *
+   * Off by default: a translucent window makes the OS blur the desktop behind
+   * it continuously, at the display's real backing resolution. On a Retina Mac
+   * that is a constant full-window GPU job that no amount of CSS can avoid,
+   * because it happens below the web contents entirely — it is the one cost
+   * that survived every other optimization.
+   */
+  translucent?: boolean
 }
 const stateFile = (): string => join(app.getPath('userData'), 'window-state.json')
 
@@ -67,13 +81,32 @@ function onScreen(s: WinState): boolean {
   })
 }
 
+/** Current backdrop mode, mirrored here so bounds saves don't drop it. */
+let translucent = false
+
 function saveWinState(w: BrowserWindow): void {
   try {
     if (w.isMinimized() || w.isMaximized() || w.isDestroyed()) return
     const b = w.getBounds()
-    writeFileSync(stateFile(), JSON.stringify({ width: b.width, height: b.height, x: b.x, y: b.y }))
+    writeFileSync(
+      stateFile(),
+      JSON.stringify({ width: b.width, height: b.height, x: b.x, y: b.y, translucent })
+    )
   } catch {
     /* ignore */
+  }
+}
+
+/** Apply the backdrop to a live window. Each call is a no-op on other platforms. */
+function applyTranslucency(w: BrowserWindow, on: boolean): void {
+  try {
+    if (process.platform === 'darwin') w.setVibrancy(on ? 'under-window' : null)
+    else if (process.platform === 'win32') w.setBackgroundMaterial(on ? 'mica' : 'none')
+    // Opaque needs a real backdrop colour behind the page; the scene's own
+    // gradient paints over it, so this only shows during resize//paint gaps.
+    w.setBackgroundColor(on ? '#00000000' : '#07090c')
+  } catch {
+    /* an older Electron without setBackgroundMaterial must not crash the app */
   }
 }
 
@@ -98,6 +131,7 @@ let ptyManager: PtyManager
 
 function createWindow(): void {
   const st = loadWinState()
+  translucent = st.translucent === true
   win = new BrowserWindow({
     width: st.width,
     height: st.height,
@@ -105,12 +139,15 @@ function createWindow(): void {
     ...(process.platform !== 'darwin' && existsSync(iconPng) ? { icon: iconPng } : {}),
     minWidth: 720,
     minHeight: 480,
-    // Transparent bg + Windows 11 backdrop material = frosted desktop behind the
-    // app. 'mica' reads sharper/calmer than 'acrylic' (it tints from the wallpaper
-    // instead of live-blurring the desktop) — swap back to 'acrylic' here to A/B.
-    backgroundColor: '#00000000',
-    backgroundMaterial: 'mica',
-    vibrancy: 'under-window', // macOS equivalent (no-op on Windows)
+    // Frosted desktop behind the app, when the user opts into it. Costly: the
+    // OS re-blurs whatever is behind the window continuously, below the web
+    // contents where powerIdle and CSS cannot reach it. Opaque by default.
+    // 'mica' reads sharper/calmer than 'acrylic' (it tints from the wallpaper
+    // instead of live-blurring the desktop) — swap to 'acrylic' here to A/B.
+    backgroundColor: translucent ? '#00000000' : '#07090c',
+    ...(translucent
+      ? { backgroundMaterial: 'mica' as const, vibrancy: 'under-window' as const }
+      : {}),
     // Hide the native title bar so the glass runs edge-to-edge. Windows/Linux
     // draw min/max/close as an overlay (top-right); macOS keeps its native
     // traffic lights, nudged to sit centered in our 40px titlebar strip.
@@ -216,7 +253,18 @@ if (!app.requestSingleInstanceLock()) {
   // Dock launch on macOS gets launchd's minimal PATH, which hides every agent CLI.
   applyResolvedPath()
   applyProductionCsp()
-  ptyManager = registerIpc(() => win)
+  ptyManager = registerIpc(() => win, {
+    get: () => translucent,
+    set: (on) => {
+      translucent = on
+      if (win && !win.isDestroyed()) {
+        applyTranslucency(win, translucent)
+        // Persist now: the next launch has to construct the window with this
+        // before any renderer code runs.
+        saveWinState(win)
+      }
+    }
+  })
   // macOS needs an explicit menu so ⌘C/⌘V/⌘A reach the terminal instead of being
   // swallowed by the default Edit-menu key equivalents (see menu.ts).
   installMacMenu(() => win)

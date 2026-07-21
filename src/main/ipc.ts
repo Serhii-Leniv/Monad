@@ -47,7 +47,37 @@ function workspacesFile(): string {
  * tests, and so Phase 2's git/worktree handlers slot in alongside these.
  * Returns the PtyManager so the caller can kill sessions on quit.
  */
-export function registerIpc(getWindow: () => BrowserWindow | null): PtyManager {
+/**
+ * Window-backdrop plumbing, supplied by index.ts, which owns the persisted
+ * value because it needs it before any renderer exists. Optional so the smoke
+ * scripts — which call registerIpc directly, without index.ts — still get a
+ * working handler instead of an unhandled-invoke crash.
+ */
+export interface TranslucencyHooks {
+  get: () => boolean
+  set: (on: boolean) => void
+}
+
+export function registerIpc(
+  getWindow: () => BrowserWindow | null,
+  translucency?: TranslucencyHooks
+): PtyManager {
+  // Fallback state for the no-hooks case, so the channel always answers.
+  let localTranslucent = false
+  const readTranslucent = (): boolean => translucency?.get() ?? localTranslucent
+  const writeTranslucent = (on: boolean): void => {
+    localTranslucent = on
+    translucency?.set(on)
+  }
+
+  // Applied live so the backdrop can be A/B'd against its power cost without a
+  // restart; index.ts persists it for the next launch.
+  ipcMain.handle('window:get-translucency', () => readTranslucent())
+  ipcMain.handle('window:set-translucency', (_e, on: boolean) => {
+    writeTranslucent(!!on)
+    return readTranslucent()
+  })
+
   // Guard against a destroyed window: a PTY can still emit during teardown,
   // and webContents.send on a destroyed object throws "Object has been destroyed".
   const send = (channel: string, payload: unknown): void => {

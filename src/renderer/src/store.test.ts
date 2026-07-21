@@ -771,4 +771,73 @@ describe('setStageSize', () => {
     expect(tile.w).toBeGreaterThan(0)
     expect(tile.x + tile.w).toBeLessThanOrEqual(1600)
   })
+
+  it('leaves an unaffected workspace object identical across a resize', () => {
+    // An agent-less workspace has nothing to re-tile — laidOut returns the very
+    // same array for it — so its session object must survive a resize
+    // untouched. Cloning it regardless gave every live workspace a new identity
+    // on each resize frame (a rAF-driven stream of them), re-rendering each
+    // Stage's Moveable and Selecto for a layout that never moved.
+    st().createWorkspace('empty')
+    const emptyId = ws().id
+    st().createWorkspace('busy')
+    st().addAgent()
+    st().setStageSize(1400, 900)
+
+    const emptyBefore = wsById(st(), emptyId)
+    const busyBefore = wsById(st(), ws().id)
+
+    st().setStageSize(1600, 1000)
+
+    expect(wsById(st(), emptyId)).toBe(emptyBefore)
+    // The workspace that DID re-tile must still be rebuilt.
+    expect(wsById(st(), busyBefore!.id)).not.toBe(busyBefore)
+  })
+})
+
+// These mutators fire constantly — TerminalPane re-asserts status at the end of
+// every output burst — and mapWs mints a new outer liveWorkspaces array on each
+// call. Without an equality guard a no-op write still re-renders App and, with
+// it, every live workspace's Stage.
+describe('no-op status writes', () => {
+  beforeEach(() => {
+    st().createWorkspace('A')
+  })
+
+  it('setStatus with the current status changes nothing', () => {
+    st().addAgent()
+    const id = agentIds()[0]
+    st().setStatus(id, 'working')
+    const before = st().liveWorkspaces
+
+    st().setStatus(id, 'working')
+    expect(st().liveWorkspaces).toBe(before)
+  })
+
+  it('setStatus with a different status still applies', () => {
+    st().addAgent()
+    const id = agentIds()[0]
+    st().setStatus(id, 'working')
+    st().setStatus(id, 'idle')
+    expect(ws().agents[0].status).toBe('idle')
+  })
+
+  it('setAgentRuntime with identical values changes nothing', () => {
+    st().addAgent()
+    const id = agentIds()[0]
+    st().setAgentRuntime(id, { cwd: '/tmp' })
+    const before = st().liveWorkspaces
+
+    st().setAgentRuntime(id, { cwd: '/tmp' })
+    expect(st().liveWorkspaces).toBe(before)
+  })
+
+  it('setAgentRuntime still applies a partial change', () => {
+    st().addAgent()
+    const id = agentIds()[0]
+    st().setAgentRuntime(id, { cwd: '/tmp', branch: 'canvas/x' })
+    st().setAgentRuntime(id, { cwd: '/tmp', branch: 'canvas/y' })
+    expect(ws().agents[0].branch).toBe('canvas/y')
+    expect(ws().agents[0].cwd).toBe('/tmp')
+  })
 })

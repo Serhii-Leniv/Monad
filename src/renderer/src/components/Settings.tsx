@@ -284,6 +284,21 @@ export default function Settings(): JSX.Element {
                 </div>
               </label>
 
+              <label className="settings__row settings__row--toggle">
+                <span className="settings__label">
+                  Translucent window
+                  <span className="settings__hint">
+                    frosted desktop behind the app — costs noticeably more power, especially on
+                    a laptop
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={settings.windowTranslucency}
+                  onChange={(e) => setSetting('windowTranslucency', e.target.checked)}
+                />
+              </label>
+
               <label className="settings__row">
                 <span className="settings__label">
                   Interface scale

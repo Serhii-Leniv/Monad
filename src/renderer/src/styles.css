@@ -250,6 +250,17 @@ body {
     linear-gradient(180deg, rgba(10, 12, 16, 0.42), rgba(7, 9, 12, 0.52));
 }
 
+/* Opaque window (the default): the veil above is deliberately semi-transparent
+   so the OS backdrop reads through it, but with no backdrop to read there is
+   nothing behind these alphas except black — the scene washes out to near-flat.
+   Same two layers at full strength, so the app looks like itself while the OS
+   is spared blurring the desktop behind the window on every frame. */
+body.is-opaque-window {
+  background:
+    radial-gradient(1200px 820px at 18% -6%, rgba(30, 64, 92, 0.14), transparent 55%),
+    linear-gradient(180deg, #0a0c10, #07090c);
+}
+
 .app {
   display: flex;
   flex-direction: column;
@@ -302,14 +313,21 @@ body {
   pointer-events: none;
 }
 
-/* Ambient orbs that slowly breathe + drift so the glass has *living* light to
-   refract. Kept GPU-cheap and flicker-safe on Windows DWM: small amplitudes,
-   translate3d/scale only (own compositor layer — no filter/layout repaint), very
-   long loops, and paused entirely while dragging a pane. */
+/* Ambient orbs giving the glass real light to refract.
+
+   These deliberately do NOT animate. The drift was the app's single largest GPU
+   cost: the orbs sit under backdrop-filtered chrome, so every frame they moved
+   forced that chrome to re-blur — a full-screen composite at Retina 2x, running
+   forever, regardless of how many agents were open. Held still they are painted
+   once and never dirtied again, which is effectively free, and the colour and
+   depth they give the glass is unchanged.
+
+   No `will-change` either: it exists to hint at *upcoming* animation, and on a
+   static element it just pins a compositor layer (~16MB across the three) for
+   nothing. */
 .aurora__orb {
   position: absolute;
   border-radius: 50%;
-  will-change: transform;
 }
 
 .aurora__orb--1 {
@@ -319,7 +337,6 @@ body {
   top: -20%;
   /* Secondary-brand navy — stays blue even though the accent is red. */
   background: radial-gradient(circle, rgba(var(--brand-rgb), 0.34), transparent 62%);
-  animation: aurora-1 44s ease-in-out infinite;
 }
 
 .aurora__orb--2 {
@@ -328,7 +345,8 @@ body {
   right: -12%;
   top: 4%;
   background: radial-gradient(circle, rgba(46, 132, 162, 0.26), transparent 62%);
-  animation: aurora-2 54s ease-in-out infinite;
+  /* Held at the midpoint of the old drift so the composition reads the same. */
+  transform: translate3d(-3%, 3.5%, 0) scale(1);
 }
 
 .aurora__orb--3 {
@@ -337,55 +355,37 @@ body {
   left: 22%;
   bottom: -24%;
   background: radial-gradient(circle, rgba(122, 92, 222, 0.2), transparent 62%);
-  animation: aurora-3 64s ease-in-out infinite;
-}
-
-@keyframes aurora-1 {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(3.5%, 2.5%, 0) scale(1.07);
-  }
-}
-@keyframes aurora-2 {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1.05);
-  }
-  50% {
-    transform: translate3d(-3%, 3.5%, 0) scale(1);
-  }
-}
-@keyframes aurora-3 {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(2.5%, -3%, 0) scale(1.08);
-  }
-}
-
-/* Hold the orbs still while a pane is being dragged — keep every frame for the
-   drag itself. */
-body.dragging .aurora__orb {
-  animation-play-state: paused;
+  transform: translate3d(2.5%, -3%, 0) scale(1.08);
 }
 
 /* ---------- Power: pause decoration when nobody is watching ----------
    powerIdle.ts stamps is-blurred / is-hidden / is-idle on <body>. Purely
-   decorative motion (aurora, emblem glow) freezes on all three — every frame
-   it animates forces the backdrop-filtered chrome above it to re-blur, which
-   is the app's whole idle GPU draw. Paused animations resume from the same
-   frame, so nothing jumps when focus/input returns. */
-body.is-blurred .aurora__orb,
-body.is-hidden .aurora__orb,
-body.is-idle .aurora__orb,
-body.is-blurred .empty__card > img,
-body.is-hidden .empty__card > img,
-body.is-idle .empty__card > img {
+   decorative motion freezes on all three. Paused animations resume from the
+   same frame, so nothing jumps when focus/input returns.
+
+   The aurora is no longer listed here because it no longer animates at all —
+   see .aurora__orb above. What remains is the Home screen, whose wordmark
+   animates `background-position` (a PAINT property) through an SVG mask and a
+   34px drop-shadow, and whose hero glow scales a blurred surface: both are full
+   filter passes every frame, and both used to run forever behind the launcher.
+
+   Keep this list in step with the sheet — styles.test.ts asserts that every
+   `infinite` animation is either paused here or explicitly allowlisted. */
+body.is-blurred .home__wordmark,
+body.is-hidden .home__wordmark,
+body.is-idle .home__wordmark,
+body.is-blurred .home__hero::before,
+body.is-hidden .home__hero::before,
+body.is-idle .home__hero::before {
+  animation-play-state: paused;
+}
+
+/* The terminal cursor pauses only when the window is genuinely not visible.
+   Each blink is nearly free on its own, but it keeps one live animation per
+   pane, which stops the compositor settling. Deliberately NOT paused on
+   blur/idle: `step-end` could strand the cursor mid-cycle on its dim frame,
+   and an unfocused-but-visible terminal should still look alive. */
+body.is-hidden .xterm-cursor-blink {
   animation-play-state: paused;
 }
 
@@ -672,19 +672,11 @@ body.has-wallpaper .aurora {
     inset 0 1px 0 var(--glass-highlight);
 }
 
-/* The empty-state emblem breathes a soft accent glow (static — glow only). */
-.empty__card > img {
-  animation: emblem-glow 4.6s ease-in-out infinite;
-}
-@keyframes emblem-glow {
-  0%,
-  100% {
-    filter: drop-shadow(0 0 16px rgba(var(--accent-rgb), 0.3));
-  }
-  50% {
-    filter: drop-shadow(0 0 34px rgba(var(--accent-rgb), 0.55));
-  }
-}
+/* (An `emblem-glow` animation on `.empty__card > img` was removed here: the
+   empty state renders a heading, a paragraph and buttons — there has been no
+   <img> in that card for some time, so the rule matched nothing. It also sat in
+   powerIdle's pause list, which is how that list came to look better covered
+   than it was.) */
 
 /* ---------- Toasts ---------- */
 .toasts {
@@ -939,17 +931,11 @@ body.has-wallpaper .aurora {
   color: #fff;
 }
 
-/* Fine film grain over the scene — the premium "matte" texture (static = free). */
-.grain {
-  position: fixed;
-  inset: 0;
-  z-index: 6;
-  pointer-events: none;
-  opacity: 0.05;
-  mix-blend-mode: overlay;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 220 220' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 220px 220px;
-}
+/* The film grain that used to live here was removed: a full-viewport
+   `mix-blend-mode: overlay` is not "static = free" as its comment claimed. A
+   blend mode forces its whole backdrop into a separate compositing group and
+   re-blends any region that changes underneath it — so every terminal write and
+   every cursor blink paid an extra full-screen pass for a 5%-opacity texture. */
 
 /* Thin glass scrollbars for the scrollable surfaces. */
 .review__body::-webkit-scrollbar,
@@ -4127,21 +4113,9 @@ body.has-wallpaper .vec-pane__term {
   z-index: -1;
   animation: hero-glow 6s ease-in-out infinite;
 }
-.home__hero > svg,
-.home__hero > img {
-  filter: drop-shadow(0 0 34px rgba(var(--accent-rgb), 0.5));
-  animation: home-float 6s ease-in-out infinite;
-  /* Composited layer: the float moves ~0.04px per frame — without layer
-     promotion the browser repaints the PNG+shadow each frame and snaps to
-     whole pixels, which reads as jitter instead of a drift. */
-  will-change: transform;
-}
-@media (prefers-reduced-motion: reduce) {
-  .home__hero > svg,
-  .home__hero > img {
-    animation: none;
-  }
-}
+/* (`.home__hero > svg, > img` rules removed — the hero renders a masked
+   `.home__wordmark` heading now, so these matched nothing. `home-float` is
+   still used, by the wordmark itself.) */
 @keyframes home-float {
   0%,
   100% {
@@ -4172,27 +4146,8 @@ body.has-wallpaper .vec-pane__term {
     transform: translate(-50%, -50%) scale(1.08);
   }
 }
-.home__title {
-  margin: 16px 0 8px;
-  font-family: var(--font-display);
-  font-size: clamp(34px, 5vw, 48px);
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  /* Gradient wordmark with a slow light sheen drifting across it. */
-  background: linear-gradient(
-    100deg,
-    #ffffff 0%,
-    #ffffff 38%,
-    var(--accent-2) 50%,
-    #ffffff 62%,
-    #ffffff 100%
-  );
-  background-size: 220% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: title-sheen 9s ease-in-out infinite;
-}
+/* (`.home__title` removed — superseded by the masked `.home__wordmark`, which
+   carries the sheen now. The keyframes below are still live.) */
 @keyframes title-sheen {
   0%,
   100% {
