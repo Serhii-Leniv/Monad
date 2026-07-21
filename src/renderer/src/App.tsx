@@ -38,8 +38,8 @@ function OverlayLoading(): JSX.Element {
 import { useStore, toPersisted, activeWs, useActiveAgents, NEEDS_ATTENTION } from './store'
 import { restoreWorkspaces, saveWorkspaces, closeWorkspaceById } from './openProject'
 import { installPowerIdle } from './powerIdle'
+import { initWindowFocus } from './windowFocus'
 import { applyAccent } from './accent'
-import { applyTheme } from './theme'
 import {
   handleMenuEdit,
   terminals,
@@ -66,7 +66,6 @@ export default function App(): JSX.Element {
   const filePanelOpen = useStore((s) => activeWs(s)?.filePanel.open ?? false)
   const filePanelWidth = useStore((s) => s.filePanelWidth)
   const zoomFactor = useStore((s) => s.settings.zoomFactor)
-  const theme = useStore((s) => s.settings.theme)
   const accent = useStore((s) => s.settings.accent)
   const wallpaper = useStore((s) => s.settings.wallpaper)
   const terminalOpacity = useStore((s) => s.settings.terminalOpacity)
@@ -104,6 +103,10 @@ export default function App(): JSX.Element {
   // Freeze decorative animation (aurora, emblem glow) while the window is
   // unfocused, hidden, or the user has gone idle — see powerIdle.ts.
   useEffect(() => installPowerIdle(), [])
+
+  // Desaturate the whole UI while this window is not the key window, the way
+  // native apps do — see windowFocus.ts.
+  useEffect(() => initWindowFocus(), [])
 
   // Reopen every live workspace from last session (spawning all their agents) and
   // restore which one was in front. Falls back to the last recent project.
@@ -362,13 +365,6 @@ export default function App(): JSX.Element {
   useEffect(() => {
     applyAccent(accent)
   }, [accent])
-
-  // Theme (dark / light / system) → data-theme on <html>. main.tsx already
-  // applied it pre-paint; this keeps it live when the setting changes (and
-  // applyTheme itself tracks OS switches while set to 'system').
-  useEffect(() => {
-    applyTheme(theme)
-  }, [theme])
 
   // Keyboard shortcuts: ⌘ on macOS, Ctrl+Shift on Windows/Linux (avoids the
   // shell's own Ctrl-key readline bindings).
