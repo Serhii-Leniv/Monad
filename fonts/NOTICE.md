@@ -1,20 +1,19 @@
 # Bundled fonts
 
-These typefaces power the Monad type system (see `@font-face` in `index.html`).
-Both are redistributed under the **SIL Open Font License 1.1** (OFL), which permits
-bundling in an application as long as this attribution travels with them.
+The page's display face is the app's own brand serif (see `@font-face` in
+`index.html`), redistributed under the **SIL Open Font License 1.1** (OFL),
+which permits bundling as long as this attribution travels with it.
 
-| Role      | Upstream typeface        | Author / Copyright                          | License |
-| --------- | ------------------------ | ------------------------------------------- | ------- |
-| Body / UI | Inter (variable)         | Copyright The Inter Project Authors         | OFL 1.1 |
-| Display   | Space Grotesk (variable) | Copyright The Space Grotesk Project Authors | OFL 1.1 |
+| Role    | Upstream typeface       | Author / Copyright                                        | License |
+| ------- | ----------------------- | --------------------------------------------------------- | ------- |
+| Display | Lora (variable, roman)  | Copyright 2011 The Lora Project Authors (Cyreal)          | OFL 1.1 |
+| Display | Lora (variable, italic) | Copyright 2011 The Lora Project Authors (Cyreal)          | OFL 1.1 |
 
-Files are the `latin` subset, variable-weight `woff2` builds. Full license text:
-https://openfontlicense.org
+These are the same `latin`-subset variable `woff2` builds the Monad app itself
+ships as "Monad Serif", so the site and the app render one identity.
+Full license text: https://openfontlicense.org · Lora: https://github.com/cyrealtype/Lora
 
-Inter: https://github.com/rsms/inter ·
-Space Grotesk: https://github.com/floriankarsten/space-grotesk
-
-Monospace is not bundled — the page uses the reader's system mono stack
-(`ui-monospace`, SF Mono, Menlo, Consolas), which costs no bytes and matches the
-terminal font they already read code in.
+Body text is not bundled — the page uses the reader's system UI stack, which
+costs no bytes. Monospace likewise uses the system mono stack (`ui-monospace`,
+SF Mono, Cascadia Code, Menlo, Consolas), matching the terminal font a
+developer already reads code in.

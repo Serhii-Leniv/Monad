@@ -9,7 +9,7 @@
       content="Monad is a desktop app that runs Claude Code, Codex, Gemini and any other CLI coding agent side by side — each sealed in its own git worktree, with diff and merge built in. Free, MIT-licensed, bring your own CLIs."
     />
     <link rel="canonical" href="https://serhii-leniv.github.io/Monad/" />
-    <meta name="theme-color" content="#08090c" />
+    <meta name="theme-color" content="#100d0c" />
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Monad" />
@@ -29,69 +29,75 @@
 
     <link rel="icon" href="icon-monad-v2.png" type="image/png" />
     <link rel="apple-touch-icon" href="icon-monad-v2.png" />
-    <link rel="preload" as="font" type="font/woff2" href="fonts/inter-var.woff2" crossorigin />
-    <link rel="preload" as="font" type="font/woff2" href="fonts/space-grotesk-var.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="fonts/lora-var.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="fonts/lora-var-italic.woff2" crossorigin />
 
     <style>
       /* ------------------------------------------------------------------
          Monad — landing page. Single file, no build step, no CDN.
 
          Art direction, and the reasons for it:
-           - Nothing is centred except the ticker. The hero is an asymmetric
-             two-column split: headline left, supporting text right. Centred
-             stacks are what every generated page does.
-           - Type contrast is violent, not graduated: ~88px headline against
-             a 16px body. A smooth ramp reads as a template.
-           - The demo breaks the container into a full-bleed band with its
-             own texture, so the page has a spine instead of one column.
-           - The worktree layout is drawn as a real terminal tree. It is the
-             one thing on the page that could not be a stock component.
+           - The site now speaks the app's own voice. Monad's entire UI is
+             set in Lora ("Monad Serif" in the app bundle) with a red accent
+             on dark; the page uses the same face and the same softened
+             dark-mode red, so the download and the thing downloaded are one
+             brand. No Space Grotesk, no Inter — display is Lora, body is
+             the reader's system face, mono appears only on genuine data
+             (branch names, paths, commands, versions).
+           - The palette is a WARM charcoal, not the stock blue-slate dark.
+             Every neutral leans toward the red accent's temperature; the
+             hairlines are warm alpha so edges feel lit, not drawn.
+           - Two artifacts carry the page: the real app on video, clipped by
+             the fold, and a hand-drawn git branch graph — the product's
+             actual mental model, with rounded caps and one red merge dot.
+           - Sections open with full serif sentences, not kicker labels.
+             The uppercase-mono label costume is gone everywhere.
            - Still no box-shadow anywhere: depth is the surface ladder plus
-             1px hairlines.
+             warm 1px hairlines and a fine grain film under the content.
          ------------------------------------------------------------------ */
 
       @font-face {
-        font-family: 'Inter';
-        src: url('fonts/inter-var.woff2') format('woff2');
-        font-weight: 100 900;
-        font-display: swap;
-        font-style: normal;
-      }
-      @font-face {
-        font-family: 'Space Grotesk';
-        src: url('fonts/space-grotesk-var.woff2') format('woff2');
+        font-family: 'Lora';
+        src: url('fonts/lora-var.woff2') format('woff2');
         font-weight: 400 700;
         font-display: swap;
         font-style: normal;
       }
+      @font-face {
+        font-family: 'Lora';
+        src: url('fonts/lora-var-italic.woff2') format('woff2');
+        font-weight: 400 700;
+        font-display: swap;
+        font-style: italic;
+      }
 
       :root {
-        --canvas: #08090c;
-        --surface-1: #101218;
-        --surface-2: #171a21;
+        --canvas: #100d0c;
+        --canvas-high: #151110; /* the faint warm lift at the very top of the page */
+        --floor: #0a0807; /* footer floor — the one deliberate hard colour step */
+        --surface-1: #181312;
+        --surface-2: #211a18;
 
-        --line: #1e2128;
-        --line-strong: #2c3038;
+        --line: rgba(255, 233, 220, 0.09);
+        --line-strong: rgba(255, 233, 220, 0.18);
 
-        --ink: #f4f6fa;
-        --ink-muted: #c8d0de;
-        --ink-subtle: #848d9d;
-        --ink-faint: #565d6b;
+        --ink: #f4ede6;
+        --ink-muted: #cfc4bb;
+        --ink-subtle: #99897e;
+        --ink-faint: #6d5f56;
 
-        --brand-1: #ff6a5a;
-        --brand-2: #ff453a;
-        --brand-3: #8b46c9;
-        --brand-4: #3b5bd9;
-        --brand-gradient: linear-gradient(115deg, #ff6a5a 0%, #ff453a 42%, #8b46c9 62%, #3b5bd9 100%);
+        /* The app's accent is #ff453a; in dark mode it ships softened and
+           lightened (the visual-refresh rule). The site inherits the dark
+           form and uses it only where colour means something. */
+        --accent: #ff7a6b;
+        --working: #86b893;
+        --waiting: #cfa257;
 
-        --success: #34c08a;
-        --amber: #f0b429;
+        --font-display: 'Lora', Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+        --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+        --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, 'Liberation Mono', monospace;
 
-        --font-display: 'Space Grotesk', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-        --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
-
-        --container: 1200px;
+        --container: 1160px;
         --gutter: 32px;
       }
 
@@ -108,15 +114,29 @@
 
       body {
         margin: 0;
-        background: var(--canvas);
         color: var(--ink-muted);
         font-family: var(--font-body);
         font-size: 16px;
         line-height: 1.6;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
-        font-feature-settings: 'kern', 'liga', 'calt';
         overflow-x: clip;
+      }
+      /* Fine grain, baked into the substrate itself: the noise tile is the
+         top background layer of the surfaces it textures, so it always sits
+         under the content and text stays crisp above it. One quiet
+         atmosphere move rides beneath it — the top of the page is a shade
+         warmer and lighter, resolving into the canvas before the ticker; a
+         lit room, not a gradient effect. The grain stops it banding. */
+      body {
+        background-color: var(--canvas);
+        background-image: var(--grain),
+          linear-gradient(180deg, var(--canvas-high) 0%, var(--canvas) 100%);
+        background-repeat: repeat, no-repeat;
+        background-size: auto, 100% 640px;
+      }
+      :root {
+        --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
       }
 
       a {
@@ -134,10 +154,10 @@
       h3 {
         color: var(--ink);
         margin: 0;
-        font-weight: 600;
+        font-weight: 550;
       }
       :focus-visible {
-        outline: 2px solid var(--brand-1);
+        outline: 2px solid var(--accent);
         outline-offset: 3px;
         border-radius: 3px;
       }
@@ -149,24 +169,17 @@
         padding: 0 var(--gutter);
       }
 
-      .label {
-        font-family: var(--font-mono);
-        font-size: 11px;
-        font-weight: 500;
-        letter-spacing: 1.4px;
-        text-transform: uppercase;
-        color: var(--ink-faint);
-        margin: 0;
-      }
-
       /* ---------------------------------------------------------------- nav */
       .nav {
         position: sticky;
         top: 0;
         z-index: 60;
-        background: rgba(8, 9, 12, 0.8);
-        backdrop-filter: saturate(150%) blur(14px);
-        -webkit-backdrop-filter: saturate(150%) blur(14px);
+        /* Tinted to --canvas-high, not --canvas: at the top of the page the
+           bar melts into the lifted hero tone instead of printing a darker
+           band across it. */
+        background: rgba(21, 17, 16, 0.75);
+        backdrop-filter: saturate(140%) blur(14px);
+        -webkit-backdrop-filter: saturate(140%) blur(14px);
         border-bottom: 1px solid transparent;
         transition: border-color 0.2s ease;
       }
@@ -174,7 +187,7 @@
         border-bottom-color: var(--line);
       }
       .nav-inner {
-        height: 60px;
+        height: 62px;
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -183,23 +196,28 @@
       .brand {
         display: flex;
         align-items: center;
-        gap: 9px;
+        gap: 11px;
         color: var(--ink);
       }
       .brand img {
-        /* 34px, not the 22px the old wordmark-flanked mark used: this mark
-           carries the knocked-out M right to the disc edge and turns to mush
-           below about 30px. The nav is 60px, so it still has room to breathe. */
+        /* 34px, not smaller: the knocked-out M runs right to the disc edge
+           and turns to mush below about 30px. The nav is 62px, so it still
+           has room to breathe. */
         width: 34px;
         height: 34px;
         display: block;
+      }
+      .brand b {
+        font-family: var(--font-display);
+        font-size: 18px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
       }
       .nav-right {
         display: flex;
         align-items: center;
         gap: 26px;
-        font-family: var(--font-mono);
-        font-size: 12.5px;
+        font-size: 13.5px;
       }
       .nav-right a {
         color: var(--ink-subtle);
@@ -213,7 +231,7 @@
         padding-bottom: 2px;
       }
       .nav-right .nav-dl:hover {
-        border-bottom-color: var(--brand-2);
+        border-bottom-color: var(--accent);
       }
       @media (max-width: 700px) {
         .nav-right .hide-sm {
@@ -223,69 +241,66 @@
 
       /* -------------------------------------------------------------- hero */
       .hero {
-        padding: 104px 0 72px;
-        display: grid;
-        grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr);
-        gap: 56px;
-        align-items: end;
+        padding: 92px 0 0;
       }
       .hero h1 {
+        /* Two lines, broken by hand in the markup — a display line is a
+           composition, not a wrap. The clamp floor keeps the second line
+           whole on a 390px phone. */
         font-family: var(--font-display);
-        font-size: clamp(42px, 6.6vw, 86px);
-        font-weight: 700;
-        line-height: 0.97;
-        letter-spacing: -0.045em;
+        font-size: clamp(33px, 8.6vw, 88px);
+        font-weight: 550;
+        line-height: 1.06;
+        letter-spacing: -0.015em;
         margin: 0;
       }
-      /* Deliberately NOT gradient-filled. Gradient display type is the single
-         most over-used move on generated landing pages; the headline stays
-         solid and the only colour on the page is functional — agent status in
-         the tree, the step numerals, the logo. */
       .hero h1 em {
-        font-style: normal;
-        color: var(--ink);
+        /* The one emphasis: the brand's true italic, tonal, not coloured. */
+        font-style: italic;
+        font-weight: 500;
       }
-      .hero-side {
-        padding-bottom: 6px;
+      .hero-row {
+        margin-top: 44px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 56px;
+        align-items: start;
       }
-      .hero-side p {
-        margin: 0;
-        font-size: 17px;
-        line-height: 1.6;
+      .hero-row > p {
+        margin: 4px 0 0;
+        font-size: 16.5px;
+        line-height: 1.65;
         color: var(--ink-subtle);
+        max-width: 50ch;
       }
-      .hero-side p b {
+      .hero-row > p b {
         color: var(--ink-muted);
         font-weight: 500;
       }
-      .hero-side .label {
-        margin-bottom: 14px;
-      }
 
       .cta {
-        margin-top: 44px;
         display: flex;
         align-items: center;
-        gap: 22px;
+        gap: 20px;
         flex-wrap: wrap;
       }
       .btn {
         display: inline-flex;
         align-items: center;
         gap: 9px;
-        height: 46px;
-        padding: 0 22px;
-        border-radius: 6px;
+        height: 47px;
+        padding: 0 24px;
+        border-radius: 8px;
         background: var(--ink);
-        color: var(--canvas);
+        color: #171110;
         font-size: 15px;
         font-weight: 600;
         letter-spacing: -0.1px;
         transition: background 0.15s ease;
       }
       .btn:hover {
-        background: #fff;
-        color: var(--canvas);
+        background: #fff8f0;
+        color: #171110;
       }
       .btn svg {
         width: 16px;
@@ -293,11 +308,10 @@
         flex: none;
       }
       .btn-alt {
-        font-family: var(--font-mono);
-        font-size: 13px;
+        font-size: 14px;
         color: var(--ink-subtle);
         border-bottom: 1px solid var(--line-strong);
-        padding-bottom: 3px;
+        padding-bottom: 2px;
       }
       .btn-alt:hover {
         color: var(--ink);
@@ -315,40 +329,57 @@
 
       @media (max-width: 900px) {
         .hero {
+          padding-top: 56px;
+        }
+        .hero-row {
           grid-template-columns: minmax(0, 1fr);
           gap: 28px;
-          padding: 64px 0 48px;
-          align-items: start;
         }
-        .hero-side {
-          padding-bottom: 0;
-        }
+      }
+
+      /* -------------------------------------------------------------- demo */
+      .demo-band {
+        padding: 64px 0 0;
+      }
+      .demo-frame {
+        border: 1px solid var(--line-strong);
+        border-radius: 12px;
+        overflow: hidden;
+        background: var(--surface-1);
+      }
+      .demo-frame video {
+        width: 100%;
+        display: block;
+      }
+      .demo-cap {
+        margin: 16px 0 0;
+        font-size: 13.5px;
+        color: var(--ink-faint);
       }
 
       /* ------------------------------------------------------------ ticker */
       .ticker {
+        margin-top: 64px;
         border-top: 1px solid var(--line);
         border-bottom: 1px solid var(--line);
         overflow: hidden;
-        background: var(--canvas);
       }
       .ticker-track {
         display: flex;
-        gap: 44px;
-        padding: 15px 0;
+        gap: 48px;
+        padding: 16px 0;
         white-space: nowrap;
-        font-family: var(--font-mono);
-        font-size: 11.5px;
-        letter-spacing: 1.5px;
-        text-transform: uppercase;
-        color: var(--ink-faint);
+        font-family: var(--font-display);
+        font-style: italic;
+        font-size: 15.5px;
+        color: var(--ink-subtle);
         width: max-content;
-        animation: slide 46s linear infinite;
+        animation: slide 52s linear infinite;
       }
       .ticker-track span {
         display: inline-flex;
         align-items: center;
-        gap: 44px;
+        gap: 48px;
       }
       .ticker-track span::after {
         content: '';
@@ -371,152 +402,93 @@
         }
       }
 
-      /* -------------------------------------------------------------- demo */
-      .stage {
-        /* full-bleed band with a faint dot field, so the page has a spine */
-        position: relative;
-        padding: 72px 0 80px;
-        background-color: #0b0d12;
-        background-image: radial-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px);
-        background-size: 22px 22px;
-        border-bottom: 1px solid var(--line);
+      /* ------------------------------------------------- how it works */
+      h2 {
+        font-family: var(--font-display);
+        font-size: clamp(30px, 3.6vw, 46px);
+        font-weight: 550;
+        line-height: 1.1;
+        letter-spacing: -0.01em;
+        margin: 0;
       }
-      .stage::before,
-      .stage::after {
-        /* fade the dot field out at the edges */
-        content: '';
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        width: 14vw;
-        pointer-events: none;
+      h2 em {
+        font-style: italic;
+        font-weight: 500;
       }
-      .stage::before {
-        left: 0;
-        background: linear-gradient(90deg, var(--canvas), transparent);
-      }
-      .stage::after {
-        right: 0;
-        background: linear-gradient(270deg, var(--canvas), transparent);
-      }
-      .stage .wrap {
-        position: relative;
-        z-index: 1;
-      }
-      .stage-frame {
-        border: 1px solid var(--line-strong);
-        border-radius: 10px;
-        overflow: hidden;
-        background: #0b0d12;
-      }
-      .stage-bar {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 10px 14px;
-        border-bottom: 1px solid var(--line);
-        font-family: var(--font-mono);
-        font-size: 11.5px;
-        color: var(--ink-faint);
-      }
-      .stage-bar i {
-        width: 9px;
-        height: 9px;
-        border-radius: 50%;
-        background: var(--line-strong);
-        display: inline-block;
-      }
-      .stage-bar .t {
-        margin-left: 10px;
-      }
-      .stage video {
-        width: 100%;
-        display: block;
-      }
-      .stage-cap {
-        margin: 18px 0 0;
-        font-family: var(--font-mono);
-        font-size: 12px;
-        color: var(--ink-faint);
+      .how {
+        padding: 104px 0 0;
       }
 
-      /* --------------------------------------------------------- mechanism */
-      .mech {
-        padding: 96px 0 0;
+      /* The branch graph — drawn for this page, rounded caps, colour only
+         where it means something. The two unfinished branches run off the
+         right edge on purpose: that work is still going. */
+      .graph {
+        margin-top: 48px;
+        overflow-x: auto;
+        -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent 99%);
+        mask-image: linear-gradient(90deg, #000 88%, transparent 99%);
       }
-      .mech-grid {
-        margin-top: 40px;
+      .graph svg {
+        width: 100%;
+        height: auto;
+        /* On a phone the graph scrolls sideways instead of shrinking its
+           labels below legibility; the right-edge fade doubles as the
+           there-is-more cue. */
+        min-width: 680px;
+      }
+      .graph text {
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+      }
+
+      .how-grid {
+        margin-top: 44px;
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 44px;
+      }
+      /* Subgrid keeps the three columns on shared rows: if one heading
+         wraps, every paragraph still starts on the same line. */
+      .how-grid > div {
+        display: grid;
+        grid-row: span 2;
+        grid-template-rows: subgrid;
         gap: 0;
       }
-      .mech-grid > div {
-        padding: 0 36px;
-        border-left: 1px solid var(--line);
-      }
-      .mech-grid > div:first-child {
-        border-left: 0;
-        padding-left: 0;
-      }
-      .mech-grid > div:last-child {
-        padding-right: 0;
-      }
-      .mech-num {
-        font-family: var(--font-mono);
-        font-size: 12px;
-        color: var(--brand-2);
-        letter-spacing: 1px;
-      }
-      .mech-grid h3 {
+      .how-grid h3 {
         font-family: var(--font-display);
-        font-size: 22px;
-        font-weight: 600;
-        letter-spacing: -0.5px;
-        margin: 16px 0 12px;
-        line-height: 1.2;
+        font-size: 21px;
+        font-weight: 550;
+        letter-spacing: -0.2px;
+        margin: 0 0 10px;
+        line-height: 1.25;
       }
-      .mech-grid p {
+      .how-grid p {
         margin: 0;
         font-size: 15px;
         color: var(--ink-subtle);
       }
       @media (max-width: 880px) {
-        .mech-grid {
+        .how-grid {
           grid-template-columns: minmax(0, 1fr);
-        }
-        .mech-grid > div {
-          border-left: 0;
-          border-top: 1px solid var(--line);
-          padding: 28px 0 0;
-        }
-        .mech-grid > div:first-child {
-          border-top: 0;
-          padding-top: 0;
+          gap: 30px;
         }
       }
 
       /* --------------------------------------------------------- isolation */
       .iso {
-        padding: 104px 0 0;
+        padding: 112px 0 0;
         display: grid;
-        grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+        grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
         gap: 64px;
-        align-items: start;
+        align-items: center;
       }
-      h2 {
-        font-family: var(--font-display);
-        font-size: clamp(28px, 3.4vw, 44px);
-        font-weight: 700;
-        line-height: 1.04;
-        letter-spacing: -0.035em;
-        margin: 16px 0 0;
-      }
-      .iso p {
+      .iso-copy p {
         color: var(--ink-subtle);
-        margin: 22px 0 0;
+        margin: 24px 0 0;
         font-size: 16px;
       }
-      .iso p b {
+      .iso-copy p b {
         color: var(--ink-muted);
         font-weight: 500;
       }
@@ -524,27 +496,29 @@
         .iso {
           grid-template-columns: minmax(0, 1fr);
           gap: 36px;
-          padding-top: 72px;
+          padding-top: 80px;
+        }
+        .iso .tree {
+          order: 2;
         }
       }
 
-      /* the terminal tree — the page's one un-stock element */
+      /* the on-disk tree — real paths, so it earns its mono */
       .tree {
         background: var(--surface-1);
         border: 1px solid var(--line);
-        border-radius: 10px;
+        border-radius: 12px;
         overflow: hidden;
       }
       .tree-head {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 11px 16px;
+        padding: 11px 18px;
         border-bottom: 1px solid var(--line);
         font-family: var(--font-mono);
-        font-size: 11.5px;
+        font-size: 12px;
         color: var(--ink-faint);
-        letter-spacing: 0.4px;
       }
       .tree pre {
         margin: 0;
@@ -560,28 +534,28 @@
         color: var(--ink);
       }
       .tree .yours {
-        color: var(--amber);
+        color: var(--waiting);
       }
       .tree .note {
         color: var(--ink-faint);
       }
       .tree .on {
-        color: var(--success);
+        color: var(--working);
       }
       .tree .wait {
-        color: var(--amber);
+        color: var(--waiting);
       }
       .tree-foot {
         border-top: 1px solid var(--line);
-        padding: 13px 16px;
+        padding: 13px 18px;
         font-family: var(--font-mono);
-        font-size: 11.5px;
+        font-size: 12px;
         color: var(--ink-faint);
       }
 
       /* ---------------------------------------------------------- download */
       .dl {
-        padding: 112px 0 0;
+        padding: 120px 0 0;
       }
       .dl-head {
         display: grid;
@@ -593,6 +567,7 @@
         margin: 0;
         color: var(--ink-subtle);
         font-size: 16px;
+        max-width: 56ch;
       }
       @media (max-width: 940px) {
         .dl-head {
@@ -602,18 +577,16 @@
       }
 
       .prereq {
-        margin-top: 44px;
-        border: 1px solid var(--line);
-        border-left: 2px solid var(--brand-2);
-        border-radius: 0 8px 8px 0;
-        background: var(--surface-1);
-        padding: 18px 22px;
-        font-size: 15px;
+        margin-top: 40px;
+        max-width: 74ch;
+        font-size: 15.5px;
         color: var(--ink-subtle);
       }
       .prereq b {
+        font-family: var(--font-display);
         color: var(--ink);
         font-weight: 600;
+        font-size: 16.5px;
       }
       code {
         font-family: var(--font-mono);
@@ -627,15 +600,15 @@
 
       /* platform rows, not cards */
       .plat {
-        margin-top: 12px;
+        margin-top: 36px;
         border-top: 1px solid var(--line);
       }
       .plat-row {
         display: grid;
-        grid-template-columns: 230px minmax(0, 1fr) auto;
+        grid-template-columns: 220px minmax(0, 1fr) auto;
         gap: 32px;
         align-items: center;
-        padding: 26px 0;
+        padding: 28px 0;
         border-bottom: 1px solid var(--line);
       }
       .plat-name {
@@ -643,10 +616,10 @@
         align-items: center;
         gap: 10px;
         font-family: var(--font-display);
-        font-size: 19px;
+        font-size: 20px;
         font-weight: 600;
         color: var(--ink);
-        letter-spacing: -0.3px;
+        letter-spacing: -0.2px;
       }
       .plat-name svg {
         width: 17px;
@@ -657,8 +630,7 @@
         font-family: var(--font-mono);
         font-size: 12px;
         color: var(--ink-faint);
-        margin-top: 3px;
-        letter-spacing: 0.3px;
+        margin-top: 4px;
       }
       .plat-note {
         font-size: 14px;
@@ -670,7 +642,7 @@
         font-weight: 500;
       }
       .cmd {
-        margin-top: 9px;
+        margin-top: 10px;
         display: flex;
         align-items: center;
         gap: 10px;
@@ -694,11 +666,10 @@
         background: none;
         border: 1px solid var(--line-strong);
         border-radius: 4px;
-        color: var(--ink-faint);
+        color: var(--ink-subtle);
         font-family: var(--font-mono);
-        font-size: 10.5px;
-        letter-spacing: 0.5px;
-        padding: 3px 7px;
+        font-size: 11px;
+        padding: 3px 8px;
         cursor: pointer;
       }
       .copy:hover {
@@ -715,11 +686,10 @@
 
       .dl-foot {
         margin-top: 26px;
-        font-family: var(--font-mono);
-        font-size: 12px;
+        font-size: 13.5px;
         color: var(--ink-faint);
         display: flex;
-        gap: 22px;
+        gap: 24px;
         flex-wrap: wrap;
       }
       .dl-foot a {
@@ -731,23 +701,44 @@
 
       /* ------------------------------------------------------------ footer */
       footer {
-        margin-top: 104px;
+        margin-top: 112px;
+        background-color: var(--floor);
+        background-image: var(--grain);
         border-top: 1px solid var(--line);
-        padding: 26px 0 44px;
-        display: flex;
-        justify-content: space-between;
-        gap: 20px;
-        flex-wrap: wrap;
-        font-family: var(--font-mono);
-        font-size: 12px;
-        color: var(--ink-faint);
+        padding: 56px 0 0;
       }
-      footer a {
+      .foot-meta {
+        text-align: center;
+        font-size: 13px;
+        color: var(--ink-faint);
+        display: flex;
+        justify-content: center;
+        gap: 24px;
+        flex-wrap: wrap;
+      }
+      .foot-meta a {
         color: var(--ink-subtle);
       }
-      footer .links {
-        display: flex;
-        gap: 22px;
+      .foot-meta a:hover {
+        color: var(--ink);
+      }
+      /* The signature: the brand word, set in its own true italic, flush to
+         the very bottom of the page — the caps fully clear, only the last
+         few percent of the glyphs bleeding off the edge. Tuned by eye
+         against a rendered screenshot; the numbers are deliberate. */
+      .wm {
+        margin-top: 34px;
+        height: 0.74em;
+        overflow: hidden;
+        font-family: var(--font-display);
+        font-style: italic;
+        font-weight: 550;
+        font-size: clamp(110px, 20vw, 290px);
+        line-height: 0.72;
+        letter-spacing: 0.015em;
+        text-align: center;
+        color: #2b201b;
+        user-select: none;
       }
 
       @media (prefers-reduced-motion: reduce) {
@@ -769,10 +760,10 @@
           <img src="logo-mark-white.png" alt="" width="34" height="34" />
         </a>
         <div class="nav-right">
-          <a class="hide-sm" href="#isolation">how&nbsp;it&nbsp;works</a>
-          <a class="hide-sm" href="https://github.com/Serhii-Leniv/Monad/blob/main/docs/FAQ.md">faq</a>
-          <a class="hide-sm" href="https://github.com/Serhii-Leniv/Monad">github</a>
-          <a class="nav-dl" href="#download">download</a>
+          <a class="hide-sm" href="#how">how&nbsp;it&nbsp;works</a>
+          <a class="hide-sm" href="https://github.com/Serhii-Leniv/Monad/blob/main/docs/FAQ.md">FAQ</a>
+          <a class="hide-sm" href="https://github.com/Serhii-Leniv/Monad">GitHub</a>
+          <a class="nav-dl" href="#download">Download</a>
         </div>
       </div>
     </nav>
@@ -781,9 +772,9 @@
       <!-- ---------------------------------------------------------- hero -->
       <div class="wrap">
         <header class="hero">
-          <div>
-            <h1>Run every agent in <em>its own worktree.</em></h1>
+          <h1>Run every agent<br />in <em>its own worktree.</em></h1>
 
+          <div class="hero-row">
             <div class="cta">
               <a
                 id="dl-primary"
@@ -811,35 +802,18 @@
                 <span id="ver-text"><b>v0.1.28</b></span>
               </span>
             </div>
-          </div>
 
-          <div class="hero-side">
-            <p class="label">What it is</p>
             <p>
               A desktop app that runs Claude Code, Codex, Gemini and any other terminal agent side by
-              side — each sealed in <b>its own git worktree</b>, with diff and merge built in.
-              <b>Five agents, one repo, nothing trampled.</b>
+              side, each sealed in <b>its own git worktree</b>. Review the diff and land what's good.
+              <b>Nothing touches your branch until you say so.</b>
             </p>
           </div>
         </header>
-      </div>
 
-      <!-- -------------------------------------------------------- ticker -->
-      <div class="ticker" aria-hidden="true">
-        <div class="ticker-track" id="ticker">
-          <span>Claude Code</span><span>Codex</span><span>Gemini</span><span>Cursor</span><span>Any terminal agent</span
-          ><span>Your own keys</span><span>No telemetry</span><span>No inference cost</span><span>MIT licensed</span>
-        </div>
-      </div>
-
-      <!-- ---------------------------------------------------------- demo -->
-      <section class="stage" aria-label="Monad in action">
-        <div class="wrap">
-          <div class="stage-frame">
-            <div class="stage-bar">
-              <i></i><i></i><i></i>
-              <span class="t">monad — 6 agents — storefront</span>
-            </div>
+        <!-- ---------------------------------------------------------- demo -->
+        <section class="demo-band" aria-label="Monad in action">
+          <div class="demo-frame">
             <video
               class="demo"
               src="demo.mp4"
@@ -852,26 +826,80 @@
               aria-label="Six coding agents running in parallel in Monad, each in its own git worktree"
             ></video>
           </div>
-          <p class="stage-cap">Six agents in parallel — each a real terminal, each on its own branch.</p>
+          <p class="demo-cap">Six agents in parallel: each a real terminal, each on its own branch.</p>
+        </section>
+      </div>
+
+      <!-- -------------------------------------------------------- ticker -->
+      <div class="ticker" aria-hidden="true">
+        <div class="ticker-track" id="ticker">
+          <span>Claude Code</span><span>Codex</span><span>Gemini</span><span>Cursor</span><span>any terminal agent</span
+          ><span>your own keys</span><span>no telemetry</span><span>no inference cost</span><span>MIT licensed</span>
         </div>
-      </section>
+      </div>
 
       <div class="wrap">
-        <!-- ---------------------------------------------------- mechanism -->
-        <section class="mech">
-          <p class="label">The shape of it</p>
-          <div class="mech-grid">
+        <!-- ------------------------------------------------- how it works -->
+        <section class="how" id="how">
+          <h2>Five agents, one repo,<br /><em>nothing trampled.</em></h2>
+
+          <div class="graph" role="img" aria-label="A git branch graph: three agent branches fork from main; one has been merged back, two are still running">
+            <svg viewBox="0 0 960 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <!-- main. Lanes are nested so nothing ever crosses: the outer
+                   top lane forks before the inner one begins. -->
+              <path d="M 16 170 H 944" stroke="#a89a8f" stroke-width="2.5" stroke-linecap="round" />
+              <!-- gemini: outer top lane, waiting, runs off the edge -->
+              <path
+                d="M 100 170 C 132 170 140 40 172 40 H 950"
+                stroke="#5f544c"
+                stroke-width="2.5"
+                stroke-linecap="round"
+              />
+              <!-- claude: inner top lane — forked, worked, merged back -->
+              <path
+                d="M 170 170 C 202 170 210 96 242 96 H 570 C 602 96 610 170 642 170"
+                stroke="#7c6e64"
+                stroke-width="2.5"
+                stroke-linecap="round"
+              />
+              <!-- codex: below main, still working, runs off the edge -->
+              <path
+                d="M 300 170 C 332 170 340 248 372 248 H 950"
+                stroke="#6e625a"
+                stroke-width="2.5"
+                stroke-linecap="round"
+              />
+              <!-- commits on main -->
+              <circle cx="48" cy="170" r="4.5" fill="#a89a8f" />
+              <circle cx="100" cy="170" r="4.5" fill="#a89a8f" />
+              <circle cx="170" cy="170" r="4.5" fill="#a89a8f" />
+              <circle cx="300" cy="170" r="4.5" fill="#a89a8f" />
+              <circle cx="880" cy="170" r="4.5" fill="#a89a8f" />
+              <!-- the merge: the one red on the page -->
+              <circle cx="642" cy="170" r="5.5" fill="#ff7a6b" />
+              <text x="642" y="206" text-anchor="middle" fill="#99897e">merged, by you</text>
+              <!-- branch names -->
+              <text x="180" y="26" fill="#7c6e64">monad/gemini</text>
+              <text x="250" y="82" fill="#7c6e64">monad/claude</text>
+              <text x="380" y="274" fill="#7c6e64">monad/codex</text>
+              <!-- live status -->
+              <circle cx="600" cy="248" r="4" fill="#86b893" />
+              <text x="612" y="252.5" fill="#86b893">working</text>
+              <circle cx="700" cy="40" r="4" fill="#cfa257" />
+              <text x="712" y="44.5" fill="#cfa257">waiting for you</text>
+            </svg>
+          </div>
+
+          <div class="how-grid">
             <div>
-              <span class="mech-num">01</span>
               <h3>A branch and a worktree each</h3>
               <p>
                 Every agent gets its own private checkout, so parallel edits can't collide. Agents are
-                pinned to their worktree after spawn — even a shell profile that jumps directories
+                pinned to their worktree after spawn, so even a shell profile that jumps directories
                 can't walk one into your real working tree.
               </p>
             </div>
             <div>
-              <span class="mech-num">02</span>
               <h3>Up to nine live terminals</h3>
               <p>
                 Real terminals, tiled automatically. Start a swarm and watch them all at once, drag to
@@ -879,11 +907,10 @@
               </p>
             </div>
             <div>
-              <span class="mech-num">03</span>
               <h3>Merge, apply, or discard</h3>
               <p>
                 Read an agent's diff against your base branch and merge it, take just the files you
-                want onto your branch, or throw the whole branch away — without leaving the app.
+                want onto your branch, or throw the whole branch away, all without leaving the app.
               </p>
             </div>
           </div>
@@ -891,20 +918,6 @@
 
         <!-- ---------------------------------------------------- isolation -->
         <section class="iso" id="isolation">
-          <div>
-            <p class="label">Why it's safe</p>
-            <h2>Five agents. One repo. Nothing&nbsp;trampled.</h2>
-            <p>
-              Running several agents on one checkout normally means they overwrite each other's edits
-              — and yours. Monad gives each agent <b>its own branch and its own git worktree</b>: a
-              real, separate directory on disk, backed by the same repository.
-            </p>
-            <p>
-              Your working tree is never one of them. When an agent gets it right you review the diff
-              and land it deliberately — <b>nothing reaches your branch until you say so</b>.
-            </p>
-          </div>
-
           <div class="tree">
             <div class="tree-head">
               <span>~/code/storefront</span>
@@ -920,27 +933,37 @@
    └─ <span class="dir">gemini/</span>              <span class="note">● idle</span></pre>
             <div class="tree-foot">three checkouts · three branches · zero collisions</div>
           </div>
+
+          <div class="iso-copy">
+            <h2>Your working tree is never <em>one of them.</em></h2>
+            <p>
+              Running several agents on one checkout normally means they overwrite each other's edits,
+              and yours. Monad gives each agent <b>its own branch and its own git worktree</b>: a
+              real, separate directory on disk, backed by the same repository.
+            </p>
+            <p>
+              When an agent gets it right you review the diff and land it deliberately.
+              <b>Nothing reaches your branch until you say so.</b>
+            </p>
+          </div>
         </section>
 
         <!-- ----------------------------------------------------- download -->
         <section class="dl" id="download">
           <div class="dl-head">
-            <div>
-              <p class="label">Get it</p>
-              <h2>Download Monad</h2>
-            </div>
+            <h2>Download Monad</h2>
             <p>
-              Free and MIT-licensed. Runs on your machine against your repo — no account, no
+              Free and MIT-licensed. Runs on your machine against your repo: no account, no
               telemetry, and no inference cost, because it drives the agent CLIs you already pay for.
             </p>
           </div>
 
-          <div class="prereq">
-            <b>Install an agent CLI first.</b> Monad orchestrates the tools you already run — it
+          <p class="prereq">
+            <b>Install an agent CLI first.</b> Monad orchestrates the tools you already run; it
             doesn't ship a model of its own. Have at least one of <code>claude</code>,
             <code>codex</code>, <code>gemini</code> or <code>cursor-agent</code> on your PATH, then
             open a git repo and add your first agent.
-          </div>
+          </p>
 
           <div class="plat">
             <div class="plat-row">
@@ -957,7 +980,7 @@
               </div>
               <div>
                 <p class="plat-note">
-                  Drag Monad to Applications, then run this once — macOS marks unsigned downloads
+                  Drag Monad to Applications, then run this once: macOS marks unsigned downloads
                   &ldquo;damaged&rdquo; until the quarantine flag is cleared.
                 </p>
                 <div class="cmd">
@@ -985,7 +1008,7 @@
               </div>
               <div>
                 <p class="plat-note">
-                  Run the installer. If SmartScreen appears, choose <b>More info → Run anyway</b> —
+                  Run the installer. If SmartScreen appears, choose <b>More info → Run anyway</b>;
                   the build isn't code-signed yet. Updates install themselves in place from then on.
                 </p>
               </div>
@@ -1000,20 +1023,23 @@
 
           <div class="dl-foot">
             <a href="https://github.com/Serhii-Leniv/Monad/releases">all releases &amp; checksums</a>
-            <a href="https://github.com/Serhii-Leniv/Monad/blob/main/docs/FAQ.md">faq</a>
+            <a href="https://github.com/Serhii-Leniv/Monad/blob/main/docs/FAQ.md">FAQ</a>
             <a href="https://github.com/Serhii-Leniv/Monad/issues">report a bug</a>
           </div>
         </section>
-
-        <footer>
-          <span>Built by Serhii Leniv · MIT</span>
-          <span class="links">
-            <a href="https://github.com/Serhii-Leniv/Monad">github</a>
-            <a href="https://github.com/Serhii-Leniv/Monad/releases">changelog</a>
-          </span>
-        </footer>
       </div>
     </main>
+
+    <footer>
+      <div class="wrap">
+        <div class="foot-meta">
+          <span>Built by Serhii Leniv · MIT</span>
+          <a href="https://github.com/Serhii-Leniv/Monad">GitHub</a>
+          <a href="https://github.com/Serhii-Leniv/Monad/releases">changelog</a>
+        </div>
+      </div>
+      <div class="wm" aria-hidden="true">Monad</div>
+    </footer>
 
     <script>
       // ---- Download UX: detect OS, order the buttons, resolve live assets ----
