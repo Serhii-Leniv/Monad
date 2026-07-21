@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-// A workspace created via "New workspace" has defaultPath === null. The UI used
-// to hide every launch affordance behind that path: Rail wrapped its whole tool
+// HISTORY: a workspace created via "New workspace" had defaultPath === null,
+// and the UI hid every launch affordance behind that path: Rail wrapped its whole tool
 // block in `{projectPath && …}`, the command palette gated its "New" group the
 // same way, and Stage rendered nothing at all with zero agents. The result was a
 // tab you could create but not use — no terminal button, no way to attach a
@@ -18,7 +18,12 @@ import { resolve } from 'node:path'
 // else would fail if these gates came back.
 const read = (p: string): string => readFileSync(resolve(process.cwd(), p), 'utf8')
 
-describe('a folderless workspace stays usable', () => {
+// SINCE "one tab = one folder": the UI can no longer CREATE a folderless tab —
+// the + opens a folder picker directly. These gates still matter anyway. The
+// store keeps createWorkspace (the smokes drive it), a folder can go missing
+// between sessions, and a tab whose path fails to resolve must degrade to a
+// usable stage rather than the blank dead end this file was written for.
+describe('a tab with no resolvable folder stays usable', () => {
   it('does not hide the rail’s new-terminal button behind a folder', () => {
     const src = read('src/renderer/src/components/Rail.tsx')
     const newButton = src.indexOf('className="rail__new"')
@@ -41,18 +46,21 @@ describe('a folderless workspace stays usable', () => {
     expect(src).toContain('addAgent({ workspaceId })')
   })
 
-  it('keeps the palette’s launch commands available without a folder', () => {
+  it('keeps the palette’s launch commands ungated by a folder', () => {
     const src = read('src/renderer/src/components/CommandPalette.tsx')
     // The "New" group is built under `if (!full)`. If that ever becomes
     // `if (projectPath)` again the palette stops being the keyboard escape
-    // hatch for a folderless tab.
+    // hatch when a tab's folder can't be resolved.
     const newGroup = src.indexOf("title: 'New terminal'")
     expect(newGroup).toBeGreaterThan(-1)
     const gated = /if \(projectPath\) \{[\s\S]{0,400}?title: 'New terminal'/.test(src)
     expect(gated, 'the New group is folder-gated again').toBe(false)
-    // And the workspace itself is reachable/closable without one.
-    expect(src).toContain("id: 'new-workspace'")
-    expect(src).toContain("id: 'set-folder'")
+    // REMOVED with "one tab = one folder": this also asserted the palette
+    // offered 'new-workspace' and 'set-folder'. Both created or repaired a tab
+    // with no folder, which is no longer a thing that can exist — the + goes
+    // straight to a folder picker. The assertion above (the New group is not
+    // folder-gated) is the part that still protects something, and it is
+    // unchanged.
   })
 
   it('styles both empty-state actions', () => {
